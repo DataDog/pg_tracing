@@ -1,0 +1,8 @@
+-- Drop test table and test functions
+DROP TABLE pg_tracing_test;
+DROP function test_function_project_set;
+DROP function test_function_result;
+DROP EXTENSION pg_tracing CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to view peek_spans_with_level
+drop cascades to view peek_ordered_spans

@@ -1,0 +1,12 @@
+log/
+results/
+tmp_check/
+regression.diffs
+regression.out
+compile_commands.json
+tags
+.deps
+*.bc
+*.o
+*.so
+*.dylib

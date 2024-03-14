@@ -1,0 +1,13 @@
+-- Check reset is working
+SELECT pg_tracing_reset();
+ pg_tracing_reset 
+------------------
+ 
+(1 row)
+
+SELECT traces from pg_tracing_info;
+ traces 
+--------
+      0
+(1 row)
+

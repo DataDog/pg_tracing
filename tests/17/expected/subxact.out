@@ -1,0 +1,43 @@
+-- Enable full sampling
+SET pg_tracing.sample_rate = 1.0;
+-- Start a transaction with subxaction
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
+SAVEPOINT s2;
+INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
+SAVEPOINT s3;
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+COMMIT;
+-- Check that subxact_count is correctly reported
+select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
+                          span_operation                          |         parameters         | subxact_count | lvl 
+------------------------------------------------------------------+----------------------------+---------------+-----
+ BEGIN;                                                           |                            |             0 |   1
+ ProcessUtility                                                   |                            |             0 |   2
+ SAVEPOINT $1;                                                    | $1 = s1                    |             0 |   1
+ ProcessUtility                                                   |                            |             0 |   2
+ INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); | $1 = 1, $2 = 2, $3 = 'aaa' |             0 |   1
+ Planner                                                          |                            |             0 |   2
+ ExecutorRun                                                      |                            |             0 |   2
+ SAVEPOINT $1;                                                    | $1 = s2                    |             1 |   1
+ ProcessUtility                                                   |                            |             1 |   2
+ INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); | $1 = 1, $2 = 2, $3 = 'aaa' |             1 |   1
+ Planner                                                          |                            |             1 |   2
+ ExecutorRun                                                      |                            |             1 |   2
+ SAVEPOINT $1;                                                    | $1 = s3                    |             2 |   1
+ ProcessUtility                                                   |                            |             2 |   2
+ SELECT $1;                                                       | $1 = 1                     |             2 |   1
+ Planner                                                          |                            |             2 |   2
+ ExecutorRun                                                      |                            |             2 |   2
+ COMMIT;                                                          |                            |             2 |   1
+ ProcessUtility                                                   |                            |             2 |   2
+(19 rows)
+
+-- Cleaning
+CALL clean_spans();

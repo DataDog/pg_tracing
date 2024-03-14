@@ -1,0 +1,251 @@
+-- Only trace queries with sample flag
+SET pg_tracing.sample_rate = 0.0;
+SET pg_tracing.caller_sample_rate = 1.0;
+-- Run a simple query
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- Get top span id
+SELECT span_id AS top_span_id from pg_tracing_peek_spans where parent_id='0000000000000001' and span_type!='Parse' \gset
+-- Check parameters
+SELECT parameters from pg_tracing_peek_spans where span_id=:'top_span_id';
+ parameters 
+------------
+ $1 = 1
+(1 row)
+
+-- Check the number of children
+SELECT count(*) from pg_tracing_peek_spans where parent_id=:'top_span_id';
+ count 
+-------
+     2
+(1 row)
+
+-- Check span_operation
+SELECT span_type, span_operation from pg_tracing_peek_spans where trace_id='00000000000000000000000000000001' order by span_start, span_end desc;
+  span_type   | span_operation 
+--------------+----------------
+ Select query | SELECT $1;
+ Planner      | Planner
+ Executor     | ExecutorRun
+(3 rows)
+
+-- Check count of query_id
+SELECT count(distinct query_id) from pg_tracing_consume_spans where trace_id='00000000000000000000000000000001';
+ count 
+-------
+     1
+(1 row)
+
+-- Check reported number of trace
+SELECT traces from pg_tracing_info;
+ traces 
+--------
+     26
+(1 row)
+
+-- Trace a statement with function call
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ SELECT count(*) from current_database();
+ count 
+-------
+     1
+(1 row)
+
+-- Check the generated span span_type, span_operation and order of function call
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000003';
+  span_type   |              span_operation              | lvl 
+--------------+------------------------------------------+-----
+ Select query | SELECT count(*) from current_database(); |   1
+ Planner      | Planner                                  |   2
+ Executor     | ExecutorRun                              |   2
+(3 rows)
+
+-- Trace a more complex query with multiple function calls
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT s.relation_size + s.index_size
+FROM (SELECT
+      pg_relation_size(C.oid) as relation_size,
+      pg_indexes_size(C.oid) as index_size
+    FROM pg_class C) as s limit 1;
+ ?column? 
+----------
+        0
+(1 row)
+
+-- Check the nested level of spans for a query with multiple function calls
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000004';
+  span_type   |                                                                          span_operation                                                                          | lvl 
+--------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----
+ Select query | SELECT s.relation_size + s.index_sizeFROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1; |   1
+ Planner      | Planner                                                                                                                                                          |   2
+ Executor     | ExecutorRun                                                                                                                                                      |   2
+(3 rows)
+
+-- Check that we're in a correct state after a timeout
+set statement_timeout=200;
+-- Trace query triggering a statement timeout
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000007-0000000000000007-01'*/ select * from pg_sleep(10);
+ERROR:  canceling statement due to statement timeout
+SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000007';
+  span_type   |       span_operation        | sql_error_code | lvl 
+--------------+-----------------------------+----------------+-----
+ Select query | select * from pg_sleep($1); | 57014          |   1
+ Planner      | Planner                     | 00000          |   2
+ Executor     | ExecutorRun                 | 57014          |   2
+(3 rows)
+
+-- Cleanup statement setting
+set statement_timeout=0;
+-- Trace a working query after the timeout to check we're in a consistent state
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000008-0000000000000008-01'*/ select 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- Check the spans order and error code
+SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000008';
+  span_type   | span_operation | sql_error_code | lvl 
+--------------+----------------+----------------+-----
+ Select query | select $1;     | 00000          |   1
+ Planner      | Planner        | 00000          |   2
+ Executor     | ExecutorRun    | 00000          |   2
+(3 rows)
+
+-- Cleanup
+SET plan_cache_mode='auto';
+-- Run a statement with node not executed
+/*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000b-000000000000000b-01'*/ select 1 limit 0;
+ ?column? 
+----------
+(0 rows)
+
+SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000b';
+   span_operation    |   parameters   | lvl 
+---------------------+----------------+-----
+ select $1 limit $2; | $1 = 1, $2 = 0 |   1
+ Planner             |                |   2
+ ExecutorRun         |                |   2
+(3 rows)
+
+-- Test multiple statements in a single query
+/*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000c-000000000000000c-01'*/ select 1; select 2;
+ ?column? 
+----------
+        1
+(1 row)
+
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000c';
+ span_operation | parameters | lvl 
+----------------+------------+-----
+ select $1;     | $1 = 1     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+(3 rows)
+
+-- Check that parameters are not exported when disabled
+SET pg_tracing.export_parameters=false;
+/*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000d-000000000000000d-01'*/ select 1, 2, 3;
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+        1 |        2 |        3
+(1 row)
+
+SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000d';
+   span_operation   | parameters | lvl 
+--------------------+------------+-----
+ select $1, $2, $3; |            |   1
+ Planner            |            |   2
+ ExecutorRun        |            |   2
+(3 rows)
+
+SET pg_tracing.export_parameters=true;
+-- Check multi statement query
+CALL clean_spans();
+SET pg_tracing.sample_rate = 1.0;
+-- Force a multi-query statement with \;
+SELECT 1\; SELECT 1, 2;
+ ?column? 
+----------
+        1
+(1 row)
+
+ ?column? | ?column? 
+----------+----------
+        1 |        2
+(1 row)
+
+SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
+  span_type   | span_operation | parameters | lvl 
+--------------+----------------+------------+-----
+ Select query | SELECT $1;     | $1 = 1     |   1
+ Planner      | Planner        |            |   2
+ Executor     | ExecutorRun    |            |   2
+(3 rows)
+
+CALL clean_spans();
+-- Check standalone trace
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- Make sure we have unique span ids
+SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
+ count 
+-------
+     1
+     1
+     1
+(3 rows)
+
+-- Trigger a planner error
+SELECT '\xDEADBEEF'::bytea::text::int;
+ERROR:  invalid input syntax for type integer: "\xdeadbeef"
+-- Check planner error
+SELECT span_type, span_operation, parameters, sql_error_code, lvl from peek_ordered_spans;
+  span_type   |        span_operation        |    parameters     | sql_error_code | lvl 
+--------------+------------------------------+-------------------+----------------+-----
+ Select query | SELECT $1::bytea::text::int; | $1 = '\xDEADBEEF' | 22P02          |   1
+ Planner      | Planner                      |                   | 22P02          |   2
+(2 rows)
+
+CALL clean_spans();
+-- Check spans generated by lazy functions
+CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement)
+    RETURNS SETOF anyelement
+    LANGUAGE sql
+    AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)';
+SELECT lazy_function('{1,2,3,4}'::int[]) FROM (VALUES (1,2));
+ lazy_function 
+---------------
+             1
+             2
+             3
+             4
+(4 rows)
+
+-- Check lazy function spans
+SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
+   span_type    |                                                                                             span_operation                                                                                              |            parameters            | lvl 
+----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------+-----
+ Utility query  | CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement) RETURNS SETOF anyelement LANGUAGE sql AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)'; |                                  |   1
+ ProcessUtility | ProcessUtility                                                                                                                                                                                          |                                  |   2
+ Select query   | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3));                                                                                                                                                  | $1 = '{1,2,3,4}', $2 = 1, $3 = 2 |   1
+ Planner        | Planner                                                                                                                                                                                                 |                                  |   2
+ Executor       | ExecutorRun                                                                                                                                                                                             |                                  |   2
+ Select query   | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | $1 = 1, $2 = 1, $3 = 1           |   3
+ Planner        | Planner                                                                                                                                                                                                 |                                  |   4
+(7 rows)
+
+-- Cleanup
+SET pg_tracing.sample_rate = 0.0;
+CALL clean_spans();

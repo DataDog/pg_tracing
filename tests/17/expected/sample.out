@@ -1,0 +1,154 @@
+-- Trace nothing
+SET pg_tracing.sample_rate = 0.0;
+SET pg_tracing.caller_sample_rate = 0.0;
+-- Query with sampling flag
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+select count(distinct(trace_id))=0 from pg_tracing_consume_spans;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Query without trace context
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+select count(distinct(trace_id))=0 from pg_tracing_consume_spans;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Enable full sampling
+SET pg_tracing.sample_rate = 1.0;
+-- Generate queries with sampling flag on, off and no trace context
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-00'*/ SELECT 2;
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT 3;
+ ?column? 
+----------
+        3
+(1 row)
+
+SELECT 4;
+ ?column? 
+----------
+        4
+(1 row)
+
+-- Check number of generated spans
+select count(distinct(trace_id)) from pg_tracing_peek_spans;
+ count 
+-------
+     4
+(1 row)
+
+-- Check span order for full sampling
+select span_operation, parameters, lvl from peek_ordered_spans;
+ span_operation | parameters | lvl 
+----------------+------------+-----
+ SELECT $1;     | $1 = 1     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+ SELECT $1;     | $1 = 2     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+ SELECT $1;     | $1 = 3     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+ SELECT $1;     | $1 = 4     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+(12 rows)
+
+-- Top spans should reuse generated ids and have trace_id = parent_id
+select span_operation, parameters from peek_ordered_spans where right(trace_id, 16) = parent_id;
+ span_operation | parameters 
+----------------+------------
+ SELECT $1;     | $1 = 1
+ SELECT $1;     | $1 = 2
+ SELECT $1;     | $1 = 3
+ SELECT $1;     | $1 = 4
+(4 rows)
+
+CALL clean_spans();
+-- Only trace query with sampled flag
+SET pg_tracing.sample_rate = 0.0;
+SET pg_tracing.caller_sample_rate = 1.0;
+-- Clean set call spans
+CALL clean_spans();
+-- Generate queries with sampling flag on, off, no trace context and SQLComment at the end
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000005-00'*/ SELECT 2;
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT 3 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000006-01'*/;
+ ?column? 
+----------
+        3
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-fffffffffffffffff000000000000007-0000000000000007-01'*/ SELECT 4;
+ ?column? 
+----------
+        4
+(1 row)
+
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- Check number of generated spans
+select distinct(trace_id) from pg_tracing_peek_spans order by trace_id;
+             trace_id             
+----------------------------------
+ 00000000000000000000000000000004
+ 00000000000000000000000000000006
+ fffffffffffffffff000000000000007
+(3 rows)
+
+-- Check span order for sampled flag only
+select span_operation, parameters, lvl from peek_ordered_spans;
+ span_operation | parameters | lvl 
+----------------+------------+-----
+ SELECT $1;     | $1 = 1     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+ SELECT $1;     | $1 = 3     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+ SELECT $1;     | $1 = 4     |   1
+ Planner        |            |   2
+ ExecutorRun    |            |   2
+(9 rows)
+
+-- Cleaning
+CALL clean_spans();
