@@ -37,14 +37,22 @@ PG_REGRESS_ARGS=--no-locale --encoding=UTF8 --outputdir=./tests/$(LOCAL_PG_VERSI
 PG_CFLAGS := $(PG_CFLAGS) -DPG_VERSION_MAJOR=$(LOCAL_PG_VERSION)
 include $(PGXS)
 
-check:
+regress:
 	$(pg_regress_check) \
         $(PG_REGRESS_ARGS) \
         $(REGRESSCHECKS)
 
+typedefs.list:
+	wget -q -O typedefs.list https://buildfarm.postgresql.org/cgi-bin/typedefs.pl
+
+.PHONY: pgindent
+pgindent: typedefs.list
+	pgindent --typedefs=typedefs.list \
+	src/*.c \
+	src/*.h
+
 # DOCKER BUILDS
 TEST_CONTAINER_NAME = pg_tracing_test
-
 BUILD_TEST_TARGETS  = $(patsubst %,build-test-pg%,$(PG_VERSIONS))
 
 .PHONY: build-test-image
@@ -61,4 +69,4 @@ run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
-		bash -c "make check || cat /usr/src/pg_tracing/tests/$(PG_VERSION)/regression.diffs"
+		bash -c "make regress || cat /usr/src/pg_tracing/tests/$(PG_VERSION)/regression.diffs"
