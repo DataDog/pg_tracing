@@ -7,11 +7,10 @@ ARG PGVERSION
 # Install packages
 RUN apt update
 RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-    build-essential ca-certificates curl gnupg git flex bison iproute2 \
+    build-essential ca-certificates curl gnupg git flex bison \
 	libcurl4-gnutls-dev libicu-dev libncurses-dev libxml2-dev zlib1g-dev libedit-dev \
     libkrb5-dev liblz4-dev libncurses6 libpam-dev libreadline-dev libselinux1-dev \
-    libssl-dev libxslt1-dev libzstd-dev uuid-dev make autoconf openssl sudo \
-    psutils psmisc htop less postgresql-common \
+    libssl-dev libxslt1-dev libzstd-dev uuid-dev make openssl sudo postgresql-common \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
