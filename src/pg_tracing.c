@@ -695,7 +695,7 @@ check_full_shared_spans(void)
 {
 	bool		full_buffer = false;
 
-    // TODO: Use LWLock
+	/* TODO: Use LWLock */
 	SpinLockAcquire(&pg_tracing->mutex);
 	if (shared_spans->end + 1 >= shared_spans->max)
 	{
@@ -2077,18 +2077,18 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 		 */
 		return (Datum) 0;
 
-    SpinLockAcquire(&pg_tracing->mutex);
-    for (int i = 0; i < shared_spans->end; i++)
-    {
-        span = shared_spans->spans + i;
-        add_result_span(rsinfo, span, qbuffer, qbuffer_size);
-    }
+	SpinLockAcquire(&pg_tracing->mutex);
+	for (int i = 0; i < shared_spans->end; i++)
+	{
+		span = shared_spans->spans + i;
+		add_result_span(rsinfo, span, qbuffer, qbuffer_size);
+	}
 
-    /* Consume is set, remove spans from the shared buffer */
-    if (consume)
-        drop_all_spans_locked();
-    pg_tracing->stats.last_consume = GetCurrentTimestamp();
-    SpinLockRelease(&pg_tracing->mutex);
+	/* Consume is set, remove spans from the shared buffer */
+	if (consume)
+		drop_all_spans_locked();
+	pg_tracing->stats.last_consume = GetCurrentTimestamp();
+	SpinLockRelease(&pg_tracing->mutex);
 
 	return (Datum) 0;
 }
