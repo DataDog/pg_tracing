@@ -28,6 +28,22 @@ To build and install pg_tracing with debug symbols, use `PG_CFLAGS` env to pass 
 PG_CFLAGS="-g" make install
 ```
 
+## Indentation
+
+Code should be indented with pgindent. You need to install pg_bsd_indent first:
+
+```
+git clone https://git.postgresql.org/git/pg_bsd_indent.git
+cd pg_bsd_indent
+make install
+```
+
+With [pgindent](https://github.com/postgres/postgres/blob/master/src/tools/pgindent/pgindent) needs to be in your `$PATH`. Once this is done, you will be able to indent with:
+
+```
+make pgindent
+```
+
 ## Tests
 
 ### Run Tests Locally
