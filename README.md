@@ -36,7 +36,7 @@ The extension must be loaded by adding pg_tracing to the [shared_preload_librari
 shared_preload_libraries = 'pg_tracing'
 
 compute_query_id = on
-pg_tracing.span_max = 10000
+pg_tracing.max_span = 10000
 pg_tracing.track = all
 ```
 
