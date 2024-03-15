@@ -1,0 +1,39 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+
+  workflow_dispatch:
+
+jobs:
+  run_tests:
+    name: Run test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        PG_VERSION:
+          - 16
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set environment variables
+        run: |
+            echo "PG_VERSION=${{ matrix.PG_VERSION }}" >> $GITHUB_ENV
+
+      - name: Build Docker Test Image
+        run: |
+          make build-test-image
+
+      - name: Run Test
+        timeout-minutes: 1
+        run: |
+          make run-test
