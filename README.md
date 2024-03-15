@@ -1,4 +1,4 @@
-# pg_tracing - Distribution Tracing for PostgreSQL
+# pg_tracing - Distributed Tracing for PostgreSQL
 
 > [!WARNING]  
 > This extension is still in early development and may be unstable.
@@ -162,7 +162,7 @@ WHERE name ='PgTracing Spans';
 
 ### pg_tracing.buffer_mode (enum)
 
-Controls span buffer's behaviour when `pg_tracing.max_span` spans is reached. If `keep_on_full`, existing buffer is kept while new spans are dropped. If `drop_on_full`, existing buffer is dropped and new spans are added. The default value is `keep_on_full`.
+Controls span buffer's behaviour when `pg_tracing.max_span` spans is reached. If `keep_on_full`, the existing buffer is kept while new spans are dropped. If `drop_on_full`, the existing buffer is dropped and new spans are added. The default value is `keep_on_full`.
 
 ### pg_tracing.max_parameter_size (integer)
 
@@ -170,7 +170,7 @@ Controls the maximum size of the parameter string. The default value is 1024.
 
 ### pg_tracing.track (enum)
 
-Controls which statements should be generated. Specify `top` to only generate span for top-level statements (those issued directly by clients), `all` to also generate spans for nested statements (such as statements invoked within functions), or `none` to disable span generation. The default value is `all`.
+Controls which statements should be generated. Specify `top` to only generate spans for top-level statements (those issued directly by clients), `all` to also generate spans for nested statements (such as statements invoked within functions), or `none` to disable span generation. The default value is `all`.
 
 ### pg_tracing.track_utility (boolean)
 
@@ -186,7 +186,7 @@ Controls the fraction of statements with SQLCommenter tracecontext and an enable
 
 ### pg_tracing.export_parameters (boolean)
 
-Controls whether query's parameters should be exported in spans metadata. The default value is `on`.
+Controls whether the query's parameters should be exported in spans metadata. The default value is `on`.
 
 ## Implementation Details 
 
