@@ -1,5 +1,5 @@
 # pg_tracing extension
 comment = 'Distributed Tracing for PostgreSQL'
-default_version = '1.0'
+default_version = '0.1.0'
 module_pathname = '$libdir/pg_tracing'
 relocatable = true
