@@ -51,7 +51,7 @@ make pgindent
 You can run checks on a local PostgreSQL version available in the `PATH` with:
 
 ```bash
-make check
+make regresscheck
 ```
 
 This will create a temporary instance using `pg_regress`. On failure, the diffs will be available in the `regression.diffs`.

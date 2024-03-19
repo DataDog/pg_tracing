@@ -1,5 +1,3 @@
-# contrib/pg_tracing/Makefile
-
 # Supported PostgreSQL versions:
 PG_VERSIONS = 16
 
@@ -7,39 +5,32 @@ PG_VERSIONS = 16
 PG_VERSION ?= $(lastword $(PG_VERSIONS))
 
 MODULE_big = pg_tracing
-EXTENSION = pg_tracing
-DATA = pg_tracing--0.1.0.sql
+EXTENSION  = pg_tracing
+DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed tracing for postgres"
+PG_CONFIG  = pg_config
 OBJS = \
 	$(WIN32RES) \
 	src/pg_tracing.o \
 	src/pg_tracing_query_process.o \
 	src/pg_tracing_span.o
 
-REGRESSCHECKS = utility \
-				select \
-				extended \
-				insert \
-				trigger \
-				sample \
-				subxact \
-				full_buffer \
-				nested \
-				wal \
-				cleanup
+REGRESSCHECKS = utility select extended insert trigger sample \
+		  		subxact full_buffer nested wal cleanup
+REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf --temp-instance=./tmp_check
 
-PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 
 LOCAL_PG_VERSION := $(shell $(PG_CONFIG) --version | sed "s/^[^ ]* \([0-9]*\).*$$/\1/" 2>/dev/null)
-PG_REGRESS_ARGS=--no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 PG_CFLAGS := $(PG_CFLAGS) -DPG_VERSION_MAJOR=$(LOCAL_PG_VERSION)
 include $(PGXS)
 
-regress: install
+regresscheck_noinstall:
 	$(pg_regress_check) \
-        $(PG_REGRESS_ARGS) \
+        $(REGRESSCHECKS_OPTS) \
         $(REGRESSCHECKS)
+
+regresscheck: install regresscheck_noinstall
 
 typedefs.list:
 	wget -q -O typedefs.list https://buildfarm.postgresql.org/cgi-bin/typedefs.pl
@@ -68,4 +59,4 @@ run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
-		bash -c "make regress || cat /usr/src/pg_tracing/regression.diffs"
+		bash -c "make regresscheck_noinstall || cat /usr/src/pg_tracing/regression.diffs"
