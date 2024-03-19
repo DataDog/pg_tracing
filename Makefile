@@ -7,7 +7,7 @@ PG_VERSION ?= $(lastword $(PG_VERSIONS))
 MODULE_big = pg_tracing
 EXTENSION  = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
-PGFILEDESC = "pg_tracing - Distributed tracing for postgres"
+PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
 PG_CONFIG  = pg_config
 OBJS = \
 	$(WIN32RES) \
