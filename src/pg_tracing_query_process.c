@@ -389,14 +389,8 @@ text_store_file(pgTracingSharedState * pg_tracing, const char *text, int text_le
 	Size		off;
 	int			fd;
 
-	{
-		volatile	pgTracingSharedState *s = (volatile pgTracingSharedState *) pg_tracing;
-
-		SpinLockAcquire(&s->mutex);
-		off = s->extent;
-		s->extent += text_len + 1;
-		SpinLockRelease(&s->mutex);
-	}
+	off = pg_tracing->extent;
+	pg_tracing->extent += text_len + 1;
 
 	/*
 	 * Don't allow the file to grow larger than what qtext_load_file can

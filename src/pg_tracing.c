@@ -503,6 +503,7 @@ pg_tracing_shmem_request(void)
 	if (prev_shmem_request_hook)
 		prev_shmem_request_hook();
 	RequestAddinShmemSpace(pg_tracing_memsize());
+	RequestNamedLWLockTranche("pg_tracing", 1);
 }
 
 /*
@@ -545,7 +546,7 @@ store_span(const Span * span)
 }
 
 /*
- * Get the latest span for a specific level. The span must exist
+ * Get the latest span for a specific level. The span must exists
  */
 static Span *
 get_latest_top_span(int nested_level)
@@ -658,8 +659,8 @@ finish:
 }
 
 /*
- * Drop all spans from the shared buffer and truncate the query file
- * if possible. Shared state mutex must be locked beforehand.
+ * Drop all spans from the shared buffer and truncate the query file.
+ * Exclusive lock on pg_tracing->lock should be acquired beforehand.
  */
 static void
 drop_all_spans_locked(void)
@@ -667,20 +668,9 @@ drop_all_spans_locked(void)
 	/* Drop all spans */
 	shared_spans->end = 0;
 
-	/*
-	 * We only truncate query file if there's no active writers. Since we have
-	 * the lock on s->mutext, no new writers will appear while we truncate the
-	 * file
-	 */
-	if (pg_tracing->n_writers == 0)
-	{
-		/* Reset query file position */
-		pg_tracing->extent = 0;
-		pg_truncate(PG_TRACING_TEXT_FILE, 0);
-	}
-	else
-		pg_tracing->stats.failed_truncates++;
+	/* Reset query file position */
 	pg_tracing->extent = 0;
+	pg_truncate(PG_TRACING_TEXT_FILE, 0);
 }
 
 /*
@@ -695,22 +685,38 @@ check_full_shared_spans(void)
 {
 	bool		full_buffer = false;
 
-	/* TODO: Use LWLock */
-	SpinLockAcquire(&pg_tracing->mutex);
-	if (shared_spans->end + 1 >= shared_spans->max)
+	LWLockAcquire(pg_tracing->lock, LW_SHARED);
+	full_buffer = shared_spans->end >= shared_spans->max;
+	if (full_buffer && pg_tracing_buffer_mode != PG_TRACING_DROP_ON_FULL)
 	{
-		if (pg_tracing_buffer_mode == PG_TRACING_DROP_ON_FULL)
-		{
-			pg_tracing->stats.dropped_spans += shared_spans->end;
-			drop_all_spans_locked();
-		}
-		else
-		{
-			full_buffer = true;
-			pg_tracing->stats.dropped_spans++;
-		}
+		/*
+		 * Buffer is full and we want to keep existing spans. Drop the new
+		 * trace.
+		 */
+		pg_tracing->stats.dropped_traces++;
+		LWLockRelease(pg_tracing->lock);
+		return full_buffer;
 	}
-	SpinLockRelease(&pg_tracing->mutex);
+	LWLockRelease(pg_tracing->lock);
+
+	if (!full_buffer)
+		/* We have room in the shared buffer */
+		return full_buffer;
+
+	/*
+	 * We have a full buffer and we want to drop everything, get an exclusive
+	 * lock
+	 */
+	LWLockAcquire(pg_tracing->lock, LW_EXCLUSIVE);
+	/* Recheck for full buffer */
+	full_buffer = shared_spans->end >= shared_spans->max;
+	if (full_buffer)
+	{
+		pg_tracing->stats.dropped_spans += shared_spans->end;
+		drop_all_spans_locked();
+	}
+	LWLockRelease(pg_tracing->lock);
+
 	return full_buffer;
 }
 
@@ -765,7 +771,7 @@ pg_tracing_shmem_startup(void)
 	if (!found_pg_tracing)
 	{
 		pg_tracing->stats = get_empty_pg_tracing_stats();
-		SpinLockInit(&pg_tracing->mutex);
+		pg_tracing->lock = &(GetNamedLWLockTranche("pg_tracing"))->lock;
 	}
 	if (!found_shared_spans)
 	{
@@ -780,7 +786,7 @@ pg_tracing_shmem_startup(void)
  * span counters
  */
 static void
-process_query_desc(pgTracingTraceContext * trace_context, QueryDesc *queryDesc,
+process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *queryDesc,
 				   int sql_error_code, TimestampTz *end_time)
 {
 	NodeCounters *node_counters = &get_latest_top_span(exec_nested_level)->node_counters;
@@ -978,18 +984,19 @@ cleanup_tracing(void)
 }
 
 /*
- * Add span to the shared memory. Mutex must be acquired beforehand.
+ * Add span to the shared memory.
+ * Exclusive lock on pg_tracing->lock must be acquired beforehand.
  */
 static void
 add_span_to_shared_buffer_locked(const Span * span)
 {
 	/* Spans must be ended before adding them to the shared buffer */
 	Assert(span->ended);
-	if (shared_spans->end + 1 >= shared_spans->max)
+	if (shared_spans->end >= shared_spans->max)
 		pg_tracing->stats.dropped_spans++;
 	else
 	{
-		pg_tracing->stats.spans++;
+		pg_tracing->stats.processed_spans++;
 		shared_spans->spans[shared_spans->end++] = *span;
 	}
 }
@@ -999,7 +1006,7 @@ add_span_to_shared_buffer_locked(const Span * span)
  * the root level. This may happen either when query is finished or on a caught error.
  */
 static void
-end_tracing(pgTracingTraceContext * trace_context)
+end_tracing(pgTracingTraceContext * trace_context, Span * ongoing_span)
 {
 	Size		file_position = 0;
 
@@ -1007,13 +1014,10 @@ end_tracing(pgTracingTraceContext * trace_context)
 	if (exec_nested_level + plan_nested_level > 0)
 		return;
 
+	LWLockAcquire(pg_tracing->lock, LW_EXCLUSIVE);
+
 	if (current_trace_text->len > 0)
 	{
-		/* We have string to dump in the query text, set ourselves as a writer */
-		SpinLockAcquire(&pg_tracing->mutex);
-		pg_tracing->n_writers++;
-		SpinLockRelease(&pg_tracing->mutex);
-
 		/* Dump all buffered texts in file */
 		text_store_file(pg_tracing, current_trace_text->data, current_trace_text->len,
 						&file_position);
@@ -1025,23 +1029,28 @@ end_tracing(pgTracingTraceContext * trace_context)
 			for (int j = 0; j < per_level_buffers[i].top_spans->end; j++)
 				adjust_file_offset(per_level_buffers[i].top_spans->spans + j,
 								   file_position);
+		if (ongoing_span != NULL)
+			adjust_file_offset(ongoing_span, file_position);
 	}
 
-	{
-		SpinLockAcquire(&pg_tracing->mutex);
-		/* We're at the end, add all stored spans to the shared memory */
-		for (int i = 0; i < current_trace_spans->end; i++)
-			add_span_to_shared_buffer_locked(&current_trace_spans->spans[i]);
-		/* And all top spans that were not pushed to current_trace_spans */
-		for (int i = 0; i <= max_nested_level; i++)
-			for (int j = 0; j < per_level_buffers[i].top_spans->end; j++)
-				add_span_to_shared_buffer_locked(&per_level_buffers[i].top_spans->spans[j]);
+	/* We're at the end, add all stored spans to the shared memory */
+	for (int i = 0; i < current_trace_spans->end; i++)
+		add_span_to_shared_buffer_locked(&current_trace_spans->spans[i]);
+	/* And all top spans that were not pushed to current_trace_spans */
+	for (int i = 0; i <= max_nested_level; i++)
+		for (int j = 0; j < per_level_buffers[i].top_spans->end; j++)
+			add_span_to_shared_buffer_locked(&per_level_buffers[i].top_spans->spans[j]);
 
-		if (current_trace_text->len > 0)
-			/* Mark our write complete if we wrote in the file */
-			pg_tracing->n_writers--;
-		SpinLockRelease(&pg_tracing->mutex);
-	}
+	/*
+	 * We may have an ongoing span that was not allocated in
+	 * current_trace_spans nor per_level_buffers, add it to the shared spans
+	 */
+	if (ongoing_span != NULL)
+		add_span_to_shared_buffer_locked(ongoing_span);
+
+	/* Update our stats with the new trace */
+	pg_tracing->stats.processed_traces++;
+	LWLockRelease(pg_tracing->lock);
 
 	/* We can reset the memory context here */
 	cleanup_tracing();
@@ -1056,7 +1065,8 @@ end_tracing(pgTracingTraceContext * trace_context)
  * error code to it.
  */
 static void
-handle_pg_error(pgTracingTraceContext * trace_context, QueryDesc *queryDesc,
+handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
+				const QueryDesc *queryDesc,
 				TimestampTz span_end_time)
 {
 	int			sql_error_code;
@@ -1088,7 +1098,14 @@ handle_pg_error(pgTracingTraceContext * trace_context, QueryDesc *queryDesc,
 		}
 	}
 
-	end_tracing(trace_context);
+	if (ongoing_span != NULL)
+	{
+		ongoing_span->sql_error_code = sql_error_code;
+		if (!ongoing_span->ended)
+			end_span(ongoing_span, &span_end_time);
+	}
+
+	end_tracing(trace_context, ongoing_span);
 }
 
 /*
@@ -1130,13 +1147,6 @@ initialize_trace_level(void)
 		current_trace_text = makeStringInfo();
 
 		MemoryContextSwitchTo(oldcxt);
-		{
-			/* Start of a new trace */
-			SpinLockAcquire(&pg_tracing->mutex);
-			pg_tracing->stats.traces++;
-			SpinLockRelease(&pg_tracing->mutex);
-		}
-
 	}
 	else if (exec_nested_level >= allocated_nested_level)
 	{
@@ -1449,20 +1459,23 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	PG_CATCH();
 	{
 		TimestampTz span_end_time = GetCurrentTimestamp();
+		Span	   *root_span = NULL;
 
 		plan_nested_level--;
 		span_planner->sql_error_code = geterrcode();
 		if (exec_nested_level == 0)
 		{
 			/*
-			 * The root span at level 0 is stored in trace_context, copy it in
-			 * per_level_buffers
+			 * The root span at level 0 is stored in trace_context. Ideally,
+			 * we should copy it to a top span created with
+			 * allocate_new_top_span(). However, since we are within a catch
+			 * block that could be due to a out of memory error, we want to
+			 * avoid new allocations. We can just pass the existing span to be
+			 * copied in the shared memory
 			 */
-			Span	   *root_span = allocate_new_top_span();
-
-			*root_span = trace_context->root_span;
+			root_span = &trace_context->root_span;
 		}
-		handle_pg_error(trace_context, NULL, span_end_time);
+		handle_pg_error(trace_context, root_span, NULL, span_end_time);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1599,7 +1612,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		if (current_trace_spans != NULL && executor_sampled)
 		{
 			span_end_time = end_nested_level();
-			handle_pg_error(trace_context, queryDesc, span_end_time);
+			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
 		}
 		else
 			exec_nested_level--;
@@ -1665,7 +1678,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		else
 		{
 			span_end_time = end_nested_level();
-			handle_pg_error(trace_context, queryDesc, span_end_time);
+			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
 		}
 		PG_RE_THROW();
 	}
@@ -1742,7 +1755,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		if (overlapping_trace_context)
 			store_span(top_span);
 		else
-			end_tracing(trace_context);
+			end_tracing(trace_context, NULL);
 	}
 }
 
@@ -1812,7 +1825,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		{
 			Assert(current_trace_context.traceparent.sampled ||
 				   root_trace_context.traceparent.sampled);
-			end_tracing(trace_context);
+			end_tracing(trace_context, NULL);
 		}
 		return;
 	}
@@ -1848,7 +1861,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		if (current_trace_spans != NULL)
 		{
 			span_end_time = end_nested_level();
-			handle_pg_error(trace_context, NULL, span_end_time);
+			handle_pg_error(trace_context, NULL, NULL, span_end_time);
 		}
 		PG_RE_THROW();
 	}
@@ -1875,7 +1888,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	 * was restored and end tracing
 	 */
 	end_latest_top_span(&span_end_time, false);
-	end_tracing(trace_context);
+	end_tracing(trace_context, NULL);
 }
 
 /*
@@ -2051,8 +2064,17 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	Span	   *span;
 	const char *qbuffer;
 	Size		qbuffer_size = 0;
+	LWLockMode	lock_mode = LW_SHARED;
 
 	consume = PG_GETARG_BOOL(0);
+
+	/*
+	 * We need an exclusive lock to truncate and empty the shared buffer when
+	 * we consume
+	 */
+	if (consume)
+		lock_mode = LW_EXCLUSIVE;
+
 	if (!pg_tracing)
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2077,7 +2099,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 		 */
 		return (Datum) 0;
 
-	SpinLockAcquire(&pg_tracing->mutex);
+	LWLockAcquire(pg_tracing->lock, lock_mode);
 	for (int i = 0; i < shared_spans->end; i++)
 	{
 		span = shared_spans->spans + i;
@@ -2088,7 +2110,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	if (consume)
 		drop_all_spans_locked();
 	pg_tracing->stats.last_consume = GetCurrentTimestamp();
-	SpinLockRelease(&pg_tracing->mutex);
+	LWLockRelease(pg_tracing->lock);
 
 	return (Datum) 0;
 }
@@ -2116,16 +2138,14 @@ pg_tracing_info(PG_FUNCTION_ARGS)
 		elog(ERROR, "return type must be a row type");
 
 	/* Get a copy of the pg_tracing stats */
-	{
-		SpinLockAcquire(&pg_tracing->mutex);
-		stats = pg_tracing->stats;
-		SpinLockRelease(&pg_tracing->mutex);
-	}
+	LWLockAcquire(pg_tracing->lock, LW_SHARED);
+	stats = pg_tracing->stats;
+	LWLockRelease(pg_tracing->lock);
 
-	values[i++] = Int64GetDatum(stats.traces);
-	values[i++] = Int64GetDatum(stats.spans);
+	values[i++] = Int64GetDatum(stats.processed_traces);
+	values[i++] = Int64GetDatum(stats.processed_spans);
+	values[i++] = Int64GetDatum(stats.dropped_traces);
 	values[i++] = Int64GetDatum(stats.dropped_spans);
-	values[i++] = Int64GetDatum(stats.failed_truncates);
 	values[i++] = TimestampTzGetDatum(stats.last_consume);
 	values[i++] = TimestampTzGetDatum(stats.stats_reset);
 
@@ -2140,10 +2160,10 @@ get_empty_pg_tracing_stats(void)
 {
 	pgTracingStats stats;
 
-	stats.traces = 0;
-	stats.spans = 0;
+	stats.processed_traces = 0;
+	stats.processed_spans = 0;
+	stats.dropped_traces = 0;
 	stats.dropped_spans = 0;
-	stats.failed_truncates = 0;
 	stats.last_consume = 0;
 	stats.stats_reset = GetCurrentTimestamp();
 	return stats;
@@ -2160,10 +2180,9 @@ pg_tracing_reset(PG_FUNCTION_ARGS)
 	 */
 	pgTracingStats empty_stats = get_empty_pg_tracing_stats();
 
-	{
-		SpinLockAcquire(&pg_tracing->mutex);
-		pg_tracing->stats = empty_stats;
-		SpinLockRelease(&pg_tracing->mutex);
-	}
+	LWLockAcquire(pg_tracing->lock, LW_EXCLUSIVE);
+	pg_tracing->stats = empty_stats;
+	LWLockRelease(pg_tracing->lock);
+
 	PG_RETURN_VOID();
 }

@@ -82,8 +82,6 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, uint64 *spa
 
 	/*
 	 * Store the starting buffer for planner and process utility spans
-	 *
-	 * TODO: Do we need wal buffer for planner?
 	 */
 	if (type == SPAN_PLANNER || span->type == SPAN_PROCESS_UTILITY)
 	{

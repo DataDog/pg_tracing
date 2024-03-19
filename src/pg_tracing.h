@@ -13,6 +13,7 @@
 #include "nodes/queryjumble.h"
 #include "jit/jit.h"
 #include "pgstat.h"
+#include "storage/lwlock.h"
 
 /* Location of external text file */
 #define PG_TRACING_TEXT_FILE	PG_STAT_TMP_DIR "/pg_tracing.stat"
@@ -130,11 +131,10 @@ typedef struct Span
  */
 typedef struct pgTracingStats
 {
-	int64		traces;			/* number of traces processed */
-	int64		spans;			/* number of spans processed */
+	int64		processed_traces;	/* number of traces processed */
+	int64		processed_spans;	/* number of spans processed */
+	int64		dropped_traces; /* number of traces aborted due to full buffer */
 	int64		dropped_spans;	/* number of dropped spans due to full buffer */
-	int64		failed_truncates;	/* number of failed query file truncates
-									 * due to active writer */
 	TimestampTz last_consume;	/* Last time the shared spans buffer was
 								 * consumed */
 	TimestampTz stats_reset;	/* Last time stats were reset */
@@ -145,10 +145,9 @@ typedef struct pgTracingStats
  */
 typedef struct pgTracingSharedState
 {
-	slock_t		mutex;			/* protects shared stats fields and
-								 * shared_spans buffer */
+	LWLock	   *lock;			/* protects shared spans, shared state and
+								 * query file */
 	Size		extent;			/* current extent of query file */
-	int			n_writers;		/* number of active writers to query file */
 	pgTracingStats stats;		/* global statistics for pg_tracing */
 }			pgTracingSharedState;
 
@@ -179,7 +178,7 @@ extern const char *normalise_query_parameters(const JumbleState *jstate, const c
 extern void extract_trace_context_from_query(pgTracingTraceContext * trace_context, const char *query);
 extern void parse_trace_context(pgTracingTraceContext * trace_context, const char *trace_context_str, int trace_context_len);
 extern const char *normalise_query(const char *query, int query_loc, int *query_len_p);
-bool		text_store_file(pgTracingSharedState * pg_tracing, const char *query,
+extern bool text_store_file(pgTracingSharedState * pg_tracing, const char *query,
 							int query_len, Size *query_offset);
 extern const char *qtext_load_file(Size *buffer_size);
 extern const char *qtext_load_file(Size *buffer_size);
