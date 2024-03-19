@@ -39,7 +39,7 @@ USER postgres
 WORKDIR /usr/src/pg_tracing
 
 COPY --chown=postgres Makefile ./
-COPY --chown=postgres pg_tracing--1.0.sql pg_tracing.control ./
+COPY --chown=postgres pg_tracing--0.1.0.sql pg_tracing.control ./
 COPY --chown=postgres ./src/ ./src
 
 # Tests

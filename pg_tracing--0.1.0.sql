@@ -1,14 +1,14 @@
-/* contrib/pg_tracing/pg_tracing--1.0.sql */
+/* contrib/pg_tracing/pg_tracing--0.1.0.sql */
 
 -- complain if script is sourced in psql, rather than via ALTER EXTENSION
 \echo Use "CREATE EXTENSION pg_tracing" to load this file. \quit
 
 --- Define pg_tracing_info
 CREATE FUNCTION pg_tracing_info(
-    OUT traces bigint,
-    OUT spans bigint,
+    OUT processed_traces bigint,
+    OUT processed_spans bigint,
+    OUT dropped_traces bigint,
     OUT dropped_spans bigint,
-    OUT failed_truncates bigint,
     OUT last_consume timestamp with time zone,
     OUT stats_reset timestamp with time zone
 )

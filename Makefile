@@ -8,7 +8,7 @@ PG_VERSION ?= $(lastword $(PG_VERSIONS))
 
 MODULE_big = pg_tracing
 EXTENSION = pg_tracing
-DATA = pg_tracing--1.0.sql
+DATA = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed tracing for postgres"
 OBJS = \
 	$(WIN32RES) \
@@ -36,7 +36,7 @@ PG_REGRESS_ARGS=--no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 PG_CFLAGS := $(PG_CFLAGS) -DPG_VERSION_MAJOR=$(LOCAL_PG_VERSION)
 include $(PGXS)
 
-regress:
+regress: install
 	$(pg_regress_check) \
         $(PG_REGRESS_ARGS) \
         $(REGRESSCHECKS)
