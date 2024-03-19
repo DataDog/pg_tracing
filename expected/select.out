@@ -33,6 +33,20 @@ SELECT span_type, span_operation from pg_tracing_peek_spans where trace_id='0000
  Executor     | ExecutorRun
 (3 rows)
 
+-- Check userid
+SELECT userid = (SELECT usesysid FROM pg_user WHERE usename = current_user) FROM pg_tracing_peek_spans GROUP BY userid;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Check dbid
+SELECT dbid = (SELECT oid FROM pg_database WHERE datname = (SELECT current_database())) FROM pg_tracing_peek_spans GROUP BY dbid;
+ ?column? 
+----------
+ t
+(1 row)
+
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans where trace_id='00000000000000000000000000000001';
  count 
@@ -40,13 +54,8 @@ SELECT count(distinct query_id) from pg_tracing_consume_spans where trace_id='00
      1
 (1 row)
 
--- Check reported number of trace
-SELECT traces from pg_tracing_info;
- traces 
---------
-     26
-(1 row)
-
+-- Get initial number of traces reported
+SELECT processed_traces from pg_tracing_info \gset
 -- Trace a statement with function call
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ SELECT count(*) from current_database();
  count 
@@ -62,6 +71,13 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  Planner      | Planner                                  |   2
  Executor     | ExecutorRun                              |   2
 (3 rows)
+
+-- Check expected reported number of trace
+SELECT processed_traces = :processed_traces + 1 from pg_tracing_info;
+ ?column? 
+----------
+ t
+(1 row)
 
 -- Trace a more complex query with multiple function calls
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT s.relation_size + s.index_size
