@@ -23,7 +23,7 @@ REGRESSCHECKS = utility \
 				trigger \
 				sample \
 				subxact \
-				reset \
+				full_buffer \
 				nested \
 				wal \
 				cleanup
@@ -31,9 +31,8 @@ REGRESSCHECKS = utility \
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 
-# pg_regress expecteddir's argument is bugged and uses outputdir for expected path
 LOCAL_PG_VERSION := $(shell $(PG_CONFIG) --version | sed "s/^[^ ]* \([0-9]*\).*$$/\1/" 2>/dev/null)
-PG_REGRESS_ARGS=--no-locale --encoding=UTF8 --outputdir=./tests/$(LOCAL_PG_VERSION) --temp-config tests/pg_tracing.conf
+PG_REGRESS_ARGS=--no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 PG_CFLAGS := $(PG_CFLAGS) -DPG_VERSION_MAJOR=$(LOCAL_PG_VERSION)
 include $(PGXS)
 
@@ -69,4 +68,4 @@ run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
-		bash -c "make regress || cat /usr/src/pg_tracing/tests/$(PG_VERSION)/regression.diffs"
+		bash -c "make regress || cat /usr/src/pg_tracing/regression.diffs"
