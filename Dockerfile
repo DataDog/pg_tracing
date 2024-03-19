@@ -41,10 +41,11 @@ WORKDIR /usr/src/pg_tracing
 COPY --chown=postgres Makefile ./
 COPY --chown=postgres pg_tracing--0.1.0.sql pg_tracing.control ./
 COPY --chown=postgres ./src/ ./src
+COPY --chown=postgres ./pg_tracing.conf ./pg_tracing.conf
 
 # Tests
 COPY --chown=postgres ./sql/ ./sql
-COPY --chown=postgres ./tests/ ./tests
+COPY --chown=postgres ./expected/ ./expected
 
 RUN make -s clean
 RUN sudo make -s install -j8
