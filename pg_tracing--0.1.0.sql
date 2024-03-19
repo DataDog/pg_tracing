@@ -32,9 +32,9 @@ CREATE FUNCTION pg_tracing_spans(
     OUT span_start timestamp with time zone,
     OUT span_end timestamp with time zone,
     OUT sql_error_code character(5),
+    OUT pid int4,
     OUT userid oid,
     OUT dbid oid,
-    OUT pid int4,
     OUT subxact_count smallint,
 
 --  Plan counters
