@@ -10,3 +10,4 @@ tags
 *.o
 *.so
 *.dylib
+typedefs.list
