@@ -814,7 +814,7 @@ set_trace_id(struct pgTracingTraceContext *trace_context)
 {
 	LocalTransactionId current_lxid;
 
-#if PG_VERSION_MAJOR > 16
+#if PG_VERSION_NUM >= 170000
 	current_lxid = MyProc->vxid.lxid;
 #else
 	current_lxid = MyProc->lxid;
@@ -1332,7 +1332,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	TimestampTz start_top_span;
 	pgTracingTraceContext *trace_context = &root_trace_context;
 	bool		new_lxid;
-#if PG_VERSION_MAJOR > 16
+#if PG_VERSION_NUM >= 170000
 	new_lxid = MyProc->vxid.lxid != latest_lxid;
 #else
 	new_lxid = MyProc->lxid != latest_lxid;
@@ -1936,7 +1936,7 @@ add_node_counters(const NodeCounters * node_counters, int i, Datum *values)
 	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.local_blks_dirtied);
 	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.local_blks_written);
 
-#if PG_VERSION_MAJOR > 16
+#if PG_VERSION_NUM >= 170000
 	blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.shared_blk_read_time);
 	blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.shared_blk_write_time);
 #else

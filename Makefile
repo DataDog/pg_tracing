@@ -21,8 +21,6 @@ REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf -
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 
-LOCAL_PG_VERSION := $(shell $(PG_CONFIG) --version | sed "s/^[^ ]* \([0-9]*\).*$$/\1/" 2>/dev/null)
-PG_CFLAGS := $(PG_CFLAGS) -DPG_VERSION_MAJOR=$(LOCAL_PG_VERSION)
 include $(PGXS)
 
 regresscheck_noinstall:
