@@ -153,6 +153,10 @@ Controls the fraction of statements that generate spans. Statements with traceco
 
 Controls the fraction of statements with SQLCommenter tracecontext and an enabled sampled flag that will generate spans. The default value is 1.
 
+### pg_tracing.filter_query_ids (string)
+
+Restrict sampling to the provided queryIds. An empty value won't filter any queries. The default value is empty.
+
 ### pg_tracing.export_parameters (boolean)
 
 Controls whether the query's parameters should be exported in spans metadata. The default value is `on`.
