@@ -108,6 +108,9 @@ typedef struct pgTracingQueryIdFilter
 static int	pg_tracing_max_span;	/* Maximum number of spans to store */
 static int	pg_tracing_max_parameter_str;	/* Maximum number of spans to
 											 * store */
+static bool pg_tracing_trace_parallel_workers = true;	/* True to generate
+														 * spans from parallel
+														 * workers */
 static double pg_tracing_sample_rate = 0;	/* Sample rate applied to queries
 											 * without SQLCommenter */
 static double pg_tracing_caller_sample_rate = 1;	/* Sample rate applied to
@@ -287,6 +290,17 @@ _PG_init(void)
 							NULL,
 							NULL);
 
+	DefineCustomBoolVariable("pg_tracing.trace_parallel_workers",
+							 "Whether to generate samples from parallel workers.",
+							 NULL,
+							 &pg_tracing_trace_parallel_workers,
+							 true,
+							 PGC_USERSET,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
+
 	DefineCustomEnumVariable("pg_tracing.track",
 							 "Selects which statements are tracked by pg_tracing.",
 							 NULL,
@@ -415,6 +429,8 @@ pg_tracing_memsize(void)
 	size = add_size(size, sizeof(pgTracingSpans));
 	/* the span variable array */
 	size = add_size(size, mul_size(pg_tracing_max_span, sizeof(Span)));
+	/* and the parallel workers context  */
+	size = add_size(size, mul_size(max_parallel_workers, sizeof(pgTracingParallelContext)));
 
 	return size;
 }
@@ -519,6 +535,23 @@ add_str_to_trace_buffer(const char *str, int str_len)
 	appendBinaryStringInfo(current_trace_text, str, str_len);
 	appendStringInfoChar(current_trace_text, '\0');
 	current_trace_text->cursor = current_trace_text->len;
+	return position;
+}
+
+
+/*
+ * Add the worker name to the provided stringinfo
+ */
+static int
+add_worker_name_to_trace_buffer(StringInfo str_info, int parallel_worker_number)
+{
+	int			position = str_info->cursor;
+
+	Assert(str_len > 0);
+
+	appendStringInfo(str_info, "Worker %d", parallel_worker_number);
+	appendStringInfoChar(str_info, '\0');
+	str_info->cursor = str_info->len;
 	return position;
 }
 
@@ -767,6 +800,9 @@ pg_tracing_shmem_startup(void)
 											   "pg_tracing memory context",
 											   ALLOCSET_DEFAULT_SIZES);
 
+	/* Initialize shmem for trace propagation to parallel workers */
+	pg_tracing_shmem_parallel_startup();
+
 	/* First time, let's init shared state */
 	if (!found_pg_tracing)
 	{
@@ -928,6 +964,17 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 	if (pg_tracing_sample_rate == 0 && pg_tracing_caller_sample_rate == 0)
 		return;
 
+	/*
+	 * In a parallel worker, check the parallel context shared buffer to see
+	 * if the leader left a trace context
+	 */
+	if (IsParallelWorker())
+	{
+		if (pg_tracing_trace_parallel_workers)
+			fetch_parallel_context(trace_context);
+		return;
+	}
+
 	Assert(trace_context->root_span.span_id == 0);
 	Assert(traceid_zero(trace_context->traceparent.trace_id));
 
@@ -975,6 +1022,8 @@ cleanup_tracing(void)
 		!current_trace_context.traceparent.sampled)
 		/* No need for cleaning */
 		return;
+	if (pg_tracing_trace_parallel_workers)
+		remove_parallel_context();
 	MemoryContextReset(pg_tracing_mem_ctx);
 	reset_trace_context(&root_trace_context);
 	reset_trace_context(&current_trace_context);
@@ -1198,6 +1247,16 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 			   command_type_to_span_type(commandType),
 			   NULL, parent_id,
 			   per_level_buffers[exec_nested_level].query_id, &start_time);
+
+	if (IsParallelWorker())
+	{
+		/*
+		 * In a parallel worker, we use the worker name as the span's
+		 * operation
+		 */
+		top_span->operation_name_offset = add_worker_name_to_trace_buffer(current_trace_text, ParallelWorkerNumber);
+		return;
+	}
 
 	if (jstate && jstate->clocations_count > 0 && query != NULL)
 	{
@@ -1572,6 +1631,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
  * ExecutorRun hook: track nesting depth and create ExecutorRun span.
  * ExecutorRun can create nested queries so we need to create ExecutorRun span
  * as a top span.
+ * If the plan needs to create parallel workers, push the trace context in the parallel shared buffer.
  */
 static void
 pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
@@ -1592,6 +1652,14 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		begin_span(trace_context->traceparent.trace_id, executor_run_span,
 				   SPAN_EXECUTOR_RUN, NULL, parent_id,
 				   per_level_buffers[exec_nested_level].query_id, &span_start_time);
+
+		/*
+		 * If this query starts parallel worker, push the trace context for
+		 * the child processes
+		 */
+		if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
+			add_parallel_context(trace_context, executor_run_span->span_id,
+								 per_level_buffers[exec_nested_level].query_id);
 	}
 
 	exec_nested_level++;
