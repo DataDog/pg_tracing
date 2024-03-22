@@ -112,6 +112,26 @@ The `pg_tracing_consume_spans` and `pg_tracing_peek_spans` views are defined in 
 
 ## Parameters
 
+### pg_tracing.buffer_mode (enum)
+
+Controls span buffer's behaviour when `pg_tracing.max_span` spans is reached. If `keep_on_full`, the existing buffer is kept while new spans are dropped. If `drop_on_full`, the existing buffer is dropped and new spans are added. The default value is `keep_on_full`.
+
+### pg_tracing.caller_sample_rate (real)
+
+Controls the fraction of statements with SQLCommenter tracecontext and an enabled sampled flag that will generate spans. The default value is 1.
+
+### pg_tracing.export_parameters (boolean)
+
+Controls whether the query's parameters should be exported in spans metadata. The default value is `on`.
+
+### pg_tracing.filter_query_ids (string)
+
+Restrict sampling to the provided queryIds. An empty value won't filter any queries. The default value is empty.
+
+### pg_tracing.max_parameter_size (integer)
+
+Controls the maximum size of the parameter string. The default value is 1024.
+
 ### pg_tracing.max_span (integer)
 
 Specifies the maximum number of spans stored by the extension. If more spans are generated, the span buffer will be emptied if `pg_tracing.buffer_mode` is set to `drop_on_full`. If `pg_tracing.buffer_mode` is set to `keep_on_full`, the new spans will be dropped and tracing will be aborted. The default value is 5000. This parameter can only be set at server start.
@@ -129,13 +149,13 @@ FROM pg_shmem_allocations
 WHERE name ='PgTracing Spans';
 ```
 
-### pg_tracing.buffer_mode (enum)
+### pg_tracing.sample_rate (real)
 
-Controls span buffer's behaviour when `pg_tracing.max_span` spans is reached. If `keep_on_full`, the existing buffer is kept while new spans are dropped. If `drop_on_full`, the existing buffer is dropped and new spans are added. The default value is `keep_on_full`.
+Controls the fraction of statements that generate spans. Statements with tracecontext propagated with SQLCommenter and sampled flag enabled are not impacted by this parameter. For traces with nested statements, either all will be explained or none. The default value is 0.
 
-### pg_tracing.max_parameter_size (integer)
+### pg_tracing.trace_parallel_workers (boolean)
 
-Controls the maximum size of the parameter string. The default value is 1024.
+Controls whether spans should be generated for workers created by parallel queries.
 
 ### pg_tracing.track (enum)
 
@@ -152,10 +172,6 @@ Controls the fraction of statements that generate spans. Statements with traceco
 ### pg_tracing.caller_sample_rate (real)
 
 Controls the fraction of statements with SQLCommenter tracecontext and an enabled sampled flag that will generate spans. The default value is 1.
-
-### pg_tracing.filter_query_ids (string)
-
-Restrict sampling to the provided queryIds. An empty value won't filter any queries. The default value is empty.
 
 ### pg_tracing.export_parameters (boolean)
 

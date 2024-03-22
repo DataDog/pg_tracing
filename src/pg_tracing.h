@@ -171,6 +171,32 @@ typedef struct pgTracingTraceContext
 	Span		root_span;		/* Top span for exec_nested_level 0 */
 }			pgTracingTraceContext;
 
+/*
+ * A trace context for a specific parallel context
+ */
+typedef struct pgTracingParallelContext
+{
+	BackendId	leader_backend_id;	/* Backend id of the leader, set to
+									 * InvalidBackendId if unused */
+	pgTracingTraceContext trace_context;
+}			pgTracingParallelContext;
+
+/*
+ * Store context for parallel workers
+ */
+typedef struct pgTracingParallelWorkers
+{
+	slock_t		mutex;
+	pgTracingParallelContext trace_contexts[FLEXIBLE_ARRAY_MEMBER];
+}			pgTracingParallelWorkers;
+
+/* pg_tracing_parallel.c */
+extern void pg_tracing_shmem_parallel_startup(void);
+extern void add_parallel_context(const struct pgTracingTraceContext *trace_context,
+								 uint64 parent_id, uint64 query_id);
+extern void remove_parallel_context(void);
+extern void fetch_parallel_context(pgTracingTraceContext * trace_context);
+
 /* pg_tracing_query_process.c */
 extern const char *normalise_query_parameters(const JumbleState *jstate, const char *query,
 											  int query_loc, int *query_len_p, char **param_str,
