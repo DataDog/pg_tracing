@@ -69,6 +69,7 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, uint64 *spa
 	span->node_type_offset = -1;
 	span->operation_name_offset = -1;
 	span->parameter_offset = -1;
+	span->deparse_info_offset = -1;
 	span->sql_error_code = 0;
 	span->startup = 0;
 	span->be_pid = MyProcPid;
@@ -260,6 +261,8 @@ adjust_file_offset(Span * span, Size file_position)
 		span->operation_name_offset += file_position;
 	if (span->parameter_offset != -1)
 		span->parameter_offset += file_position;
+	if (span->deparse_info_offset != -1)
+		span->deparse_info_offset += file_position;
 }
 
 /*
