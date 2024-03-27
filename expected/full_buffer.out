@@ -25,10 +25,10 @@ select processed_traces, processed_spans, dropped_traces, dropped_spans from pg_
 -- Saturate the span buffer. Each call should create at least 2 spans
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ CALL loop_select(20);
 -- Check that we have dropped spans. The trace was still partially processed
-select processed_traces = 1, processed_spans = 40, dropped_traces = 0, dropped_spans > 0 from pg_tracing_info();
+select processed_traces = 1, processed_spans = 50, dropped_traces = 0, dropped_spans > 0 from pg_tracing_info();
  ?column? | ?column? | ?column? | ?column? 
 ----------+----------+----------+----------
- t        | f        | t        | t
+ t        | t        | t        | t
 (1 row)
 
 -- Try to create new traces while buffer is full
@@ -45,10 +45,10 @@ select processed_traces = 1, processed_spans = 40, dropped_traces = 0, dropped_s
 (1 row)
 
 -- We should have only one additional dropped trace
-select processed_traces = 1, processed_spans = 40, dropped_traces = 1 from pg_tracing_info();
+select processed_traces = 1, processed_spans = 50, dropped_traces = 1 from pg_tracing_info();
  ?column? | ?column? | ?column? 
 ----------+----------+----------
- t        | f        | t
+ t        | t        | t
 (1 row)
 
 -- Clean current spans
