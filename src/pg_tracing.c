@@ -60,6 +60,7 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/varlena.h"
+#include "utils/ruleutils.h"
 
 PG_MODULE_MAGIC;
 
@@ -93,6 +94,12 @@ typedef struct pgTracingPerLevelBuffer
 {
 	uint64		query_id;		/* Query id by for this level when available */
 	pgTracingSpans *top_spans;	/* top spans for the nested level */
+	uint64		executor_run_span_id;	/* executor run span id for this
+										 * level. Executor run is used as
+										 * parent for spans generated from
+										 * planstate */
+	TimestampTz executor_start;
+	TimestampTz executor_end;
 }			pgTracingPerLevelBuffer;
 
 /*
@@ -108,6 +115,8 @@ typedef struct pgTracingQueryIdFilter
 static int	pg_tracing_max_span;	/* Maximum number of spans to store */
 static int	pg_tracing_max_parameter_str;	/* Maximum number of spans to
 											 * store */
+static bool pg_tracing_deparse_plan = true; /* Deparse plan to generate more
+											 * detailed spans */
 static bool pg_tracing_trace_parallel_workers = true;	/* True to generate
 														 * spans from parallel
 														 * workers */
@@ -149,6 +158,7 @@ static const struct config_enum_entry buffer_mode_options[] =
 #define pg_tracing_enabled(trace_context, level) \
 	(trace_context->traceparent.sampled && pg_tracking_level(level))
 
+#define US_IN_S INT64CONST(1000000)
 #define INT64_HEX_FORMAT "%016" INT64_MODIFIER "x"
 
 PG_FUNCTION_INFO_V1(pg_tracing_info);
@@ -160,7 +170,7 @@ PG_FUNCTION_INFO_V1(pg_tracing_reset);
  */
 
 /* Memory context for pg_tracing. */
-static MemoryContext pg_tracing_mem_ctx;
+MemoryContext pg_tracing_mem_ctx;
 
 /* trace context at the root level of parse/planning hook */
 static struct pgTracingTraceContext root_trace_context;
@@ -252,6 +262,9 @@ static pgTracingStats get_empty_pg_tracing_stats(void);
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
 
+static TimestampTz generate_member_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext,
+										 uint64 parent_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
+
 
 static void cleanup_tracing(void);
 
@@ -294,6 +307,17 @@ _PG_init(void)
 							 "Whether to generate samples from parallel workers.",
 							 NULL,
 							 &pg_tracing_trace_parallel_workers,
+							 true,
+							 PGC_USERSET,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
+
+	DefineCustomBoolVariable("pg_tracing.deparse_plan",
+							 "Deparse query plan to generate details more details on a plan node.",
+							 NULL,
+							 &pg_tracing_deparse_plan,
 							 true,
 							 PGC_USERSET,
 							 0,
@@ -525,7 +549,7 @@ pg_tracing_shmem_request(void)
 /*
  * Append a string current_trace_text StringInfo
  */
-static int
+int
 add_str_to_trace_buffer(const char *str, int str_len)
 {
 	int			position = current_trace_text->cursor;
@@ -556,7 +580,7 @@ add_worker_name_to_trace_buffer(StringInfo str_info, int parallel_worker_number)
 /*
  * Store a span in the current_trace_spans buffer
  */
-static void
+void
 store_span(const Span * span)
 {
 	Assert(span->ended);
@@ -836,6 +860,34 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 	if (queryDesc->estate->es_jit)
 		node_counters->jit_usage = queryDesc->estate->es_jit->instr;
 	node_counters->rows = queryDesc->estate->es_total_processed;
+
+
+	/* Process planstate */
+	if (queryDesc->planstate && queryDesc->planstate->instrument != NULL)
+	{
+		Bitmapset  *rels_used = NULL;
+		planstateTraceContext planstateTraceContext;
+		TimestampTz latest_end = 0;
+		uint64		parent_id = per_level_buffers[exec_nested_level].executor_run_span_id;
+		uint64		query_id = per_level_buffers[exec_nested_level].query_id;
+		TimestampTz parent_start = per_level_buffers[exec_nested_level].executor_start;
+		TimestampTz parent_end = per_level_buffers[exec_nested_level].executor_end;
+
+		planstateTraceContext.rtable_names = select_rtable_names_for_explain(queryDesc->plannedstmt->rtable, rels_used);
+		planstateTraceContext.trace_id = trace_context->traceparent.trace_id;
+		planstateTraceContext.ancestors = NULL;
+		planstateTraceContext.sql_error_code = sql_error_code;
+		/* Prepare the planstate context for deparsing */
+		planstateTraceContext.deparse_ctx = NULL;
+		if (pg_tracing_deparse_plan)
+			planstateTraceContext.deparse_ctx =
+				deparse_context_for_plan_tree(queryDesc->plannedstmt,
+											  planstateTraceContext.rtable_names);
+
+
+		generate_span_from_planstate(queryDesc->planstate, &planstateTraceContext,
+									 parent_id, query_id, parent_start, parent_end, &latest_end);
+	}
 }
 
 /*
@@ -1028,6 +1080,7 @@ cleanup_tracing(void)
 	max_nested_level = -1;
 	current_trace_spans = NULL;
 	per_level_buffers = NULL;
+	cleanup_planstarts();
 }
 
 /*
@@ -1607,6 +1660,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		 */
 		initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
 							queryDesc->sourceText, start_span_time, false);
+		queryDesc->instrument_options = INSTRUMENT_ALL;
 	}
 
 	if (prev_ExecutorStart)
@@ -1650,6 +1704,8 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		begin_span(trace_context->traceparent.trace_id, executor_run_span,
 				   SPAN_EXECUTOR_RUN, NULL, parent_id,
 				   per_level_buffers[exec_nested_level].query_id, &span_start_time);
+		per_level_buffers[exec_nested_level].executor_run_span_id = executor_run_span->span_id;
+		per_level_buffers[exec_nested_level].executor_start = executor_run_span->start;
 
 		/*
 		 * If this query starts parallel worker, push the trace context for
@@ -1658,6 +1714,9 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
 			add_parallel_context(trace_context, executor_run_span->span_id,
 								 per_level_buffers[exec_nested_level].query_id);
+
+		/* Setup ExecProcNode Override */
+		setup_ExecProcNode_override(queryDesc, exec_nested_level);
 	}
 
 	exec_nested_level++;
@@ -1694,6 +1753,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	{
 		span_end_time = end_nested_level();
 		/* End ExecutorRun span and store it */
+		per_level_buffers[exec_nested_level].executor_end = span_end_time;
 		end_latest_top_span(&span_end_time, true);
 	}
 	else
@@ -2056,7 +2116,7 @@ static void
 add_result_span(ReturnSetInfo *rsinfo, Span * span,
 				const char *qbuffer, Size qbuffer_size)
 {
-#define PG_TRACING_TRACES_COLS	43
+#define PG_TRACING_TRACES_COLS	44
 	Datum		values[PG_TRACING_TRACES_COLS] = {0};
 	bool		nulls[PG_TRACING_TRACES_COLS] = {0};
 	const char *span_type;
@@ -2108,6 +2168,8 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 			values[i++] = CStringGetTextDatum(qbuffer + span->parameter_offset);
 		else
 			nulls[i++] = 1;
+		if (span->deparse_info_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->deparse_info_offset)
+			values[i++] = CStringGetTextDatum(qbuffer + span->deparse_info_offset);
 	}
 
 	for (int j = i; j < PG_TRACING_TRACES_COLS; j++)

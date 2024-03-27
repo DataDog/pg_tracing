@@ -14,11 +14,13 @@ OBJS = \
 	src/pg_tracing.o \
 	src/pg_tracing_query_process.o \
 	src/pg_tracing_parallel.o \
+	src/pg_tracing_planstate.o \
+	src/pg_tracing_explain.o \
 	src/pg_tracing_span.o
 
 REGRESSCHECKS = utility select extended insert trigger sample \
 				parallel subxact full_buffer nested wal cleanup
-REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf --temp-instance=./tmp_check
+REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 

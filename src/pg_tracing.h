@@ -57,6 +57,11 @@ typedef enum SpanType
 	SPAN_EXECUTOR_RUN,			/* Wraps Executor run hook */
 	SPAN_EXECUTOR_FINISH,		/* Wraps Executor finish hook */
 
+	/* Represents a node execution, generated from planstate */
+	SPAN_NODE,
+	SPAN_NODE_INIT_PLAN,
+	SPAN_NODE_SUBPLAN,
+
 	/* Top Span types. They are created from the query cmdType */
 	SPAN_TOP_SELECT,
 	SPAN_TOP_INSERT,
@@ -117,6 +122,7 @@ typedef struct Span
 	Size		node_type_offset;	/* name of the node type */
 	Size		operation_name_offset;	/* operation represented by the span */
 	Size		parameter_offset;	/* query parameters values */
+	Size		deparse_info_offset;	/* info from deparsed plan */
 
 	PlanCounters plan_counters; /* Counters with plan costs */
 	NodeCounters node_counters; /* Counters with node costs (jit, wal,
@@ -151,6 +157,16 @@ typedef struct pgTracingSharedState
 	Size		extent;			/* current extent of query file */
 	pgTracingStats stats;		/* global statistics for pg_tracing */
 }			pgTracingSharedState;
+
+/* Context needed when generating spans from planstate */
+typedef struct planstateTraceContext
+{
+	TraceId		trace_id;
+	int			sql_error_code;
+	List	   *ancestors;
+	List	   *deparse_ctx;
+	List	   *rtable_names;
+}			planstateTraceContext;
 
 /*
  * Traceparent values propagated by the caller
@@ -191,12 +207,31 @@ typedef struct pgTracingParallelWorkers
 	pgTracingParallelContext trace_contexts[FLEXIBLE_ARRAY_MEMBER];
 }			pgTracingParallelWorkers;
 
+/* pg_tracing_explain.c */
+extern const char *plan_to_node_type(const Plan *plan);
+extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
+extern const char *plan_to_deparse_info(const planstateTraceContext * planstateTraceContext, const PlanState *planstate);
+
 /* pg_tracing_parallel.c */
 extern void pg_tracing_shmem_parallel_startup(void);
 extern void add_parallel_context(const struct pgTracingTraceContext *trace_context,
 								 uint64 parent_id, uint64 query_id);
 extern void remove_parallel_context(void);
 extern void fetch_parallel_context(pgTracingTraceContext * trace_context);
+
+/* pg_tracing_planstate.c */
+extern Span
+create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
+				 uint64 *span_id, uint64 parent_id, uint64 queryId, SpanType span_type,
+				 char *subplan_name, TimestampTz span_start, TimestampTz span_end);
+extern TimestampTz
+			generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
+										 uint64 parent_id, uint64 query_id,
+										 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
+extern void
+			setup_ExecProcNode_override(QueryDesc *queryDesc, int exec_nested_level);
+extern void
+			cleanup_planstarts(void);
 
 /* pg_tracing_query_process.c */
 extern const char *normalise_query_parameters(const JumbleState *jstate, const char *query,
@@ -219,5 +254,13 @@ extern const char *get_span_type(const Span * span, const char *qbuffer, Size qb
 extern const char *get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size);
 extern void adjust_file_offset(Span * span, Size file_position);
 extern bool traceid_zero(TraceId trace_id);
+
+
+/* pg_tracing.c */
+extern MemoryContext pg_tracing_mem_ctx;
+extern void
+			store_span(const Span * span);
+extern int
+			add_str_to_trace_buffer(const char *str, int str_len);
 
 #endif
