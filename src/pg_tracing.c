@@ -323,7 +323,7 @@ _PG_init(void)
 							 NULL,
 							 NULL);
 
-	DefineCustomBoolVariable("pg_tracing.explain_spans",
+	DefineCustomBoolVariable("pg_tracing.planstate_spans",
 							 "Generate spans from the executed plan.",
 							 NULL,
 							 &pg_tracing_planstate_spans,

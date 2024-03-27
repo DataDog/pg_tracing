@@ -1,6 +1,6 @@
 
--- Test with explain_spans disabled
-SET pg_tracing.explain_spans = false;
+-- Test with planstate_spans disabled
+SET pg_tracing.planstate_spans = false;
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT s.relation_size + s.index_size
 FROM (SELECT
       pg_relation_size(C.oid) as relation_size,
@@ -8,8 +8,8 @@ FROM (SELECT
     FROM pg_class C) as s limit 1;
 SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where trace_id='00000000000000000000000000000001';
 
--- Test with explain_spans enabled
-SET pg_tracing.explain_spans = true;
+-- Test with planstate_spans enabled
+SET pg_tracing.planstate_spans = true;
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/  SELECT s.relation_size + s.index_size
 FROM (SELECT
       pg_relation_size(C.oid) as relation_size,
