@@ -1668,7 +1668,13 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		 */
 		initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
 							queryDesc->sourceText, start_span_time, false);
-		queryDesc->instrument_options = INSTRUMENT_ALL;
+
+		/*
+		 * We only need full instrumenation if we generate spans from
+		 * planstate
+		 */
+		if (pg_tracing_planstate_spans)
+			queryDesc->instrument_options = INSTRUMENT_ALL;
 	}
 
 	if (prev_ExecutorStart)
