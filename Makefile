@@ -19,7 +19,8 @@ OBJS = \
 	src/pg_tracing_span.o
 
 REGRESSCHECKS = utility select extended insert trigger sample \
-				parallel subxact full_buffer nested wal cleanup
+				planstate parallel subxact full_buffer nested wal \
+				cleanup
 REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
