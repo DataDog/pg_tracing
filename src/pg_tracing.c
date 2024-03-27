@@ -2174,17 +2174,18 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 	values[i++] = UInt8GetDatum(span->subxact_count);
 
 	/* Only node and top spans have counters */
-	if ((span->type >= SPAN_TOP_SELECT && span->type <= SPAN_TOP_UNKNOWN)
+	if ((span->type >= SPAN_NODE && span->type <= SPAN_TOP_UNKNOWN)
 		|| span->type == SPAN_PLANNER)
 	{
 		i = add_plan_counters(&span->plan_counters, i, values);
 		i = add_node_counters(&span->node_counters, i, values);
-
 		values[i++] = Int64GetDatumFast(span->startup);
+
 		if (span->parameter_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->parameter_offset)
 			values[i++] = CStringGetTextDatum(qbuffer + span->parameter_offset);
 		else
 			nulls[i++] = 1;
+
 		if (span->deparse_info_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->deparse_info_offset)
 			values[i++] = CStringGetTextDatum(qbuffer + span->deparse_info_offset);
 	}
