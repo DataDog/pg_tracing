@@ -115,6 +115,7 @@ typedef struct pgTracingQueryIdFilter
 static int	pg_tracing_max_span;	/* Maximum number of spans to store */
 static int	pg_tracing_max_parameter_str;	/* Maximum number of spans to
 											 * store */
+static bool pg_tracing_planstate_spans = true; /* Generate spans from the execution plan */
 static bool pg_tracing_deparse_plan = true; /* Deparse plan to generate more
 											 * detailed spans */
 static bool pg_tracing_trace_parallel_workers = true;	/* True to generate
@@ -318,6 +319,17 @@ _PG_init(void)
 							 "Deparse query plan to generate details more details on a plan node.",
 							 NULL,
 							 &pg_tracing_deparse_plan,
+							 true,
+							 PGC_USERSET,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
+
+	DefineCustomBoolVariable("pg_tracing.explain_spans",
+							 "Generate spans from the executed plan.",
+							 NULL,
+							 &pg_tracing_planstate_spans,
 							 true,
 							 PGC_USERSET,
 							 0,
@@ -863,7 +875,7 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 
 
 	/* Process planstate */
-	if (queryDesc->planstate && queryDesc->planstate->instrument != NULL)
+	if (queryDesc->planstate && queryDesc->planstate->instrument != NULL && pg_tracing_planstate_spans)
 	{
 		Bitmapset  *rels_used = NULL;
 		planstateTraceContext planstateTraceContext;
@@ -883,7 +895,6 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 			planstateTraceContext.deparse_ctx =
 				deparse_context_for_plan_tree(queryDesc->plannedstmt,
 											  planstateTraceContext.rtable_names);
-
 
 		generate_span_from_planstate(queryDesc->planstate, &planstateTraceContext,
 									 parent_id, query_id, parent_start, parent_end, &latest_end);
@@ -1715,8 +1726,9 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 			add_parallel_context(trace_context, executor_run_span->span_id,
 								 per_level_buffers[exec_nested_level].query_id);
 
-		/* Setup ExecProcNode Override */
-		setup_ExecProcNode_override(queryDesc, exec_nested_level);
+        if (pg_tracing_planstate_spans)
+            /* Setup ExecProcNode override to capture node start if planstate spans were requested */
+            setup_ExecProcNode_override(queryDesc, exec_nested_level);
 	}
 
 	exec_nested_level++;
