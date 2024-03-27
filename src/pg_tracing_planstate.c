@@ -322,6 +322,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		case T_Hash:
 		case T_BitmapAnd:
 		case T_BitmapOr:
+
 			/*
 			 * Those nodes won't go through ExecProcNode so we won't have
 			 * their start. Fallback to the parent start
