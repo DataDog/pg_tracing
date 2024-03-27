@@ -12,21 +12,21 @@ FROM peek_ordered_spans;
  00000000000000000000000000000001 | Insert query    | INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); | t           | t
  00000000000000000000000000000001 | Planner         | Planner                                                          | f           | f
  00000000000000000000000000000001 | Executor        | ExecutorRun                                                      |             | 
- 00000000000000000000000000000001 | Insert          | Insert on pg_tracing_test                                        |             | 
- 00000000000000000000000000000001 | ProjectSet      | ProjectSet                                                       |             | 
- 00000000000000000000000000000001 | Result          | Result                                                           |             | 
+ 00000000000000000000000000000001 | Insert          | Insert on pg_tracing_test                                        | t           | t
+ 00000000000000000000000000000001 | ProjectSet      | ProjectSet                                                       | f           | f
+ 00000000000000000000000000000001 | Result          | Result                                                           | f           | f
  00000000000000000000000000000002 | Update query    | UPDATE pg_tracing_test SET b = $1 WHERE a = $2;                  | t           | t
  00000000000000000000000000000002 | Planner         | Planner                                                          | f           | f
  00000000000000000000000000000002 | Executor        | ExecutorRun                                                      |             | 
- 00000000000000000000000000000002 | Update          | Update on pg_tracing_test                                        |             | 
- 00000000000000000000000000000002 | BitmapHeapScan  | BitmapHeapScan on pg_tracing_test                                |             | 
- 00000000000000000000000000000002 | BitmapIndexScan | BitmapIndexScan on pg_tracing_index                              |             | 
+ 00000000000000000000000000000002 | Update          | Update on pg_tracing_test                                        | t           | t
+ 00000000000000000000000000000002 | BitmapHeapScan  | BitmapHeapScan on pg_tracing_test                                | f           | f
+ 00000000000000000000000000000002 | BitmapIndexScan | BitmapIndexScan on pg_tracing_index                              | f           | f
  00000000000000000000000000000003 | Delete query    | DELETE FROM pg_tracing_test WHERE a = $1;                        | t           | t
  00000000000000000000000000000003 | Planner         | Planner                                                          | f           | f
  00000000000000000000000000000003 | Executor        | ExecutorRun                                                      |             | 
- 00000000000000000000000000000003 | Delete          | Delete on pg_tracing_test                                        |             | 
- 00000000000000000000000000000003 | BitmapHeapScan  | BitmapHeapScan on pg_tracing_test                                |             | 
- 00000000000000000000000000000003 | BitmapIndexScan | BitmapIndexScan on pg_tracing_index                              |             | 
+ 00000000000000000000000000000003 | Delete          | Delete on pg_tracing_test                                        | t           | t
+ 00000000000000000000000000000003 | BitmapHeapScan  | BitmapHeapScan on pg_tracing_test                                | f           | f
+ 00000000000000000000000000000003 | BitmapIndexScan | BitmapIndexScan on pg_tracing_index                              | f           | f
 (18 rows)
 
 CALL clean_spans();
