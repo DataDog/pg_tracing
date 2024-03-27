@@ -264,10 +264,6 @@ static pgTracingStats get_empty_pg_tracing_stats(void);
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
 
-static TimestampTz generate_member_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext,
-										 uint64 parent_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
-
-
 static void cleanup_tracing(void);
 
 /*
