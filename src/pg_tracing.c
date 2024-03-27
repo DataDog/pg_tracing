@@ -115,7 +115,8 @@ typedef struct pgTracingQueryIdFilter
 static int	pg_tracing_max_span;	/* Maximum number of spans to store */
 static int	pg_tracing_max_parameter_str;	/* Maximum number of spans to
 											 * store */
-static bool pg_tracing_planstate_spans = true; /* Generate spans from the execution plan */
+static bool pg_tracing_planstate_spans = true;	/* Generate spans from the
+												 * execution plan */
 static bool pg_tracing_deparse_plan = true; /* Deparse plan to generate more
 											 * detailed spans */
 static bool pg_tracing_trace_parallel_workers = true;	/* True to generate
@@ -1726,9 +1727,13 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 			add_parallel_context(trace_context, executor_run_span->span_id,
 								 per_level_buffers[exec_nested_level].query_id);
 
-        if (pg_tracing_planstate_spans)
-            /* Setup ExecProcNode override to capture node start if planstate spans were requested */
-            setup_ExecProcNode_override(queryDesc, exec_nested_level);
+		if (pg_tracing_planstate_spans)
+
+			/*
+			 * Setup ExecProcNode override to capture node start if planstate
+			 * spans were requested
+			 */
+			setup_ExecProcNode_override(queryDesc, exec_nested_level);
 	}
 
 	exec_nested_level++;
