@@ -73,7 +73,7 @@ SET pg_tracing.track = 'top';
 SELECT count(*) from pg_tracing_consume_spans where trace_id='00000000000000000000000000000052';
  count 
 -------
-     3
+     5
 (1 row)
 
 -- Check tracking with no tracking
@@ -110,7 +110,8 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  Planner             |   4
  Planner             |   4
  ExecutorRun         |   4
-(6 rows)
+ Result              |   5
+(7 rows)
 
 -- Test again with utility tracking disabled
 SET pg_tracing.track_utility=off;
@@ -137,7 +138,8 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  Planner                             |   2
  Planner                             |   3
  ExecutorRun                         |   2
-(4 rows)
+ Result                              |   3
+(5 rows)
 
 -- +-------------------------------------------------------------------+
 -- | A: Select test_function(1);                                       |
@@ -174,10 +176,13 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  select test_function_result($1, $2);            |   1
  Planner                                         |   2
  ExecutorRun                                     |   2
+ Result                                          |   3
  INSERT INTO pg_tracing_test(a, b) VALUES (a, b) |   3
  Planner                                         |   4
  ExecutorRun                                     |   4
-(6 rows)
+ Insert on pg_tracing_test                       |   5
+ Result                                          |   6
+(9 rows)
 
 -- Cleanup
 CALL clean_spans();

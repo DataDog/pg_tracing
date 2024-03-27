@@ -140,14 +140,20 @@ SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00
  Insert query | INSERT INTO Employee VALUES($1,$2);                                                                                 |   1
  Planner      | Planner                                                                                                             |   2
  Executor     | ExecutorRun                                                                                                         |   2
+ Insert       | Insert on employee                                                                                                  |   3
+ Result       | Result                                                                                                              |   4
  Executor     | ExecutorFinish                                                                                                      |   2
  Insert query | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
  Planner      | Planner                                                                                                             |   4
  Executor     | ExecutorRun                                                                                                         |   4
+ Insert       | Insert on employee_audit                                                                                            |   5
+ Result       | Result                                                                                                              |   6
  Insert query | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
  Planner      | Planner                                                                                                             |   4
  Executor     | ExecutorRun                                                                                                         |   4
-(10 rows)
+ Insert       | Insert on employee_audit                                                                                            |   5
+ Result       | Result                                                                                                              |   6
+(16 rows)
 
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans where trace_id='00000000000000000000000000000001';
@@ -183,59 +189,72 @@ CREATE TRIGGER employee_delete_trigger
    ->  Result  (cost=0.00..0.01 rows=1 width=4)
 (2 rows)
 
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='fed00000000000000000000000000001';
-   span_type    |                    span_operation                    | lvl 
-----------------+------------------------------------------------------+-----
- Utility query  | explain INSERT INTO before_trigger_table VALUES($1); |   1
- ProcessUtility | ProcessUtility                                       |   2
- Insert query   | explain INSERT INTO before_trigger_table VALUES($1); |   3
- Planner        | Planner                                              |   4
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='fed00000000000000000000000000001';
+             trace_id             |   span_type    |                    span_operation                    | lvl 
+----------------------------------+----------------+------------------------------------------------------+-----
+ fed00000000000000000000000000001 | Utility query  | explain INSERT INTO before_trigger_table VALUES($1); |   1
+ fed00000000000000000000000000001 | ProcessUtility | ProcessUtility                                       |   2
+ fed00000000000000000000000000001 | Insert query   | explain INSERT INTO before_trigger_table VALUES($1); |   3
+ fed00000000000000000000000000001 | Planner        | Planner                                              |   4
 (4 rows)
 
 -- Call before trigger insert
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ INSERT INTO before_trigger_table SELECT generate_series(1,2);
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
-  span_type   |                         span_operation                          | lvl 
---------------+-----------------------------------------------------------------+-----
- Insert query | INSERT INTO before_trigger_table SELECT generate_series($1,$2); |   1
- Planner      | Planner                                                         |   2
- Executor     | ExecutorRun                                                     |   2
- Select query | SELECT $1                                                       |   3
- Planner      | Planner                                                         |   4
- Executor     | ExecutorRun                                                     |   4
- Select query | SELECT 'SELECT 1'                                               |   3
- Executor     | ExecutorRun                                                     |   4
-(8 rows)
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
+             trace_id             |  span_type   |                         span_operation                          | lvl 
+----------------------------------+--------------+-----------------------------------------------------------------+-----
+ 00000000000000000000000000000002 | Insert query | INSERT INTO before_trigger_table SELECT generate_series($1,$2); |   1
+ 00000000000000000000000000000002 | Planner      | Planner                                                         |   2
+ 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   2
+ 00000000000000000000000000000002 | Insert       | Insert on before_trigger_table                                  |   3
+ 00000000000000000000000000000002 | ProjectSet   | ProjectSet                                                      |   4
+ 00000000000000000000000000000002 | Result       | Result                                                          |   5
+ 00000000000000000000000000000002 | Select query | SELECT $1                                                       |   3
+ 00000000000000000000000000000002 | Planner      | Planner                                                         |   4
+ 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   4
+ 00000000000000000000000000000002 | Result       | Result                                                          |   5
+ 00000000000000000000000000000002 | Select query | SELECT 'SELECT 1'                                               |   3
+ 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   4
+ 00000000000000000000000000000002 | Result       | Result                                                          |   5
+(13 rows)
 
 -- Call before trigger update
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ UPDATE before_trigger_table set a=1;
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
-  span_type   |            span_operation             | lvl 
---------------+---------------------------------------+-----
- Update query | UPDATE before_trigger_table set a=$1; |   1
- Planner      | Planner                               |   2
- Executor     | ExecutorRun                           |   2
- Select query | SELECT $1                             |   3
- Planner      | Planner                               |   4
- Executor     | ExecutorRun                           |   4
- Select query | SELECT 'SELECT 1'                     |   3
- Executor     | ExecutorRun                           |   4
-(8 rows)
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
+             trace_id             |  span_type   |            span_operation             | lvl 
+----------------------------------+--------------+---------------------------------------+-----
+ 00000000000000000000000000000003 | Update query | UPDATE before_trigger_table set a=$1; |   1
+ 00000000000000000000000000000003 | Planner      | Planner                               |   2
+ 00000000000000000000000000000003 | Executor     | ExecutorRun                           |   2
+ 00000000000000000000000000000003 | Update       | Update on before_trigger_table        |   3
+ 00000000000000000000000000000003 | SeqScan      | SeqScan on before_trigger_table       |   4
+ 00000000000000000000000000000003 | Select query | SELECT $1                             |   3
+ 00000000000000000000000000000003 | Planner      | Planner                               |   4
+ 00000000000000000000000000000003 | Executor     | ExecutorRun                           |   4
+ 00000000000000000000000000000003 | Result       | Result                                |   5
+ 00000000000000000000000000000003 | Select query | SELECT 'SELECT 1'                     |   3
+ 00000000000000000000000000000003 | Executor     | ExecutorRun                           |   4
+ 00000000000000000000000000000003 | Result       | Result                                |   5
+(12 rows)
 
 -- Call before trigger delete
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ DELETE FROM before_trigger_table where a=1;
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
-  span_type   |                span_operation                | lvl 
---------------+----------------------------------------------+-----
- Delete query | DELETE FROM before_trigger_table where a=$1; |   1
- Planner      | Planner                                      |   2
- Executor     | ExecutorRun                                  |   2
- Select query | SELECT $1                                    |   3
- Planner      | Planner                                      |   4
- Executor     | ExecutorRun                                  |   4
- Select query | SELECT 'SELECT 1'                            |   3
- Executor     | ExecutorRun                                  |   4
-(8 rows)
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
+             trace_id             |  span_type   |                span_operation                | lvl 
+----------------------------------+--------------+----------------------------------------------+-----
+ 00000000000000000000000000000004 | Delete query | DELETE FROM before_trigger_table where a=$1; |   1
+ 00000000000000000000000000000004 | Planner      | Planner                                      |   2
+ 00000000000000000000000000000004 | Executor     | ExecutorRun                                  |   2
+ 00000000000000000000000000000004 | Delete       | Delete on before_trigger_table               |   3
+ 00000000000000000000000000000004 | SeqScan      | SeqScan on before_trigger_table              |   4
+ 00000000000000000000000000000004 | Select query | SELECT $1                                    |   3
+ 00000000000000000000000000000004 | Planner      | Planner                                      |   4
+ 00000000000000000000000000000004 | Executor     | ExecutorRun                                  |   4
+ 00000000000000000000000000000004 | Result       | Result                                       |   5
+ 00000000000000000000000000000004 | Select query | SELECT 'SELECT 1'                            |   3
+ 00000000000000000000000000000004 | Executor     | ExecutorRun                                  |   4
+ 00000000000000000000000000000004 | Result       | Result                                       |   5
+(12 rows)
 
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans;

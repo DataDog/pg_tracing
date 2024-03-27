@@ -19,7 +19,9 @@ SELECT span_type, span_operation from peek_ordered_spans where trace_id='0000000
  Insert query | INSERT INTO pg_tracing_test_table_with_constraint VALUES($1, $2);
  Planner      | Planner
  Executor     | ExecutorRun
-(3 rows)
+ Insert       | Insert on pg_tracing_test_table_with_constraint
+ Result       | Result
+(5 rows)
 
 -- Trigger constraint violation
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ INSERT INTO pg_tracing_test_table_with_constraint VALUES(1, 'aaa');
