@@ -197,6 +197,13 @@ get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size)
 			return "Nothing query";
 		case SPAN_TOP_UNKNOWN:
 			return "Unknown query";
+
+		case SPAN_NODE_INIT_PLAN:
+			return "InitPlan";
+		case SPAN_NODE_SUBPLAN:
+			return "SubPlan";
+		case SPAN_NODE:
+			return "Node";
 	}
 	return "???";
 }
@@ -233,6 +240,10 @@ get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 		case SPAN_TOP_NOTHING:
 		case SPAN_TOP_UNKNOWN:
 			return "Top";
+		case SPAN_NODE_INIT_PLAN:
+		case SPAN_NODE_SUBPLAN:
+		case SPAN_NODE:
+			return "Node";
 	}
 	return "Unknown type";
 }

@@ -77,7 +77,8 @@ CREATE FUNCTION pg_tracing_spans(
 
 --  Span node specific data
     OUT startup bigint, -- First tuple
-    OUT parameters text
+    OUT parameters text,
+    OUT deparse_info text
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME'
