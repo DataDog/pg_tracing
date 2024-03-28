@@ -466,7 +466,7 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 		operation_name = plan_to_operation(planstateTraceContext, planstate, node_type);
 		span.operation_name_offset = add_str_to_trace_buffer(operation_name, strlen(operation_name));
 
-		/* deparse_ctx us NULL if deparsing was disabled */
+		/* deparse_ctx is NULL if deparsing was disabled */
 		if (planstateTraceContext->deparse_ctx != NULL)
 		{
 			deparse_info = plan_to_deparse_info(planstateTraceContext, planstate);
