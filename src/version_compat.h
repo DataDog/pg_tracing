@@ -25,4 +25,4 @@
 
 #endif
 
-#endif   /* VERSION_COMPAT_H */
+#endif							/* VERSION_COMPAT_H */
