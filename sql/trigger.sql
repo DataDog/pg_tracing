@@ -153,19 +153,19 @@ CREATE TRIGGER employee_delete_trigger
 -- Test explain on a before trigger
 -- This will go through ExecutorEnd without any parent executor run
 /*dddbs='postgres.db',traceparent='00-fed00000000000000000000000000001-0000000000000003-01'*/ explain INSERT INTO before_trigger_table VALUES(10);
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='fed00000000000000000000000000001';
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='fed00000000000000000000000000001';
 
 -- Call before trigger insert
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ INSERT INTO before_trigger_table SELECT generate_series(1,2);
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
 
 -- Call before trigger update
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ UPDATE before_trigger_table set a=1;
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
 
 -- Call before trigger delete
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ DELETE FROM before_trigger_table where a=1;
-SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
 
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans;

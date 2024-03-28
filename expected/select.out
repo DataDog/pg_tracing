@@ -31,7 +31,8 @@ SELECT span_type, span_operation from pg_tracing_peek_spans where trace_id='0000
  Select query | SELECT $1;
  Planner      | Planner
  Executor     | ExecutorRun
-(3 rows)
+ Result       | Result
+(4 rows)
 
 -- Check userid
 SELECT userid = (SELECT usesysid FROM pg_user WHERE usename = current_user) FROM pg_tracing_peek_spans GROUP BY userid;
@@ -70,7 +71,9 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  Select query | SELECT count(*) from current_database(); |   1
  Planner      | Planner                                  |   2
  Executor     | ExecutorRun                              |   2
-(3 rows)
+ Aggregate    | Aggregate                                |   3
+ FunctionScan | FunctionScan on current_database         |   4
+(5 rows)
 
 -- Check expected reported number of trace
 SELECT processed_traces = :processed_traces + 1 from pg_tracing_info;
@@ -97,7 +100,10 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  Select query | SELECT s.relation_size + s.index_sizeFROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1; |   1
  Planner      | Planner                                                                                                                                                          |   2
  Executor     | ExecutorRun                                                                                                                                                      |   2
-(3 rows)
+ Limit        | Limit                                                                                                                                                            |   3
+ SubqueryScan | SubqueryScan on s                                                                                                                                                |   4
+ SeqScan      | SeqScan on pg_class c                                                                                                                                            |   5
+(6 rows)
 
 -- Check that we're in a correct state after a timeout
 set statement_timeout=200;
@@ -128,7 +134,8 @@ SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans wh
  Select query | select $1;     | 00000          |   1
  Planner      | Planner        | 00000          |   2
  Executor     | ExecutorRun    | 00000          |   2
-(3 rows)
+ Result       | Result         | 00000          |   3
+(4 rows)
 
 -- Cleanup
 SET plan_cache_mode='auto';
@@ -144,7 +151,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  select $1 limit $2; | $1 = 1, $2 = 0 |   1
  Planner             |                |   2
  ExecutorRun         |                |   2
-(3 rows)
+ Limit               |                |   3
+(4 rows)
 
 -- Test multiple statements in a single query
 /*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000c-000000000000000c-01'*/ select 1; select 2;
@@ -164,7 +172,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  select $1;     | $1 = 1     |   1
  Planner        |            |   2
  ExecutorRun    |            |   2
-(3 rows)
+ Result         |            |   3
+(4 rows)
 
 -- Check that parameters are not exported when disabled
 SET pg_tracing.export_parameters=false;
@@ -180,7 +189,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  select $1, $2, $3; |            |   1
  Planner            |            |   2
  ExecutorRun        |            |   2
-(3 rows)
+ Result             |            |   3
+(4 rows)
 
 SET pg_tracing.export_parameters=true;
 -- Check multi statement query
@@ -204,7 +214,8 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Select query | SELECT $1;     | $1 = 1     |   1
  Planner      | Planner        |            |   2
  Executor     | ExecutorRun    |            |   2
-(3 rows)
+ Result       | Result         |            |   3
+(4 rows)
 
 CALL clean_spans();
 -- Check standalone trace
@@ -221,7 +232,8 @@ SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
      1
      1
      1
-(3 rows)
+     1
+(4 rows)
 
 -- Trigger a planner error
 SELECT '\xDEADBEEF'::bytea::text::int;
@@ -258,9 +270,11 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Select query   | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3));                                                                                                                                                  | $1 = '{1,2,3,4}', $2 = 1, $3 = 2 |   1
  Planner        | Planner                                                                                                                                                                                                 |                                  |   2
  Executor       | ExecutorRun                                                                                                                                                                                             |                                  |   2
+ ProjectSet     | ProjectSet                                                                                                                                                                                              |                                  |   3
+ Result         | Result                                                                                                                                                                                                  |                                  |   4
  Select query   | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | $1 = 1, $2 = 1, $3 = 1           |   3
  Planner        | Planner                                                                                                                                                                                                 |                                  |   4
-(7 rows)
+(9 rows)
 
 -- Cleanup
 SET pg_tracing.sample_rate = 0.0;
