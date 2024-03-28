@@ -547,8 +547,6 @@ add_worker_name_to_trace_buffer(StringInfo str_info, int parallel_worker_number)
 {
 	int			position = str_info->cursor;
 
-	Assert(str_len > 0);
-
 	appendStringInfo(str_info, "Worker %d", parallel_worker_number);
 	appendStringInfoChar(str_info, '\0');
 	str_info->cursor = str_info->len;
