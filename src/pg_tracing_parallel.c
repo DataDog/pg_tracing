@@ -36,7 +36,7 @@ pg_tracing_shmem_parallel_startup(void)
 	{
 		SpinLockInit(&pg_tracing_parallel->mutex);
 		for (int i = 0; i < max_parallel_workers; i++)
-			pg_tracing_parallel->trace_contexts[i].leader_backend_id = InvalidBackendId;
+			pg_tracing_parallel->trace_contexts[i].leader_backend_id = INVALID_PROC_NUMBER;
 	}
 }
 
@@ -54,12 +54,12 @@ add_parallel_context(const struct pgTracingTraceContext *trace_context,
 	for (int i = 0; i < max_parallel_workers; i++)
 	{
 		ctx = pg_tracing_parallel->trace_contexts + i;
-		Assert(ctx->leader_backend_id != MyBackendId);
-		if (ctx->leader_backend_id != InvalidBackendId)
+		Assert(ctx->leader_backend_id != MyProcNumber);
+		if (ctx->leader_backend_id != INVALID_PROC_NUMBER)
 			continue;
 		/* Slot is available */
 		parallel_context_index = i;
-		ctx->leader_backend_id = MyBackendId;
+		ctx->leader_backend_id = MyProcNumber;
 		/* We can do the rest outside the lock */
 		break;
 	}
@@ -85,7 +85,7 @@ remove_parallel_context(void)
 		return;
 
 	SpinLockAcquire(&pg_tracing_parallel->mutex);
-	pg_tracing_parallel->trace_contexts[parallel_context_index].leader_backend_id = InvalidBackendId;
+	pg_tracing_parallel->trace_contexts[parallel_context_index].leader_backend_id = INVALID_PROC_NUMBER;
 	SpinLockRelease(&pg_tracing_parallel->mutex);
 	parallel_context_index = -1;
 }
@@ -100,7 +100,7 @@ fetch_parallel_context(pgTracingTraceContext * trace_context)
 	SpinLockAcquire(&pg_tracing_parallel->mutex);
 	for (int i = 0; i < max_parallel_workers; i++)
 	{
-		if (pg_tracing_parallel->trace_contexts[i].leader_backend_id != ParallelLeaderBackendId)
+		if (pg_tracing_parallel->trace_contexts[i].leader_backend_id != ParallelLeaderProcNumber)
 			continue;
 		/* Found a matching a trace context, fetch it */
 		*trace_context = pg_tracing_parallel->trace_contexts[i].trace_context;

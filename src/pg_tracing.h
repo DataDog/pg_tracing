@@ -14,6 +14,7 @@
 #include "jit/jit.h"
 #include "pgstat.h"
 #include "storage/lwlock.h"
+#include "version_compat.h"
 
 /* Location of external text file */
 #define PG_TRACING_TEXT_FILE	PG_STAT_TMP_DIR "/pg_tracing.stat"
@@ -176,7 +177,7 @@ typedef struct pgTracingTraceContext
  */
 typedef struct pgTracingParallelContext
 {
-	BackendId	leader_backend_id;	/* Backend id of the leader, set to
+	ProcNumber	leader_backend_id;	/* Backend id of the leader, set to
 									 * InvalidBackendId if unused */
 	pgTracingTraceContext trace_context;
 }			pgTracingParallelContext;
