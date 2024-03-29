@@ -220,6 +220,19 @@ extern void remove_parallel_context(void);
 extern void fetch_parallel_context(pgTracingTraceContext * trace_context);
 
 /* pg_tracing_planstate.c */
+
+/*
+ * Match a planstate to the first start of a node.
+ * This is needed to set the start for spans generated from planstate.
+ */
+typedef struct TracedPlanstate
+{
+	PlanState  *planstate;
+	TimestampTz node_start;
+	uint64		span_id;
+	int			nested_level;
+}			TracedPlanstate;
+
 extern Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
 				 uint64 *span_id, uint64 parent_id, uint64 queryId, SpanType span_type,
@@ -232,6 +245,10 @@ extern void
 			setup_ExecProcNode_override(QueryDesc *queryDesc, int exec_nested_level);
 extern void
 			cleanup_planstarts(void);
+extern TracedPlanstate *
+get_parent_traced_planstate(void);
+extern void
+			drop_traced_planstate(int exec_nested_level);
 
 /* pg_tracing_query_process.c */
 extern const char *normalise_query_parameters(const JumbleState *jstate, const char *query,

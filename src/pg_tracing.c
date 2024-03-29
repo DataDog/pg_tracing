@@ -1299,7 +1299,19 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		/* Root top span, use the parent id from the trace context */
 		parent_id = trace_context->traceparent.parent_id;
 	else
-		parent_id = get_latest_top_span(exec_nested_level - 1)->span_id;
+	{
+		TracedPlanstate *parent_traced_planstate = get_parent_traced_planstate();
+		Span	   *latest_top_span = get_latest_top_span(exec_nested_level - 1);
+
+		/*
+		 * Both planstate and previous top span can be the parent for the new
+		 * top span, we use the most recent as a parent
+		 */
+		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start > latest_top_span->start)
+			parent_id = parent_traced_planstate->span_id;
+		else
+			parent_id = latest_top_span->span_id;
+	}
 
 	begin_span(trace_context->traceparent.trace_id, top_span,
 			   command_type_to_span_type(commandType),
@@ -1872,7 +1884,8 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		TimestampTz parent_end = per_level_buffers[exec_nested_level].executor_end;
 
 		process_query_desc(trace_context, queryDesc, 0, parent_end);
-    }
+		drop_traced_planstate(exec_nested_level);
+	}
 
 	/* No need to increment nested level here */
 	if (prev_ExecutorEnd)

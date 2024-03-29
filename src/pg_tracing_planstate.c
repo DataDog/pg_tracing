@@ -16,38 +16,55 @@
 
 #define US_IN_S INT64CONST(1000000)
 
-/*
- * Match a planstate to the first start of a node.
- * This is needed to set the start for spans generated from planstate.
- */
-typedef struct PlanstateStart
-{
-	PlanState  *planstate;
-	TimestampTz node_start;
-}			PlanstateStart;
-
 /* List of planstate to start found for the current query */
-static PlanstateStart * planstate_starts = NULL;
+static TracedPlanstate * traced_planstates = NULL;
 /* Previous value of the ExecProcNode pointer in planstates */
 static ExecProcNodeMtd previous_ExecProcNode = NULL;
 
-/* Current available slot in the planstate_starts array */
+/* Current available slot in the traced_planstates array */
 static int	index_planstart = 0;
 
-/* Maximum elements allocated in the planstate_starts array */
+/* Maximum elements allocated in the traced_planstates array */
 static int	max_planstart = 0;
 
 static void override_ExecProcNode(PlanState *planstate);
 
 /*
- * Reset the planstate_starts list
+ * Reset the traced_planstates array
  */
 void
 cleanup_planstarts(void)
 {
-	planstate_starts = NULL;
+	traced_planstates = NULL;
 	max_planstart = 0;
 	index_planstart = 0;
+}
+
+/*
+ * Drop all traced_planstates after the provided nested level
+ */
+void
+drop_traced_planstate(int exec_nested_level)
+{
+	int			i;
+	int			new_index_start;
+
+	for (i = index_planstart; i > 0; i--)
+	{
+		if (traced_planstates[i - 1].nested_level <= exec_nested_level)
+		{
+			/*
+			 * Found a new planstate from a previous nested level, we can stop
+			 * here
+			 */
+			index_planstart = i;
+			return;
+		}
+		else
+			/* the traced_planstate should be dropped */
+			new_index_start = i - 1;
+	}
+	index_planstart = new_index_start;
 }
 
 /*
@@ -67,24 +84,26 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 	if (index_planstart >= max_planstart)
 	{
 		/*
-		 * We need to extend the planstate_starts array, switch to pg_tracing
+		 * We need to extend the traced_planstates array, switch to pg_tracing
 		 * memory context beforehand
 		 */
 		MemoryContext oldcxt;
 		int			old_max_planstart = max_planstart;
 
-		Assert(planstate_starts != NULL);
+		Assert(traced_planstates != NULL);
 		max_planstart += 5;
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		planstate_starts = repalloc0(planstate_starts,
-									 old_max_planstart * sizeof(PlanstateStart),
-									 max_planstart * sizeof(PlanstateStart));
+		traced_planstates = repalloc0(traced_planstates,
+									  old_max_planstart * sizeof(TracedPlanstate),
+									  max_planstart * sizeof(TracedPlanstate));
 		MemoryContextSwitchTo(oldcxt);
 	}
 
 	/* Register planstate start */
-	planstate_starts[index_planstart].planstate = node;
-	planstate_starts[index_planstart].node_start = GetCurrentTimestamp();
+	traced_planstates[index_planstart].planstate = node;
+	traced_planstates[index_planstart].node_start = GetCurrentTimestamp();
+	traced_planstates[index_planstart].span_id = pg_prng_uint64(&pg_global_prng_state);
+	traced_planstates[index_planstart].nested_level = exec_nested_level;
 	index_planstart++;
 
 exit:
@@ -199,7 +218,7 @@ setup_ExecProcNode_override(QueryDesc *queryDesc, int exec_nested_level)
 
 		max_planstart = 10;
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		planstate_starts = palloc0(max_planstart * sizeof(PlanstateStart));
+		traced_planstates = palloc0(max_planstart * sizeof(TracedPlanstate));
 		MemoryContextSwitchTo(oldcxt);
 	}
 	Assert(queryDesc->planstate->instrument);
@@ -274,15 +293,38 @@ get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, Timest
 /*
  * Fetch the node start of a planstate
  */
-static TimestampTz
-planstate_to_start(PlanState *planstate)
+static TracedPlanstate *
+get_traced_planstate(PlanState *planstate)
 {
-	for (int i = 0; i < max_planstart; i++)
+	for (int i = 0; i < index_planstart; i++)
 	{
-		if (planstate == planstate_starts[i].planstate)
-			return planstate_starts[i].node_start;
+		if (planstate == traced_planstates[i].planstate)
+			return &traced_planstates[i];
 	}
-	return 0;
+	return NULL;
+}
+
+/*
+ * Get possible parent traced_planstate
+ */
+TracedPlanstate *
+get_parent_traced_planstate(void)
+{
+	TracedPlanstate *traced_planstate;
+
+	if (index_planstart >= 2)
+	{
+		traced_planstate = &traced_planstates[index_planstart - 2];
+		if (nodeTag(traced_planstate->planstate->plan) == T_ProjectSet)
+			return traced_planstate;
+	}
+	if (index_planstart >= 1)
+	{
+		traced_planstate = &traced_planstates[index_planstart - 1];
+		if (nodeTag(traced_planstate->planstate->plan) == T_Result)
+			return traced_planstate;
+	}
+	return NULL;
 }
 
 /*
@@ -296,6 +338,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	ListCell   *l;
 	uint64		span_id;
 	Span		span_node;
+	TracedPlanstate *traced_planstate = NULL;
 	TimestampTz span_start;
 	TimestampTz span_end;
 	TimestampTz outer_span_end = 0;
@@ -325,8 +368,6 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		/* The node was never executed, ignore it */
 		return 0;
 
-	span_id = pg_prng_uint64(&pg_global_prng_state);
-
 	switch (nodeTag(planstate->plan))
 	{
 		case T_BitmapIndexScan:
@@ -336,15 +377,34 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 
 			/*
 			 * Those nodes won't go through ExecProcNode so we won't have
-			 * their start. Fallback to the parent start
+			 * their start. Fallback to the parent start. TODO: Use the child
+			 * start as a fallback instead
 			 */
 			span_start = parent_start;
 			break;
 		default:
-			span_start = planstate_to_start(planstate);
+			traced_planstate = get_traced_planstate(planstate);
+			/* TODO: better fallback if planstate is not found */
+			Assert(traced_planstate != NULL);
+			span_start = traced_planstate->node_start;
 			break;
 	}
 	Assert(span_start > 0);
+
+	if (traced_planstate != NULL)
+	{
+		switch (nodeTag(traced_planstate->planstate->plan))
+		{
+			case T_Result:
+			case T_ProjectSet:
+				span_id = traced_planstate->span_id;
+				break;
+			default:
+				span_id = pg_prng_uint64(&pg_global_prng_state);
+		}
+	}
+	else
+		span_id = pg_prng_uint64(&pg_global_prng_state);
 
 	span_end = get_span_end_from_planstate(planstate, span_start, root_end);
 
@@ -367,15 +427,16 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		SubPlanState *sstate = (SubPlanState *) lfirst(l);
 		PlanState  *splan = sstate->planstate;
 		Span		init_span;
-		TimestampTz initplan_span_start;
+		TracedPlanstate *initplan_traced_planstate;
 		TimestampTz initplan_span_end;
 
 		if (splan->instrument->total == 0)
 			continue;
-		initplan_span_start = planstate_to_start(planstate);
-		initplan_span_end = get_span_end_from_planstate(planstate, initplan_span_start, root_end);
-		init_span = create_span_node(splan, planstateTraceContext, NULL, parent_id, query_id,
-									 SPAN_NODE_INIT_PLAN, sstate->subplan->plan_name, initplan_span_start, initplan_span_end);
+		initplan_traced_planstate = get_traced_planstate(planstate);
+		initplan_span_end = get_span_end_from_planstate(planstate, initplan_traced_planstate->node_start, root_end);
+		init_span = create_span_node(splan, planstateTraceContext,
+									 &initplan_traced_planstate->span_id, parent_id, query_id,
+									 SPAN_NODE_INIT_PLAN, sstate->subplan->plan_name, initplan_traced_planstate->node_start, initplan_span_end);
 		store_span(&init_span);
 		generate_span_from_planstate(splan, planstateTraceContext, init_span.span_id, query_id, span_start, root_end, latest_end);
 	}
@@ -386,14 +447,16 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		SubPlanState *sstate = (SubPlanState *) lfirst(l);
 		PlanState  *splan = sstate->planstate;
 		Span		subplan_span;
-		TimestampTz subplan_span_start;
+		TracedPlanstate *subplan_traced_planstate;
 		TimestampTz subplan_span_end;
 
 		if (splan->instrument->total == 0)
 			continue;
-		subplan_span_start = planstate_to_start(planstate);
-		subplan_span_end = get_span_end_from_planstate(planstate, subplan_span_start, root_end);
-		subplan_span = create_span_node(splan, planstateTraceContext, NULL, parent_id, query_id, SPAN_NODE_SUBPLAN, sstate->subplan->plan_name, subplan_span_start, subplan_span_end);
+		subplan_traced_planstate = get_traced_planstate(planstate);
+		subplan_span_end = get_span_end_from_planstate(planstate, subplan_traced_planstate->node_start, root_end);
+		subplan_span = create_span_node(splan, planstateTraceContext,
+										&subplan_traced_planstate->span_id, parent_id, query_id,
+										SPAN_NODE_SUBPLAN, sstate->subplan->plan_name, subplan_traced_planstate->node_start, subplan_span_end);
 		store_span(&subplan_span);
 		generate_span_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, span_start, root_end, latest_end);
 	}
