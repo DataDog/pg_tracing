@@ -218,7 +218,7 @@ static int	max_nested_level = -1;
 static int	plan_nested_level = 0;
 
 /* Current nesting depth of ExecutorRun+ProcessUtility calls */
-static int	exec_nested_level = 0;
+int			exec_nested_level = 0;
 
 /* Number of spans initially allocated at the start of a trace. */
 static int	pg_tracing_initial_allocated_spans = 25;

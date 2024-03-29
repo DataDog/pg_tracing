@@ -258,6 +258,7 @@ extern bool traceid_zero(TraceId trace_id);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
+extern int	exec_nested_level;
 extern void
 			store_span(const Span * span);
 extern int
