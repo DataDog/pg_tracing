@@ -69,6 +69,7 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, uint64 *spa
 	span->node_type_offset = -1;
 	span->operation_name_offset = -1;
 	span->parameter_offset = -1;
+	span->deparse_info_offset = -1;
 	span->sql_error_code = 0;
 	span->startup = 0;
 	span->be_pid = MyProcPid;
@@ -197,6 +198,13 @@ get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size)
 			return "Nothing query";
 		case SPAN_TOP_UNKNOWN:
 			return "Unknown query";
+
+		case SPAN_NODE_INIT_PLAN:
+			return "InitPlan";
+		case SPAN_NODE_SUBPLAN:
+			return "SubPlan";
+		case SPAN_NODE:
+			return "Node";
 	}
 	return "???";
 }
@@ -233,6 +241,10 @@ get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 		case SPAN_TOP_NOTHING:
 		case SPAN_TOP_UNKNOWN:
 			return "Top";
+		case SPAN_NODE_INIT_PLAN:
+		case SPAN_NODE_SUBPLAN:
+		case SPAN_NODE:
+			return "Node";
 	}
 	return "Unknown type";
 }
@@ -249,6 +261,8 @@ adjust_file_offset(Span * span, Size file_position)
 		span->operation_name_offset += file_position;
 	if (span->parameter_offset != -1)
 		span->parameter_offset += file_position;
+	if (span->deparse_info_offset != -1)
+		span->deparse_info_offset += file_position;
 }
 
 /*
