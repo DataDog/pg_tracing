@@ -33,7 +33,9 @@ SELECT span_type, span_operation, sql_error_code, lvl from peek_ordered_spans wh
  Insert query | INSERT INTO pg_tracing_test_table_with_constraint VALUES($1, $2); | 23505          |   1
  Planner      | Planner                                                           | 00000          |   2
  Executor     | ExecutorRun                                                       | 23505          |   2
-(3 rows)
+ Insert       | Insert on pg_tracing_test_table_with_constraint                   | 23505          |   3
+ Result       | Result                                                            | 23505          |   4
+(5 rows)
 
 -- Trigger an error while calling pg_tracing_peek_spans which resets tracing, nothing should be generated
 CALL clean_spans();

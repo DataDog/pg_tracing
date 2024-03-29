@@ -116,7 +116,8 @@ SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans wh
  Select query | select * from pg_sleep($1); | 57014          |   1
  Planner      | Planner                     | 00000          |   2
  Executor     | ExecutorRun                 | 57014          |   2
-(3 rows)
+ FunctionScan | FunctionScan on pg_sleep    | 57014          |   3
+(4 rows)
 
 -- Cleanup statement setting
 set statement_timeout=0;
@@ -272,8 +273,8 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Executor       | ExecutorRun                                                                                                                                                                                             |                                  |   2
  ProjectSet     | ProjectSet                                                                                                                                                                                              |                                  |   3
  Result         | Result                                                                                                                                                                                                  |                                  |   4
- Select query   | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | $1 = 1, $2 = 1, $3 = 1           |   3
- Planner        | Planner                                                                                                                                                                                                 |                                  |   4
+ Select query   | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | $1 = 1, $2 = 1, $3 = 1           |   4
+ Planner        | Planner                                                                                                                                                                                                 |                                  |   5
 (9 rows)
 
 -- Cleanup

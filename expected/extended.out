@@ -62,10 +62,10 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Planner        | Planner        |                    |   2
  Executor       | ExecutorRun    |                    |   2
  Result         | Result         |                    |   3
- Result         | Result         |                    |   3
  Select query   | SELECT $1, $2  | $1 = '2', $2 = '3' |   1
  Planner        | Planner        |                    |   2
  Executor       | ExecutorRun    |                    |   2
+ Result         | Result         |                    |   3
  Utility query  | COMMIT;        |                    |   1
  ProcessUtility | ProcessUtility |                    |   2
 (12 rows)
@@ -108,10 +108,10 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Planner        | Planner            |                        |   2
  Executor       | ExecutorRun        |                        |   2
  Result         | Result             |                        |   3
- Result         | Result             |                        |   3
  Select query   | SELECT $1, $2, $3; | $1 = 5, $2 = 6, $3 = 7 |   1
  Planner        | Planner            |                        |   2
  Executor       | ExecutorRun        |                        |   2
+ Result         | Result             |                        |   3
  Select query   | SELECT $1, $2      | $1 = '2', $2 = '3'     |   1
  Planner        | Planner            |                        |   2
  Executor       | ExecutorRun        |                        |   2

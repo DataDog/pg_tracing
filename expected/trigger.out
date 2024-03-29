@@ -209,13 +209,13 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
  00000000000000000000000000000002 | Insert       | Insert on before_trigger_table                                  |   3
  00000000000000000000000000000002 | ProjectSet   | ProjectSet                                                      |   4
  00000000000000000000000000000002 | Result       | Result                                                          |   5
- 00000000000000000000000000000002 | Select query | SELECT $1                                                       |   3
- 00000000000000000000000000000002 | Planner      | Planner                                                         |   4
- 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   4
- 00000000000000000000000000000002 | Result       | Result                                                          |   5
- 00000000000000000000000000000002 | Select query | SELECT 'SELECT 1'                                               |   3
- 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   4
- 00000000000000000000000000000002 | Result       | Result                                                          |   5
+ 00000000000000000000000000000002 | Select query | SELECT $1                                                       |   5
+ 00000000000000000000000000000002 | Planner      | Planner                                                         |   6
+ 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   6
+ 00000000000000000000000000000002 | Result       | Result                                                          |   7
+ 00000000000000000000000000000002 | Select query | SELECT 'SELECT 1'                                               |   5
+ 00000000000000000000000000000002 | Executor     | ExecutorRun                                                     |   6
+ 00000000000000000000000000000002 | Result       | Result                                                          |   7
 (13 rows)
 
 -- Call before trigger update
