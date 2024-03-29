@@ -854,7 +854,7 @@ pg_tracing_shmem_startup(void)
  */
 static void
 process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *queryDesc,
-				   int sql_error_code, TimestampTz *end_time)
+				   int sql_error_code, TimestampTz parent_end)
 {
 	NodeCounters *node_counters = &get_latest_top_span(exec_nested_level)->node_counters;
 
@@ -880,7 +880,6 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 		uint64		parent_id = per_level_buffers[exec_nested_level].executor_run_span_id;
 		uint64		query_id = per_level_buffers[exec_nested_level].query_id;
 		TimestampTz parent_start = per_level_buffers[exec_nested_level].executor_start;
-		TimestampTz parent_end = per_level_buffers[exec_nested_level].executor_end;
 
 		planstateTraceContext.rtable_names = select_rtable_names_for_explain(queryDesc->plannedstmt->rtable, rels_used);
 		planstateTraceContext.trace_id = trace_context->traceparent.trace_id;
@@ -1186,7 +1185,7 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 	sql_error_code = geterrcode();
 
 	if (queryDesc != NULL)
-		process_query_desc(trace_context, queryDesc, sql_error_code, &span_end_time);
+		process_query_desc(trace_context, queryDesc, sql_error_code, span_end_time);
 
 	/* End all ongoing top spans */
 	for (int i = 0; i <= max_nested_level; i++)
@@ -1869,7 +1868,11 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
 
 	if (executor_sampled)
-		process_query_desc(trace_context, queryDesc, 0, NULL);
+	{
+		TimestampTz parent_end = per_level_buffers[exec_nested_level].executor_end;
+
+		process_query_desc(trace_context, queryDesc, 0, parent_end);
+    }
 
 	/* No need to increment nested level here */
 	if (prev_ExecutorEnd)
