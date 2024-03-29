@@ -313,7 +313,7 @@ _PG_init(void)
 							 NULL);
 
 	DefineCustomBoolVariable("pg_tracing.deparse_plan",
-							 "Deparse query plan to generate details more details on a plan node.",
+							 "Deparse query plan to generate more details on a plan node.",
 							 NULL,
 							 &pg_tracing_deparse_plan,
 							 true,
