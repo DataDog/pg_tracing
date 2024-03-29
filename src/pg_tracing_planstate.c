@@ -305,13 +305,24 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	if (planstate->instrument == NULL)
 		return 0;
 
+	if (!planstate->state->es_finished && !INSTR_TIME_IS_ZERO(planstate->instrument->starttime))
+	{
+		/*
+		 * If the query is in an unfinished state, it means that we're in an
+		 * error handler. Stop the node instrumentation to get the latest
+		 * known state.
+		 */
+		InstrStopNode(planstate->instrument, planstate->state->es_processed);
+	}
+
 	/*
 	 * Make sure stats accumulation is done. Function is a no-op if if was
 	 * already done.
 	 */
 	InstrEndLoop(planstate->instrument);
-	/* TODO: Error may have an ongoing start */
+
 	if (planstate->instrument->total == 0)
+		/* The node was never executed, ignore it */
 		return 0;
 
 	span_id = pg_prng_uint64(&pg_global_prng_state);
@@ -489,18 +500,7 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 	span.plan_counters.plan_width = plan->plan_width;
 
 	if (!planstate->state->es_finished)
-	{
-		/*
-		 * If the query is in an unfinished state, it means that we're in an
-		 * error handler. Stop the node instrumentation to get the latest
-		 * known state.
-		 */
-		if (!INSTR_TIME_IS_ZERO(planstate->instrument->starttime))
-			/* Don't stop the node if it wasn't started */
-			InstrStopNode(planstate->instrument, planstate->state->es_processed);
-		InstrEndLoop(planstate->instrument);
 		span.sql_error_code = planstateTraceContext->sql_error_code;
-	}
 	Assert(planstate->instrument->total > 0);
 	end_span(&span, &span_end);
 
