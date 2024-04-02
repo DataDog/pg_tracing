@@ -184,6 +184,11 @@ CREATE OR REPLACE FUNCTION function_with_error(IN anyarray, OUT x anyelement, OU
 -- Check lazy function call with error
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
 
+-- Add some test data
+INSERT INTO pg_tracing_test VALUES(generate_series(1, 10000), 'aaa');
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000005-01'*/ ANALYZE pg_tracing_test;
+select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000005';
+
 -- Cleanup
 CALL clean_spans();
 SET pg_tracing.track_utility TO DEFAULT;
