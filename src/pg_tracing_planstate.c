@@ -250,7 +250,8 @@ generate_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext 
 					  uint64 query_id, TimestampTz fallback_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	int			j;
-    /* We keep track of the end of the last sibling end to use as start */
+
+	/* We keep track of the end of the last sibling end to use as start */
 	TimestampTz sibling_end = fallback_start;
 
 	for (j = 0; j < nplans; j++)
