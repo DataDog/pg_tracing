@@ -9,23 +9,23 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
 --  +-----------------------------+-------------------------------+-------------------------------+
 
 SELECT span_id AS span_a_id,
-        get_span_start(span_start) as span_a_start,
-        get_span_end(span_start) as span_a_end
+        get_epoch(span_start) as span_a_start,
+        get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans
         where trace_id='00000000000000000000000000000001' AND span_operation='BitmapOr' \gset
 SELECT span_id AS span_b_id,
-        get_span_start(span_start) as span_b_start,
-        get_span_end(span_start) as span_b_end
+        get_epoch(span_start) as span_b_start,
+        get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
         where parent_id =:'span_a_id' and deparse_info='Index Cond: (a = 1)' \gset
 SELECT span_id AS span_c_id,
-        get_span_start(span_start) as span_c_start,
-        get_span_end(span_start) as span_c_end
+        get_epoch(span_start) as span_c_start,
+        get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
         where parent_id =:'span_a_id' and deparse_info='Index Cond: (a = 2)' \gset
 SELECT span_id AS span_d_id,
-        get_span_start(span_start) as span_d_start,
-        get_span_end(span_start) as span_d_end
+        get_epoch(span_start) as span_d_start,
+        get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
         where parent_id =:'span_a_id' and deparse_info='Index Cond: (a = 2)' \gset
 

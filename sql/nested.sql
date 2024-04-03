@@ -34,28 +34,28 @@ LANGUAGE plpgsql;
 
 -- Gather span_id, span start and span end of function call statement
 SELECT span_id AS span_a_id,
-        get_span_start(span_start) as span_a_start,
-        get_span_end(span_start) as span_a_end
+        get_epoch(span_start) as span_a_start,
+        get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans where parent_id='0000000000000051' \gset
 SELECT span_id AS span_d_id,
-        get_span_start(span_start) as span_d_start,
-        get_span_end(span_start) as span_d_end
+        get_epoch(span_start) as span_d_start,
+        get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans where parent_id=:'span_a_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
 SELECT span_id AS span_e_id,
-        get_span_start(span_start) as span_e_start,
-        get_span_end(span_start) as span_e_end
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
 		from pg_tracing_peek_spans where parent_id=:'span_d_id' and span_type='ProjectSet' \gset
 SELECT span_id AS span_g_id,
-        get_span_start(span_start) as span_g_start,
-        get_span_end(span_start) as span_g_end
+        get_epoch(span_start) as span_g_start,
+        get_epoch(span_end) as span_g_end
 		from pg_tracing_peek_spans where parent_id=:'span_e_id' and span_type='Result' \gset
 SELECT span_id AS span_g_id,
-        get_span_start(span_start) as span_g_start,
-        get_span_end(span_start) as span_g_end
+        get_epoch(span_start) as span_g_start,
+        get_epoch(span_end) as span_g_end
 		from pg_tracing_peek_spans where parent_id=:'span_e_id' and span_type='Select query' \gset
 SELECT span_id AS span_h_id,
-        get_span_start(span_start) as span_h_start,
-        get_span_end(span_start) as span_h_end
+        get_epoch(span_start) as span_h_start,
+        get_epoch(span_end) as span_h_end
 		from pg_tracing_peek_spans where parent_id=:'span_g_id' and span_operation='ExecutorRun' \gset
 
 -- Check that spans' start and end are within expection
@@ -132,13 +132,13 @@ CREATE OR REPLACE FUNCTION test_generate_series(IN anyarray, OUT x anyelement)
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000057-0000000000000057-01'*/ select test_generate_series('{1,2,3,4}'::int[]) FROM (VALUES (1,2));
 
 SELECT span_id AS span_project_set_id,
-        get_span_start(span_start) as span_project_set_start,
-        get_span_end(span_start) as span_project_set_end
+        get_epoch(span_start) as span_project_set_start,
+        get_epoch(span_end) as span_project_set_end
 		from pg_tracing_peek_spans where span_type='ProjectSet' \gset
 
 SELECT span_id AS span_result_id,
-        get_span_start(span_start) as span_result_start,
-        get_span_end(span_start) as span_result_end
+        get_epoch(span_start) as span_result_start,
+        get_epoch(span_end) as span_result_end
 		from pg_tracing_peek_spans where parent_id=:'span_project_set_id' and span_type='Result' \gset
 
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000057';
@@ -160,20 +160,20 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
 
 -- Gather span_id, span start and span end of function call statement
 SELECT span_id AS span_a_id,
-        get_span_start(span_start) as span_a_start,
-        get_span_end(span_start) as span_a_end
+        get_epoch(span_start) as span_a_start,
+        get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans where parent_id='0000000000000058' \gset
 SELECT span_id AS span_c_id,
-        get_span_start(span_start) as span_c_start,
-        get_span_end(span_start) as span_c_end
+        get_epoch(span_start) as span_c_start,
+        get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans where parent_id=:'span_a_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
 SELECT span_id AS span_d_id,
-        get_span_start(span_start) as span_d_start,
-        get_span_end(span_start) as span_d_end
+        get_epoch(span_start) as span_d_start,
+        get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans where parent_id=:'span_c_id' and span_type='Result' \gset
 SELECT span_id AS span_e_id,
-        get_span_start(span_start) as span_e_start,
-        get_span_end(span_start) as span_e_end
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
 		from pg_tracing_peek_spans where parent_id=:'span_d_id' and span_type='Insert query' \gset
 
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000058';
