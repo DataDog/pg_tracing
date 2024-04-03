@@ -68,7 +68,8 @@ drop_traced_planstate(int exec_nested_level)
 }
 
 /*
- * If spans from planstate is requested, we override planstate's ExecProcNode's pointer with this function. It will track the time of the first node call needed to place the planstate span.
+ * If spans from planstate is requested, we override planstate's ExecProcNode's pointer with this function.
+ * It will track the time of the first node call needed to place the planstate span.
  */
 static TupleTableSlot *
 ExecProcNodeFirstPgTracing(PlanState *node)
@@ -388,16 +389,19 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	switch (nodeTag(planstate->plan))
 	{
 		case T_BitmapIndexScan:
-		case T_Hash:
 		case T_BitmapAnd:
 		case T_BitmapOr:
 
 			/*
 			 * Those nodes won't go through ExecProcNode so we won't have
-			 * their start. Fallback to the parent start. TODO: Use the child
-			 * start as a fallback instead
+			 * their start. Fallback to the parent start.
 			 */
 			span_start = fallback_start;
+			break;
+		case T_Hash:
+			/* For hash node, use the child's start */
+			traced_planstate = get_traced_planstate(outerPlanState(planstate));
+			span_start = traced_planstate->node_start;
 			break;
 		default:
 			traced_planstate = get_traced_planstate(planstate);
