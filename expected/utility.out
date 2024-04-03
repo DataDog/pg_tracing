@@ -1,14 +1,3 @@
--- Some helper functions
-CREATE OR REPLACE FUNCTION get_epoch(ts timestamptz) RETURNS bigint AS
-$BODY$
-    SELECT extract(epoch from ts);
-$BODY$
-LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE clean_spans() AS $$
-BEGIN
-    PERFORM count(*) from pg_tracing_consume_spans;
-END;
-$$ LANGUAGE plpgsql;
 -- Create pg_tracing extension with sampling on
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ CREATE EXTENSION pg_tracing;
 -- This will create the following spans (non exhaustive list):
@@ -216,22 +205,22 @@ select span_operation, parameters, sql_error_code, lvl from peek_ordered_spans w
 (2 rows)
 
 -- Create test table
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ CREATE TABLE pg_tracing_test (a int, b char(20));
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ CREATE TABLE test_create_table (a int, b char(20));
 -- Check create table spans
 select trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
-             trace_id             |   span_type    |                  span_operation                   | lvl 
-----------------------------------+----------------+---------------------------------------------------+-----
- 00000000000000000000000000000002 | Utility query  | CREATE TABLE pg_tracing_test (a int, b char(20)); |   1
- 00000000000000000000000000000002 | ProcessUtility | ProcessUtility                                    |   2
+             trace_id             |   span_type    |                   span_operation                    | lvl 
+----------------------------------+----------------+-----------------------------------------------------+-----
+ 00000000000000000000000000000002 | Utility query  | CREATE TABLE test_create_table (a int, b char(20)); |   1
+ 00000000000000000000000000000002 | ProcessUtility | ProcessUtility                                      |   2
 (2 rows)
 
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ CREATE INDEX pg_tracing_index ON pg_tracing_test (a);
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ CREATE INDEX test_create_table_index ON test_create_table (a);
 -- Check create index spans
 select trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
-             trace_id             |   span_type    |                    span_operation                     | lvl 
-----------------------------------+----------------+-------------------------------------------------------+-----
- 00000000000000000000000000000003 | Utility query  | CREATE INDEX pg_tracing_index ON pg_tracing_test (a); |   1
- 00000000000000000000000000000003 | ProcessUtility | ProcessUtility                                        |   2
+             trace_id             |   span_type    |                         span_operation                         | lvl 
+----------------------------------+----------------+----------------------------------------------------------------+-----
+ 00000000000000000000000000000003 | Utility query  | CREATE INDEX test_create_table_index ON test_create_table (a); |   1
+ 00000000000000000000000000000003 | ProcessUtility | ProcessUtility                                                 |   2
 (2 rows)
 
 CREATE OR REPLACE FUNCTION function_with_error(IN anyarray, OUT x anyelement, OUT n int)
@@ -255,14 +244,20 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
  00000000000000000000000000000004 | Select query | select s from pg_catalog.generate_series($1, $2, $3) as g(s) | 00000          |   4
 (6 rows)
 
--- Add some test data
-INSERT INTO pg_tracing_test VALUES(generate_series(1, 10000), 'aaa');
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000005-01'*/ ANALYZE pg_tracing_test;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000005-01'*/ ANALYZE test_create_table;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000005';
-             trace_id             |   span_type    |      span_operation      | sql_error_code | lvl 
-----------------------------------+----------------+--------------------------+----------------+-----
- 00000000000000000000000000000005 | Utility query  | ANALYZE pg_tracing_test; | 00000          |   1
- 00000000000000000000000000000005 | ProcessUtility | ProcessUtility           | 00000          |   2
+             trace_id             |   span_type    |       span_operation       | sql_error_code | lvl 
+----------------------------------+----------------+----------------------------+----------------+-----
+ 00000000000000000000000000000005 | Utility query  | ANALYZE test_create_table; | 00000          |   1
+ 00000000000000000000000000000005 | ProcessUtility | ProcessUtility             | 00000          |   2
+(2 rows)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000006-01'*/ DROP TABLE test_create_table;
+select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000006';
+             trace_id             |   span_type    |        span_operation         | sql_error_code | lvl 
+----------------------------------+----------------+-------------------------------+----------------+-----
+ 00000000000000000000000000000006 | Utility query  | DROP TABLE test_create_table; | 00000          |   1
+ 00000000000000000000000000000006 | ProcessUtility | ProcessUtility                | 00000          |   2
 (2 rows)
 
 -- Cleanup

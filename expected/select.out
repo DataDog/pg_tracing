@@ -90,7 +90,7 @@ FROM (SELECT
     FROM pg_class C) as s limit 1;
  ?column? 
 ----------
-        0
+   851968
 (1 row)
 
 -- Check the nested level of spans for a query with multiple function calls

@@ -7,7 +7,7 @@ FROM (SELECT
     FROM pg_class C) as s limit 1;
  ?column? 
 ----------
-        0
+   851968
 (1 row)
 
 SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where trace_id='00000000000000000000000000000001';
@@ -27,7 +27,7 @@ FROM (SELECT
     FROM pg_class C) as s limit 1;
  ?column? 
 ----------
-        0
+   851968
 (1 row)
 
 SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where trace_id='00000000000000000000000000000002';
