@@ -712,9 +712,21 @@ end_nested_level(void)
 	for (int i = 0; i < top_spans->end; i++)
 	{
 		Span	   *top_span = top_spans->spans + i;
+		TimestampTz top_span_end = span_end_time;
 
 		if (!top_span->ended)
-			end_span(top_span, &span_end_time);
+		{
+			if (top_span->parent_planstate_index > -1)
+			{
+				/* We have a parent planstate, use it for the span end */
+				TracedPlanstate *traced_planstate = get_traced_planstate_from_index(top_span->parent_planstate_index);
+
+				/* Make sure to end instrumentation */
+				InstrEndLoop(traced_planstate->planstate->instrument);
+				top_span_end = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
+			}
+			end_span(top_span, &top_span_end);
+		}
 	}
 
 finish:
@@ -1288,6 +1300,7 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 	int			query_len;
 	const char *normalised_query;
 	uint64		parent_id;
+	int8		parent_planstate_index = -1;
 
 	/* in case of a cached plan, query might be unavailable */
 	if (query != NULL)
@@ -1300,14 +1313,23 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		parent_id = trace_context->traceparent.parent_id;
 	else
 	{
-		TracedPlanstate *parent_traced_planstate = get_parent_traced_planstate(exec_nested_level);
-		Span	   *latest_top_span = get_latest_top_span(exec_nested_level - 1);
+		TracedPlanstate *parent_traced_planstate = NULL;
+		Span	   *latest_top_span = NULL;
+
+		/*
+		 * We're in a nested level, check if we have a parent planstate and
+		 * use it as a parent span
+		 */
+		parent_planstate_index = get_parent_traced_planstate_index(exec_nested_level);
+		if (parent_planstate_index > -1)
+			parent_traced_planstate = get_traced_planstate_from_index(parent_planstate_index);
+		latest_top_span = get_latest_top_span(exec_nested_level - 1);
 
 		/*
 		 * Both planstate and previous top span can be the parent for the new
 		 * top span, we use the most recent as a parent
 		 */
-		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start >= latest_top_span->start)
+		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start > latest_top_span->start)
 			parent_id = parent_traced_planstate->span_id;
 		else
 			parent_id = latest_top_span->span_id;
@@ -1317,6 +1339,8 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 			   command_type_to_span_type(commandType),
 			   NULL, parent_id,
 			   per_level_buffers[exec_nested_level].query_id, &start_time);
+	/* Keep track of the parent planstate index */
+	top_span->parent_planstate_index = parent_planstate_index;
 
 	if (IsParallelWorker())
 	{

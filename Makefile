@@ -19,7 +19,7 @@ OBJS = \
 	src/pg_tracing_span.o
 
 REGRESSCHECKS = setup utility select extended insert trigger sample \
-				planstate planstate_bitmap planstate_hash \
+				planstate planstate_bitmap planstate_hash planstate_projectset \
 				parallel subxact full_buffer \
 				nested wal cleanup
 REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
