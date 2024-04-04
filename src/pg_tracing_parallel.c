@@ -47,7 +47,7 @@ void
 add_parallel_context(const struct pgTracingTraceContext *trace_context,
 					 uint64 parent_id, uint64 query_id)
 {
-	pgTracingParallelContext *ctx;
+	pgTracingParallelContext *ctx = NULL;
 
 	Assert(parallel_context_index == -1);
 	SpinLockAcquire(&pg_tracing_parallel->mutex);
@@ -65,7 +65,7 @@ add_parallel_context(const struct pgTracingTraceContext *trace_context,
 	}
 	SpinLockRelease(&pg_tracing_parallel->mutex);
 
-	if (parallel_context_index > -1)
+	if (parallel_context_index > -1 && ctx != NULL)
 	{
 		ctx->trace_context = *trace_context;
 		/* We don't need to propagate root span index to parallel workers */

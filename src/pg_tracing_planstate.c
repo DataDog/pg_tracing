@@ -47,7 +47,7 @@ void
 drop_traced_planstate(int exec_nested_level)
 {
 	int			i;
-	int			new_index_start;
+	int			new_index_start = 0;
 
 	for (i = index_planstart; i > 0; i--)
 	{
@@ -120,7 +120,6 @@ static void
 override_member_nodes(PlanState **planstates, int nplans)
 {
 	int			j;
-	TimestampTz child_end;
 
 	for (j = 0; j < nplans; j++)
 		override_ExecProcNode(planstates[j]);
@@ -359,8 +358,6 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	TracedPlanstate *traced_planstate = NULL;
 	TimestampTz span_start;
 	TimestampTz span_end;
-	TimestampTz outer_span_end = 0;
-	NodeTag		node_tag;
 
 	/* The node was never executed, skip it */
 	if (planstate->instrument == NULL)
@@ -437,7 +434,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 
 	/* Walk the outerplan */
 	if (outerPlanState(planstate))
-		outer_span_end = generate_span_from_planstate(outerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+		generate_span_from_planstate(outerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 	/* Walk the innerplan */
 	if (innerPlanState(planstate))
 		generate_span_from_planstate(innerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
