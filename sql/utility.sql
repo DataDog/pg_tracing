@@ -78,7 +78,7 @@ CREATE VIEW peek_spans_with_level AS
 
 -- Create utility view to keep order stable
 CREATE VIEW peek_ordered_spans AS
-  SELECT * FROM peek_spans_with_level order by span_start, lvl, span_end;
+  SELECT * FROM peek_spans_with_level order by span_start, lvl, span_end, deparse_info;
 
 -- Nothing should have been generated
 select count(*) = 0 from pg_tracing_consume_spans;
