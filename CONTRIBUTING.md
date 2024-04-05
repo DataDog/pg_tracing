@@ -81,5 +81,5 @@ make PG_VERSION=16 run-test
 If you have added additional tests, the expected outputs needs to be updated. If the outputs match your expectations, you can simply copy them:
 
 ```bash
-cp tests/$PG_VERSION/results/* tests/$PG_VERSION/expected/
+cp results/*out expected/
 ```
