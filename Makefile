@@ -62,4 +62,4 @@ run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
-		bash -c "make regresscheck_noinstall || cat /usr/src/pg_tracing/regression.diffs"
+		bash -c "make regresscheck_noinstall || (cat /usr/src/pg_tracing/regression.diffs && exit 1)"
