@@ -27,7 +27,7 @@ SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and deparse_info='Index Cond: (a = 2)' \gset
+        where parent_id =:'span_a_id' and deparse_info='Index Cond: (a = 3)' \gset
 
 SELECT :span_b_end >= :span_c_start as bitmap_or_second_child_start_after_first,
        :span_c_end >= :span_d_start as bitmap_or_third_child_start_after_second,
