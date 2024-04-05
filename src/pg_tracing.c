@@ -1307,7 +1307,7 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		 * Both planstate and previous top span can be the parent for the new
 		 * top span, we use the most recent as a parent
 		 */
-		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start > latest_top_span->start)
+		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start >= latest_top_span->start)
 			parent_id = parent_traced_planstate->span_id;
 		else
 			parent_id = latest_top_span->span_id;
