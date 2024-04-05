@@ -1300,7 +1300,7 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		parent_id = trace_context->traceparent.parent_id;
 	else
 	{
-		TracedPlanstate *parent_traced_planstate = get_parent_traced_planstate();
+		TracedPlanstate *parent_traced_planstate = get_parent_traced_planstate(exec_nested_level);
 		Span	   *latest_top_span = get_latest_top_span(exec_nested_level - 1);
 
 		/*

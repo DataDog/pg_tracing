@@ -246,7 +246,7 @@ extern void
 extern void
 			cleanup_planstarts(void);
 extern TracedPlanstate *
-get_parent_traced_planstate(void);
+get_parent_traced_planstate(int nested_level);
 extern void
 			drop_traced_planstate(int exec_nested_level);
 

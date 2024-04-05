@@ -325,20 +325,20 @@ get_traced_planstate(PlanState *planstate)
  * Get possible parent traced_planstate
  */
 TracedPlanstate *
-get_parent_traced_planstate(void)
+get_parent_traced_planstate(int nested_level)
 {
 	TracedPlanstate *traced_planstate;
 
 	if (index_planstart >= 2)
 	{
 		traced_planstate = &traced_planstates[index_planstart - 2];
-		if (nodeTag(traced_planstate->planstate->plan) == T_ProjectSet)
+		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_ProjectSet)
 			return traced_planstate;
 	}
 	if (index_planstart >= 1)
 	{
 		traced_planstate = &traced_planstates[index_planstart - 1];
-		if (nodeTag(traced_planstate->planstate->plan) == T_Result)
+		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_Result)
 			return traced_planstate;
 	}
 	return NULL;
