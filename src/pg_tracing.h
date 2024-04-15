@@ -108,6 +108,8 @@ typedef struct Span
 								 * span's name */
 	bool		ended;			/* Track if the span was already ended.
 								 * Internal usage only */
+	int8		parent_planstate_index; /* Index to the parent planstate of
+										 * this span. Internal usage only */
 	int			be_pid;			/* Pid of the backend process */
 	Oid			user_id;		/* User ID when the span was created */
 	Oid			database_id;	/* Database ID where the span was created */
@@ -246,9 +248,13 @@ extern void
 extern void
 			cleanup_planstarts(void);
 extern TracedPlanstate *
-get_parent_traced_planstate(int nested_level);
+get_traced_planstate_from_index(int index);
+extern int
+			get_parent_traced_planstate_index(int nested_level);
 extern void
 			drop_traced_planstate(int exec_nested_level);
+extern TimestampTz
+			get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end);
 
 /* pg_tracing_query_process.c */
 extern const char *normalise_query_parameters(const JumbleState *jstate, const char *query,

@@ -277,7 +277,7 @@ generate_span_from_custom_scan(CustomScanState *css, planstateTraceContext * pla
 /*
  * Get end time for a span node from the provided planstate.
  */
-static TimestampTz
+TimestampTz
 get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end)
 {
 	TimestampTz span_end_time;
@@ -322,10 +322,21 @@ get_traced_planstate(PlanState *planstate)
 }
 
 /*
- * Get possible parent traced_planstate
+ * Get traced_planstate from index
  */
 TracedPlanstate *
-get_parent_traced_planstate(int nested_level)
+get_traced_planstate_from_index(int index)
+{
+	Assert(index > -1);
+	Assert(index < max_planstart);
+	return &traced_planstates[index];
+}
+
+/*
+ * Get index in traced_planstates array of a possible parent traced_planstate
+ */
+int
+get_parent_traced_planstate_index(int nested_level)
 {
 	TracedPlanstate *traced_planstate;
 
@@ -333,15 +344,15 @@ get_parent_traced_planstate(int nested_level)
 	{
 		traced_planstate = &traced_planstates[index_planstart - 2];
 		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_ProjectSet)
-			return traced_planstate;
+			return index_planstart - 2;
 	}
 	if (index_planstart >= 1)
 	{
 		traced_planstate = &traced_planstates[index_planstart - 1];
 		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_Result)
-			return traced_planstate;
+			return index_planstart - 1;
 	}
-	return NULL;
+	return -1;
 }
 
 /*
