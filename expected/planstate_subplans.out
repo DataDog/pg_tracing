@@ -1,0 +1,83 @@
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
+MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001' AND lvl < 6;
+                                                                                                                  span_operation                                                                                                                   |    deparse_info    |                                                   parameters                                                    | lvl 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------+-----------------------------------------------------------------------------------------------------------------+-----
+ WITH cte_init AS MATERIALIZED (SELECT $1 a, $2 b)MERGE INTO m USING (select $3 k, $4 v offset $5) o ON m.k=o.kWHEN MATCHED THEN UPDATE SET v = (SELECT b || $6 FROM cte_init WHERE a = $7 LIMIT $8)WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v); |                    | $1 = 1, $2 = 'cte_init val', $3 = 1, $4 = 'merge source InitPlan', $5 = 0, $6 = ' merge update', $7 = 1, $8 = 1 |   1
+ Planner                                                                                                                                                                                                                                           |                    |                                                                                                                 |   2
+ ExecutorRun                                                                                                                                                                                                                                       |                    |                                                                                                                 |   2
+ Merge on m                                                                                                                                                                                                                                        |                    |                                                                                                                 |   3
+ Hash Right Join                                                                                                                                                                                                                                   | Hash Cond: (k = k) |                                                                                                                 |   4
+ Hash                                                                                                                                                                                                                                              |                    |                                                                                                                 |   5
+ SeqScan on m                                                                                                                                                                                                                                      |                    |                                                                                                                 |   5
+ InitPlan 2 (returns $1)                                                                                                                                                                                                                           |                    |                                                                                                                 |   4
+ Limit                                                                                                                                                                                                                                             |                    |                                                                                                                 |   5
+ CTE cte_init                                                                                                                                                                                                                                      |                    |                                                                                                                 |   4
+ Result                                                                                                                                                                                                                                            |                    |                                                                                                                 |   5
+(11 rows)
+
+-- +----------------------------------------------------------+
+-- | A: Merge on m                                            |
+-- ++---------------------------------------------------------+
+--  | B: Hash Right Join                                |
+--  +---------------------------------------------------+
+--                              +-------------+
+--                              | F: CTE init |
+--                              +-------------+
+--                              | G: Result   |
+--                              +-------------+
+--                  +-------------------------------------+
+--                  | C: InitPlan                         |
+--                  +-----------------------------+-------+
+--                  | D: Limit                    |
+--                  +----+------------------------+
+--                       | E: CTEScan on cte_init |
+--                       +------------------------+
+SELECT span_id AS span_a_id,
+        get_epoch(span_start) as span_a_start,
+        get_epoch(span_end) as span_a_end
+		from pg_tracing_peek_spans
+        where trace_id='00000000000000000000000000000001' AND span_operation='Merge on m' \gset
+SELECT span_id AS span_b_id,
+        get_epoch(span_start) as span_b_start,
+        get_epoch(span_end) as span_b_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_a_id' and span_operation='Hash Right Join' \gset
+SELECT span_id AS span_c_id,
+        get_epoch(span_start) as span_c_start,
+        get_epoch(span_end) as span_c_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_a_id' and span_operation='InitPlan 2 (returns $1)' \gset
+SELECT span_id AS span_d_id,
+        get_epoch(span_start) as span_d_start,
+        get_epoch(span_end) as span_d_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_c_id' and span_operation='Limit' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='CTEScan on cte_init' \gset
+SELECT span_id AS span_f_id,
+        get_epoch(span_start) as span_f_start,
+        get_epoch(span_end) as span_f_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_a_id' and span_operation='CTE cte_init' \gset
+SELECT span_id AS span_g_id,
+        get_epoch(span_start) as span_g_start,
+        get_epoch(span_end) as span_g_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_f_id' and span_operation='Result' \gset
+SELECT :span_a_end >= :span_c_end as merge_ends_after_init_plan,
+       :span_c_end >= :span_d_start as bitmap_or_third_child_start_after_second,
+       :span_e_start <= :span_f_start as cte_scan_starts_before_cte_init,
+       :span_f_start >= :span_e_start as cte_init_starts_after_cte_scan;
+ merge_ends_after_init_plan | bitmap_or_third_child_start_after_second | cte_scan_starts_before_cte_init | cte_init_starts_after_cte_scan 
+----------------------------+------------------------------------------+---------------------------------+--------------------------------
+ t                          | t                                        | t                               | t
+(1 row)
+
+-- Clean created spans
+CALL clean_spans();
