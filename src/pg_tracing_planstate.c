@@ -455,19 +455,30 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	{
 		SubPlanState *sstate = (SubPlanState *) lfirst(l);
 		PlanState  *splan = sstate->planstate;
-		Span		init_span;
+		Span		initplan_span;
 		TracedPlanstate *initplan_traced_planstate;
 		TimestampTz initplan_span_end;
+		uint64		init_plan_span_id;
 
+		InstrEndLoop(splan->instrument);
 		if (splan->instrument->total == 0)
 			continue;
-		initplan_traced_planstate = get_traced_planstate(planstate);
-		initplan_span_end = get_span_end_from_planstate(planstate, initplan_traced_planstate->node_start, root_end);
-		init_span = create_span_node(splan, planstateTraceContext,
-									 &initplan_traced_planstate->span_id, parent_id, query_id,
-									 SPAN_NODE_INIT_PLAN, sstate->subplan->plan_name, initplan_traced_planstate->node_start, initplan_span_end);
-		store_span(&init_span);
-		generate_span_from_planstate(splan, planstateTraceContext, init_span.span_id, query_id, span_start, root_end, latest_end);
+
+		/*
+		 * There's no specific init_plan node so we need to generate a
+		 * dedicated span_id. We will still use the traced planstate to get
+		 * the span's end.
+		 */
+		initplan_traced_planstate = get_traced_planstate(splan);
+		init_plan_span_id = pg_prng_uint64(&pg_global_prng_state);
+		initplan_span_end = get_span_end_from_planstate(splan, initplan_traced_planstate->node_start, root_end);
+
+		initplan_span = create_span_node(splan, planstateTraceContext,
+										 &init_plan_span_id, span_id, query_id,
+										 SPAN_NODE_INIT_PLAN, sstate->subplan->plan_name, initplan_traced_planstate->node_start, initplan_span_end);
+		store_span(&initplan_span);
+		/* Use the initplan span as a parent */
+		generate_span_from_planstate(splan, planstateTraceContext, initplan_span.span_id, query_id, span_start, root_end, latest_end);
 	}
 
 	/* Handle sub plans */
@@ -478,13 +489,21 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		Span		subplan_span;
 		TracedPlanstate *subplan_traced_planstate;
 		TimestampTz subplan_span_end;
+		uint64		subplan_span_id;
 
+		InstrEndLoop(splan->instrument);
 		if (splan->instrument->total == 0)
 			continue;
-		subplan_traced_planstate = get_traced_planstate(planstate);
+
+		/*
+		 * Same as initplan, we create a dedicated span node for subplan but
+		 * still use the tracedplan to get the end.
+		 */
+		subplan_traced_planstate = get_traced_planstate(splan);
+		subplan_span_id = pg_prng_uint64(&pg_global_prng_state);
 		subplan_span_end = get_span_end_from_planstate(planstate, subplan_traced_planstate->node_start, root_end);
 		subplan_span = create_span_node(splan, planstateTraceContext,
-										&subplan_traced_planstate->span_id, parent_id, query_id,
+										&subplan_span_id, span_id, query_id,
 										SPAN_NODE_SUBPLAN, sstate->subplan->plan_name, subplan_traced_planstate->node_start, subplan_span_end);
 		store_span(&subplan_span);
 		generate_span_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, span_start, root_end, latest_end);
