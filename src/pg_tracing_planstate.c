@@ -593,7 +593,6 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 
 	if (!planstate->state->es_finished)
 		span.sql_error_code = planstateTraceContext->sql_error_code;
-	Assert(planstate->instrument->total > 0);
 	end_span(&span, &span_end);
 
 	return span;
