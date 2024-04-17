@@ -202,4 +202,4 @@ select count(distinct(query_id)) from pg_tracing_consume_spans;
 (1 row)
 
 -- Cleaning
-SET pg_tracing.filter_query_ids='';
+CALL reset_settings();

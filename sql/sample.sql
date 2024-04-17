@@ -64,4 +64,4 @@ SET pg_tracing.filter_query_ids=:'query_id_select_1',:'query_id_select_1_2';
 select count(distinct(query_id)) from pg_tracing_consume_spans;
 
 -- Cleaning
-SET pg_tracing.filter_query_ids='';
+CALL reset_settings();

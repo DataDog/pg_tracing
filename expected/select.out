@@ -278,5 +278,5 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
 (9 rows)
 
 -- Cleanup
-SET pg_tracing.sample_rate = 0.0;
 CALL clean_spans();
+CALL reset_settings();

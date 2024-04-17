@@ -99,5 +99,5 @@ SELECT lazy_function('{1,2,3,4}'::int[]) FROM (VALUES (1,2)) as t;
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
 
 -- Cleanup
-SET pg_tracing.sample_rate = 0.0;
 CALL clean_spans();
+CALL reset_settings();
