@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        PG_VERSION: [16]
+        PG_VERSION: [15, 16]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
