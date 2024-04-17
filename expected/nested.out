@@ -177,7 +177,7 @@ CREATE OR REPLACE FUNCTION test_generate_series(IN anyarray, OUT x anyelement)
     RETURNS SETOF anyelement
     LANGUAGE sql
     AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)';
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000057-0000000000000057-01'*/ select test_generate_series('{1,2,3,4}'::int[]) FROM (VALUES (1,2));
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000057-0000000000000057-01'*/ select test_generate_series('{1,2,3,4}'::int[]) FROM (VALUES (1,2)) as t;
  test_generate_series 
 ----------------------
                     1
@@ -197,7 +197,7 @@ SELECT span_id AS span_result_id,
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000057';
                                      span_operation                                     | lvl 
 ----------------------------------------------------------------------------------------+-----
- select test_generate_series($1::int[]) FROM (VALUES ($2,$3));                          |   1
+ select test_generate_series($1::int[]) FROM (VALUES ($2,$3)) as t;                     |   1
  Planner                                                                                |   2
  ExecutorRun                                                                            |   2
  ProjectSet                                                                             |   3

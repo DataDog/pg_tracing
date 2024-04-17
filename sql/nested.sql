@@ -129,7 +129,7 @@ CREATE OR REPLACE FUNCTION test_generate_series(IN anyarray, OUT x anyelement)
     LANGUAGE sql
     AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)';
 
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000057-0000000000000057-01'*/ select test_generate_series('{1,2,3,4}'::int[]) FROM (VALUES (1,2));
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000057-0000000000000057-01'*/ select test_generate_series('{1,2,3,4}'::int[]) FROM (VALUES (1,2)) as t;
 
 SELECT span_id AS span_project_set_id,
         get_epoch(span_start) as span_project_set_start,

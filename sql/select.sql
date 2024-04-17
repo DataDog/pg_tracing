@@ -94,7 +94,7 @@ CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement)
     RETURNS SETOF anyelement
     LANGUAGE sql
     AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)';
-SELECT lazy_function('{1,2,3,4}'::int[]) FROM (VALUES (1,2));
+SELECT lazy_function('{1,2,3,4}'::int[]) FROM (VALUES (1,2)) as t;
 -- Check lazy function spans
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
 
