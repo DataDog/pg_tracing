@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * src/version_compat.h
- *    Compatibility macros for writing code agnostic to PostgreSQL versions
+ *    Compatibility macros and functions for writing code agnostic to PostgreSQL versions
  *
  *-------------------------------------------------------------------------
  */
@@ -11,7 +11,24 @@
 
 #include "postgres.h"
 
-#if PG_VERSION_NUM < 170000
+#if (PG_VERSION_NUM < 160000)
+
+#include "utils/queryjumble.h"
+#define NS_PER_S	INT64CONST(1000000000)
+
+/* We need to explicitely declare _PG_init */
+void
+			_PG_init(void);
+
+/* Functions that were introduced with PG 16 */
+extern void *repalloc0(void *pointer, Size oldsize, Size size);
+extern void *guc_malloc(int elevel, size_t size);
+
+#else
+#include "nodes/queryjumble.h"
+#endif
+
+#if (PG_VERSION_NUM < 170000)
 
 /*
  * Compatibility with changes introduced in
@@ -24,5 +41,6 @@
 #define ParallelLeaderProcNumber ParallelLeaderBackendId
 
 #endif
+
 
 #endif							/* VERSION_COMPAT_H */

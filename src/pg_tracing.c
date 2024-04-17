@@ -880,7 +880,11 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 	/* Process JIT counter */
 	if (queryDesc->estate->es_jit)
 		node_counters->jit_usage = queryDesc->estate->es_jit->instr;
+#if (PG_VERSION_NUM >= 160000)
 	node_counters->rows = queryDesc->estate->es_total_processed;
+#else
+	node_counters->rows = queryDesc->estate->es_processed;
+#endif
 
 
 	/* Process planstate */

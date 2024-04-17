@@ -11,7 +11,7 @@ Trace propagation currently relies on [SQLCommenter](https://google.github.io/sq
 
 ## PostgreSQL Version Compatibility
 
-pg_tracing only supports PostgreSQL 16 for the moment.
+pg_tracing only supports PostgreSQL 15 and 16 for the moment.
 
 ## Documentation
 

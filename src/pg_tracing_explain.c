@@ -237,9 +237,11 @@ plan_to_rel_name(const PlanState *planstate, const planstateTraceContext * plans
 					case JOIN_ANTI:
 						jointype = "Anti";
 						break;
+#if PG_VERSION_NUM > 160000
 					case JOIN_RIGHT_ANTI:
 						jointype = "Right Anti";
 						break;
+#endif
 					default:
 						jointype = "???";
 						break;

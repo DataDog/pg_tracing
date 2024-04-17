@@ -1,5 +1,5 @@
 # Supported PostgreSQL versions:
-PG_VERSIONS = 16
+PG_VERSIONS = 15 16
 
 # Default version:
 PG_VERSION ?= $(lastword $(PG_VERSIONS))
@@ -16,7 +16,8 @@ OBJS = \
 	src/pg_tracing_parallel.o \
 	src/pg_tracing_planstate.o \
 	src/pg_tracing_explain.o \
-	src/pg_tracing_span.o
+	src/pg_tracing_span.o \
+	src/version_compat.o
 
 REGRESSCHECKS = setup utility select extended insert trigger sample \
 				planstate planstate_bitmap planstate_hash planstate_projectset planstate_subplans \
