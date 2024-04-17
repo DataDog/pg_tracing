@@ -1,8 +1,8 @@
-ARG PGVERSION=16
+ARG PG_VERSION=16
 
 FROM ubuntu:focal as base
 
-ARG PGVERSION
+ARG PG_VERSION
 
 # Install packages
 RUN apt update
@@ -14,26 +14,26 @@ RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt focal-pgdg main ${PGVERSION}" > /etc/apt/sources.list.d/pgdg.list
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt focal-pgdg main ${PG_VERSION}" > /etc/apt/sources.list.d/pgdg.list
 
 # Install PostgreSQL
 RUN apt update \
     && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-     postgresql-server-dev-${PGVERSION} \
-     postgresql-${PGVERSION} \
+     postgresql-server-dev-${PG_VERSION} \
+     postgresql-${PG_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 
 RUN adduser postgres sudo
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 #
-# Build pg_tracing for a given --build-arg PGVERSION target version of
+# Build pg_tracing for a given --build-arg PG_VERSION target version of
 # PostgreSQL.
 #
 FROM base as build
 
-ARG PGVERSION
-ENV PG_CONFIG /usr/lib/postgresql/${PGVERSION}/bin/pg_config
+ARG PG_VERSION
+ENV PG_CONFIG /usr/lib/postgresql/${PG_VERSION}/bin/pg_config
 USER postgres
 
 WORKDIR /usr/src/pg_tracing
@@ -51,7 +51,7 @@ RUN make -s clean
 RUN sudo make -s install -j8
 
 # Create test cluster
-RUN /usr/lib/postgresql/${PGVERSION}/bin/initdb -D /usr/src/pg_tracing/test_db/ -Atrust
+RUN /usr/lib/postgresql/${PG_VERSION}/bin/initdb -D /usr/src/pg_tracing/test_db/ -Atrust
 COPY --chown=postgres tests/postgresql.conf /usr/src/pg_tracing/test_db/
 
 #
@@ -60,6 +60,6 @@ COPY --chown=postgres tests/postgresql.conf /usr/src/pg_tracing/test_db/
 #
 FROM build as test
 
-ARG PGVERSION
+ARG PG_VERSION
 USER postgres
-ENV PATH /usr/lib/postgresql/${PGVERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH /usr/lib/postgresql/${PG_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
