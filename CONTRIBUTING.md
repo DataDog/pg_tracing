@@ -68,6 +68,9 @@ Once the docker image is built, you can launch it with:
 
 ```bash
 docker run --rm --name pg_tracing_test -ti pg_tracing_test:pg16 bash
+
+# Within the docker image
+make PG_VERSION=16 regresscheck_noinstall
 ```
 
 To launch test in the docker image:
@@ -81,5 +84,9 @@ make PG_VERSION=16 run-test
 If you have added additional tests, the expected outputs needs to be updated. If the outputs match your expectations, you can simply copy them:
 
 ```bash
+# From local results
 cp results/*out expected/
+
+# From a running docker test container
+docker cp 'pg_tracing_test:/usr/src/pg_tracing/results/.' expected
 ```
