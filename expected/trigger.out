@@ -114,9 +114,9 @@ SELECT :span_g_start <= :span_i_start as executor_finish_starts_before_child,
 (1 row)
 
 -- First trigger
-SELECT :span_i_end >= :span_n_end as first_trigger_ends_after_child;
- first_trigger_ends_after_child 
---------------------------------
+SELECT :span_i_end >= GREATEST(:span_j_end, :span_k_end) as first_trigger_ends_after_children;
+ first_trigger_ends_after_children 
+-----------------------------------
  t
 (1 row)
 

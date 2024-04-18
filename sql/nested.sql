@@ -70,7 +70,7 @@ SELECT :span_a_start <= :span_d_start AS top_query_before_run,
 
 SELECT
 		:span_g_end >= :span_h_start AS nested_result_ends_before_parse,
-		:span_h_end <= :span_g_start AS nested_parse_ends_before_select,
+		:span_h_end <= :span_g_end AS nested_parse_ends_before_select,
 
 		:span_h_start >= :span_g_start AS run_starts_after_parent_select,
 		:span_h_end <= :span_g_end AS run_ends_after_select_end;

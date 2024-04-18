@@ -111,7 +111,7 @@ SELECT :span_d_start >= :span_c_end as executor_run_starts_after_planner,
 SELECT :span_g_start <= :span_i_start as executor_finish_starts_before_child,
        :span_g_end >= :span_o_end as executor_finish_ends_after_child;
 -- First trigger
-SELECT :span_i_end >= :span_n_end as first_trigger_ends_after_child;
+SELECT :span_i_end >= GREATEST(:span_j_end, :span_k_end) as first_trigger_ends_after_children;
 -- Second trigger
 SELECT :span_o_start >= :span_i_end  as second_trigger_starts_after_first,
        :span_o_end >= :span_o_end as second_trigger_ends_after_child,

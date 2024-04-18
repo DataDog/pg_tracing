@@ -1,5 +1,5 @@
 -- Some helper functions
-CREATE OR REPLACE FUNCTION get_epoch(ts timestamptz) RETURNS bigint AS
+CREATE OR REPLACE FUNCTION get_epoch(ts timestamptz) RETURNS float AS
 $BODY$
     SELECT extract(epoch from ts);
 $BODY$
