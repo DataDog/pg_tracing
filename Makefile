@@ -25,7 +25,8 @@ REGRESSCHECKS += trigger_15
 else
 REGRESSCHECKS += extended trigger_16
 endif
-REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash planstate_projectset planstate_subplans \
+REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
+				 planstate_projectset planstate_subplans planstate_union \
 				 parallel subxact full_buffer \
 				 nested wal cleanup
 

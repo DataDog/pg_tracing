@@ -1,0 +1,68 @@
+-- Test simple append
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/
+SELECT count(*) FROM pg_tracing_test WHERE a + 0 < 10
+UNION ALL
+SELECT count(*) FROM pg_tracing_test WHERE a + 0 < 10000;
+ count 
+-------
+     9
+  9999
+(2 rows)
+
+SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
+                     span_operation                      |        deparse_info        |             parameters              | lvl 
+---------------------------------------------------------+----------------------------+-------------------------------------+-----
+ SELECT count(*) FROM pg_tracing_test WHERE a + $1 < $2 +|                            | $1 = 0, $2 = 10, $3 = 0, $4 = 10000 |   1
+ UNION ALL                                              +|                            |                                     | 
+ SELECT count(*) FROM pg_tracing_test WHERE a + $3 < $4; |                            |                                     | 
+ Planner                                                 |                            |                                     |   2
+ ExecutorRun                                             |                            |                                     |   2
+ Append                                                  |                            |                                     |   3
+ Aggregate                                               |                            |                                     |   4
+ SeqScan on pg_tracing_test                              | Filter : ((a + 0) < 10)    |                                     |   5
+ Aggregate                                               |                            |                                     |   4
+ SeqScan on pg_tracing_test pg_tracing_test_1            | Filter : ((a + 0) < 10000) |                                     |   5
+(8 rows)
+
+-- +------------------------------------------+
+-- | A: Append                                |
+-- +-+-----------------+-+-----------------+--+
+--   | B: Aggregate    | | C: Aggregate    |
+--   +-----------------+ +-----------------+
+--   | D: IndexScan    | | E: IndexScan    |
+--   +-----------------+ +-----------------+
+SELECT span_id AS span_a_id,
+        get_epoch(span_start) as span_a_start,
+        get_epoch(span_end) as span_a_end
+		from pg_tracing_peek_spans
+        where trace_id='00000000000000000000000000000001' AND span_operation='Append' \gset
+SELECT span_id AS span_b_id,
+        get_epoch(span_start) as span_b_start,
+        get_epoch(span_end) as span_b_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_a_id' and span_operation='Aggregate' LIMIT 1 OFFSET 0 \gset
+SELECT span_id AS span_c_id,
+        get_epoch(span_start) as span_c_start,
+        get_epoch(span_end) as span_c_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_a_id' and span_operation='Aggregate' LIMIT 1 OFFSET 1 \gset
+SELECT span_id AS span_d_id,
+        get_epoch(span_start) as span_d_start,
+        get_epoch(span_end) as span_d_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_b_id' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_c_id' \gset
+SELECT :span_a_end >= GREATEST(:span_c_end, :span_e_end) as root_ends_last,
+       :span_c_start >= :span_b_start as second_index_start_after_first;
+ root_ends_last | second_index_start_after_first 
+----------------+--------------------------------
+ t              | t
+(1 row)
+
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();
