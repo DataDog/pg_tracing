@@ -1774,7 +1774,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 			 * Setup ExecProcNode override to capture node start if planstate
 			 * spans were requested
 			 */
-			setup_ExecProcNode_override(queryDesc, exec_nested_level);
+			setup_ExecProcNode_override(queryDesc);
 	}
 
 	exec_nested_level++;

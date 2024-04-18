@@ -210,7 +210,7 @@ override_ExecProcNode(PlanState *planstate)
  * Override all ExecProcNode pointer of the planstate with ExecProcNodeFirstPgTracing to track first call of a node.
  */
 void
-setup_ExecProcNode_override(QueryDesc *queryDesc, int exec_nested_level)
+setup_ExecProcNode_override(QueryDesc *queryDesc)
 {
 	if (max_planstart == 0)
 	{

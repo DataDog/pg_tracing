@@ -244,7 +244,7 @@ extern TimestampTz
 										 uint64 parent_id, uint64 query_id,
 										 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
 extern void
-			setup_ExecProcNode_override(QueryDesc *queryDesc, int exec_nested_level);
+			setup_ExecProcNode_override(QueryDesc *queryDesc);
 extern void
 			cleanup_planstarts(void);
 extern TracedPlanstate *
