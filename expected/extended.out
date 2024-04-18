@@ -129,12 +129,13 @@ SELECT 1 \gdesc
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
-  span_type   |                                                        span_operation                                                        |             parameters              | lvl 
---------------+------------------------------------------------------------------------------------------------------------------------------+-------------------------------------+-----
- Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm) | $1 = '?column?', $2 = '23', $3 = -1 |   1
- Planner      | Planner                                                                                                                      |                                     |   2
- Executor     | ExecutorRun                                                                                                                  |                                     |   2
- Result       | Result                                                                                                                       |                                     |   3
+  span_type   |                           span_operation                           |             parameters              | lvl 
+--------------+--------------------------------------------------------------------+-------------------------------------+-----
+ Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| $1 = '?column?', $2 = '23', $3 = -1 |   1
+              | FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm)         |                                     | 
+ Planner      | Planner                                                            |                                     |   2
+ Executor     | ExecutorRun                                                        |                                     |   2
+ Result       | Result                                                             |                                     |   3
 (4 rows)
 
 CALL clean_spans();

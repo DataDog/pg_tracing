@@ -292,10 +292,8 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 				if (tok == 0)
 					break;		/* out of inner for-loop */
 			}
-			if (yylloc > 0 && yyextra.scanbuf[yylloc - 1] == ' ' && n_quer_loc > 0)
-			{
-				norm_query[n_quer_loc++] = ' ';
-			}
+			if (yylloc > 0 && isspace(yyextra.scanbuf[yylloc - 1]) && n_quer_loc > 0)
+				norm_query[n_quer_loc++] = yyextra.scanbuf[yylloc - 1];
 
 			/*
 			 * Append the current parameter $x in the normalised query
@@ -311,10 +309,9 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 		{
 			int			to_copy;
 
-			if (yylloc > 0 && yyextra.scanbuf[yylloc - 1] == ' ' && n_quer_loc > 0)
-			{
-				norm_query[n_quer_loc++] = ' ';
-			}
+			if (yylloc > 0 && isspace(yyextra.scanbuf[yylloc - 1]) && n_quer_loc > 0)
+				norm_query[n_quer_loc++] = yyextra.scanbuf[yylloc - 1];
+
 			to_copy = strlen(yyextra.scanbuf + yylloc);
 			Assert(n_quer_loc + to_copy < norm_query_buflen + 1);
 			memcpy(norm_query + n_quer_loc, yyextra.scanbuf + yylloc, to_copy);
@@ -363,10 +360,8 @@ normalise_query(const char *query, int query_loc, int *query_len_p)
 		if (yylloc > query_len)
 			break;
 
-		if (yylloc > 0 && yyextra.scanbuf[yylloc - 1] == ' ' && n_quer_loc > 0)
-		{
-			norm_query[n_quer_loc++] = ' ';
-		}
+		if (yylloc > 0 && isspace(yyextra.scanbuf[yylloc - 1]) && n_quer_loc > 0)
+			norm_query[n_quer_loc++] = yyextra.scanbuf[yylloc - 1];
 		to_copy = strlen(yyextra.scanbuf + yylloc);
 		Assert(n_quer_loc + to_copy < norm_query_buflen + 2);
 		memcpy(norm_query + n_quer_loc, yyextra.scanbuf + yylloc, to_copy);

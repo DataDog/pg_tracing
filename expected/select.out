@@ -95,14 +95,15 @@ FROM (SELECT
 
 -- Check the nested level of spans for a query with multiple function calls
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000004';
-  span_type   |                                                                          span_operation                                                                          | lvl 
---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----
- Select query | SELECT s.relation_size + s.index_sizeFROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1; |   1
- Planner      | Planner                                                                                                                                                          |   2
- Executor     | ExecutorRun                                                                                                                                                      |   2
- Limit        | Limit                                                                                                                                                            |   3
- SubqueryScan | SubqueryScan on s                                                                                                                                                |   4
- SeqScan      | SeqScan on pg_class c                                                                                                                                            |   5
+  span_type   |                                                       span_operation                                                        | lvl 
+--------------+-----------------------------------------------------------------------------------------------------------------------------+-----
+ Select query | SELECT s.relation_size + s.index_size                                                                                      +|   1
+              | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1; | 
+ Planner      | Planner                                                                                                                     |   2
+ Executor     | ExecutorRun                                                                                                                 |   2
+ Limit        | Limit                                                                                                                       |   3
+ SubqueryScan | SubqueryScan on s                                                                                                           |   4
+ SeqScan      | SeqScan on pg_class c                                                                                                       |   5
 (6 rows)
 
 -- Check that we're in a correct state after a timeout
