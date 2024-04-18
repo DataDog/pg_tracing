@@ -369,6 +369,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	TracedPlanstate *traced_planstate = NULL;
 	TimestampTz span_start;
 	TimestampTz span_end;
+	TimestampTz child_end = 0;
 
 	/* The node was never executed, skip it */
 	if (planstate->instrument == NULL)
@@ -513,26 +514,26 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	switch (nodeTag(planstate->plan))
 	{
 		case T_Append:
-			generate_member_nodes(((AppendState *) planstate)->appendplans,
-								  ((AppendState *) planstate)->as_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = generate_member_nodes(((AppendState *) planstate)->appendplans,
+											  ((AppendState *) planstate)->as_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_MergeAppend:
-			generate_member_nodes(((MergeAppendState *) planstate)->mergeplans,
-								  ((MergeAppendState *) planstate)->ms_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = generate_member_nodes(((MergeAppendState *) planstate)->mergeplans,
+											  ((MergeAppendState *) planstate)->ms_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_BitmapAnd:
-			generate_bitmap_nodes(((BitmapAndState *) planstate)->bitmapplans,
-								  ((BitmapAndState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = generate_bitmap_nodes(((BitmapAndState *) planstate)->bitmapplans,
+											  ((BitmapAndState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_BitmapOr:
-			generate_bitmap_nodes(((BitmapOrState *) planstate)->bitmapplans,
-								  ((BitmapOrState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = generate_bitmap_nodes(((BitmapOrState *) planstate)->bitmapplans,
+											  ((BitmapOrState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_SubqueryScan:
-			generate_span_from_planstate(((SubqueryScanState *) planstate)->subplan, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = generate_span_from_planstate(((SubqueryScanState *) planstate)->subplan, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_CustomScan:
-			generate_span_from_custom_scan((CustomScanState *) planstate, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = generate_span_from_custom_scan((CustomScanState *) planstate, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		default:
 			break;
@@ -542,6 +543,9 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	/* If node had no duration, use the latest end of its child */
 	if (planstate->instrument->total == 0)
 		span_end = *latest_end;
+	/* For special node with children, use the last child's end */
+	if (child_end > 0)
+		span_end = child_end;
 
 	span_node = create_span_node(planstate, planstateTraceContext, &span_id, parent_id, query_id, SPAN_NODE, NULL, span_start, span_end);
 	store_span(&span_node);
