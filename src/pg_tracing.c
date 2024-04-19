@@ -1395,8 +1395,9 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		}
 		normalised_query = normalise_query(query_text, stmt_location, &query_len);
 	}
-	top_span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
-															  query_len);
+    if (query_len > 0)
+        top_span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
+                                                                  query_len);
 }
 
 /*
