@@ -492,7 +492,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 										 SPAN_NODE_INIT_PLAN, sstate->subplan->plan_name, initplan_traced_planstate->node_start, initplan_span_end);
 		store_span(&initplan_span);
 		/* Use the initplan span as a parent */
-		generate_span_from_planstate(splan, planstateTraceContext, initplan_span.span_id, query_id, span_start, root_end, latest_end);
+		generate_span_from_planstate(splan, planstateTraceContext, initplan_span.span_id, query_id, initplan_traced_planstate->node_start, root_end, latest_end);
 	}
 
 	/* Handle sub plans */
@@ -516,7 +516,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		 */
 		subplan_traced_planstate = get_traced_planstate(splan);
 		subplan_span_id = pg_prng_uint64(&pg_global_prng_state);
-		subplan_span_end = get_span_end_from_planstate(planstate, subplan_traced_planstate->node_start, root_end);
+		subplan_span_end = get_span_end_from_planstate(subplan_traced_planstate->planstate, subplan_traced_planstate->node_start, root_end);
 
 		/*
 		 * Push subplan as an ancestor so that we can resolve referent of
@@ -528,7 +528,8 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 										&subplan_span_id, span_id, query_id,
 										SPAN_NODE_SUBPLAN, sstate->subplan->plan_name, subplan_traced_planstate->node_start, subplan_span_end);
 		store_span(&subplan_span);
-		generate_span_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, span_start, root_end, latest_end);
+		child_end = generate_span_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, subplan_traced_planstate->node_start,
+												 root_end, latest_end);
 
 		planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
 	}
