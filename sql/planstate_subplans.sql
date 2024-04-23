@@ -130,7 +130,9 @@ SELECT span_id AS span_g_id,
 		from pg_tracing_peek_spans
         where parent_id =:'span_f_id' and span_operation='Result' \gset
 
-SELECT :span_a_end >= :span_c_end as merge_ends_after_subplan,
+-- Subplans are stopped by the shutdown node walker after the main node.
+-- Therefore, subplan can appear as finishing after its parent
+SELECT :span_a_end <= :span_c_end as merge_ends_before_subplan,
        :span_c_end >= :span_d_start as bitmap_or_third_child_start_after_second,
        :span_e_start <= :span_f_start as cte_scan_starts_before_cte_basic,
        :span_f_start >= :span_e_start as cte_basic_starts_after_cte_scan;
