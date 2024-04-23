@@ -65,6 +65,7 @@ SELECT :span_a_end >= :span_c_end as merge_ends_after_init_plan,
        :span_c_end >= :span_d_start as bitmap_or_third_child_start_after_second,
        :span_e_start <= :span_f_start as cte_scan_starts_before_cte_init,
        :span_f_start >= :span_e_start as cte_init_starts_after_cte_scan;
+
 CALL clean_spans();
 
 -- Test with subplan
@@ -107,7 +108,7 @@ SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='Subplan 2' \gset
+        where parent_id =:'span_a_id' and span_operation='SubPlan 2' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
@@ -133,5 +134,10 @@ SELECT :span_a_end >= :span_c_end as merge_ends_after_subplan,
        :span_c_end >= :span_d_start as bitmap_or_third_child_start_after_second,
        :span_e_start <= :span_f_start as cte_scan_starts_before_cte_basic,
        :span_f_start >= :span_e_start as cte_basic_starts_after_cte_scan;
+
+-- Check deparse information for subplan
+SELECT span_operation, deparse_info
+FROM pg_tracing_peek_spans
+WHERE trace_id='00000000000000000000000000000002' AND span_id=:'span_e_id';
 
 CALL clean_spans();

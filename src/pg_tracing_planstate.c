@@ -370,6 +370,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	TimestampTz span_start;
 	TimestampTz span_end;
 	TimestampTz child_end = 0;
+	bool		haschildren = false;
 
 	/* The node was never executed, skip it */
 	if (planstate->instrument == NULL)
@@ -442,7 +443,19 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	if (*latest_end < span_end)
 		*latest_end = span_end;
 
-	planstateTraceContext->ancestors = lcons(planstate->plan, planstateTraceContext->ancestors);
+	haschildren = planstate->initPlan ||
+		outerPlanState(planstate) ||
+		innerPlanState(planstate) ||
+		IsA(planstate->plan, Append) ||
+		IsA(planstate->plan, MergeAppend) ||
+		IsA(planstate->plan, BitmapAnd) ||
+		IsA(planstate->plan, BitmapOr) ||
+		IsA(planstate->plan, SubqueryScan) ||
+		(IsA(planstate, CustomScanState) &&
+		 ((CustomScanState *) planstate)->custom_ps != NIL) ||
+		planstate->subPlan;
+	if (haschildren)
+		planstateTraceContext->ancestors = lcons(planstate->plan, planstateTraceContext->ancestors);
 
 	/* Walk the outerplan */
 	if (outerPlanState(planstate))
@@ -466,9 +479,9 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 			continue;
 
 		/*
-		 * There's no specific init_plan node so we need to generate a
-		 * dedicated span_id. We will still use the traced planstate to get
-		 * the span's end.
+		 * There's no specific init_plan planstate so we need to generate a
+		 * dedicated span_id. We will still use the child's traced planstate
+		 * to get the span's end.
 		 */
 		initplan_traced_planstate = get_traced_planstate(splan);
 		init_plan_span_id = pg_prng_uint64(&pg_global_prng_state);
@@ -486,6 +499,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	foreach(l, planstate->subPlan)
 	{
 		SubPlanState *sstate = (SubPlanState *) lfirst(l);
+		SubPlan    *sp = sstate->subplan;
 		PlanState  *splan = sstate->planstate;
 		Span		subplan_span;
 		TracedPlanstate *subplan_traced_planstate;
@@ -503,11 +517,20 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		subplan_traced_planstate = get_traced_planstate(splan);
 		subplan_span_id = pg_prng_uint64(&pg_global_prng_state);
 		subplan_span_end = get_span_end_from_planstate(planstate, subplan_traced_planstate->node_start, root_end);
+
+		/*
+		 * Push subplan as an ancestor so that we can resolve referent of
+		 * subplan parameters.
+		 */
+		planstateTraceContext->ancestors = lcons(sp, planstateTraceContext->ancestors);
+
 		subplan_span = create_span_node(splan, planstateTraceContext,
 										&subplan_span_id, span_id, query_id,
 										SPAN_NODE_SUBPLAN, sstate->subplan->plan_name, subplan_traced_planstate->node_start, subplan_span_end);
 		store_span(&subplan_span);
 		generate_span_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, span_start, root_end, latest_end);
+
+		planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
 	}
 
 	/* Handle special nodes with children nodes */
@@ -538,7 +561,8 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 		default:
 			break;
 	}
-	planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
+	if (haschildren)
+		planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
 
 	/* If node had no duration, use the latest end of its child */
 	if (planstate->instrument->total == 0)
