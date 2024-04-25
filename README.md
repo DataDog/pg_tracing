@@ -1,5 +1,7 @@
 # pg_tracing
 
+![nested_loop trace](https://gist.githubusercontent.com/bonnefoa/c4204828fff8ff1d4ed2b275fbbbdfaa/raw/313dd65703aba3a53da5eaacd1c447ef64ec7bef/nested_loop.png)
+
 pg_tracing is a PostgreSQL extension allows to generate server-side spans for distributed tracing.
 
 When pg_tracing is active, it generates spans on sampled queries. To access these spans, the extension provides two views: `pg_tracing_consume_spans` and `pg_tracing_peek_spans`. The utility functions `pg_tracing_reset` and `pg_tracing_info` provide ways to read and reset extension's statistics. These are not available globally but can be enabled for a specific database with `CREATE EXTENSION pg_tracing`.
@@ -12,6 +14,18 @@ Trace propagation currently relies on [SQLCommenter](https://google.github.io/sq
 ## PostgreSQL Version Compatibility
 
 pg_tracing only supports PostgreSQL 15 and 16 for the moment.
+
+## Generated Spans
+
+pg_tracing generates spans for the following events:
+
+- PostgreSQL internal functions: Planner, ProcessUtility, ExecutorRun, ExecutorFinish
+- Statements: SELECT, INSERT, DELETE...
+- Utility Statements: ALTER, SHOW, TRUNCATE, CALL...
+- Execution Plan: A span is created for each node of the execution plan (SeqScan, NestedLoop, HashJoin...)
+- Nested queries: Statements invoked within another statement (like a function)
+- Triggers: Statements executed through BEFORE and AFTER trigger are tracked
+- Parallel Workers: Processes created to handle queries like Parallel SeqScans are tracked 
 
 ## Documentation
 
