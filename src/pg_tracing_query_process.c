@@ -4,7 +4,7 @@
  * 		pg_tracing query processing functions.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing_explain.c
+ *	  src/pg_tracing_explain.c
  *
  *-------------------------------------------------------------------------
  */
@@ -12,9 +12,10 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "nodes/extensible.h"
 #include "parser/scanner.h"
 #include "pg_tracing.h"
-#include "nodes/extensible.h"
 
 /*
  * Check if we have a comment that could store SQLComment information at the
@@ -37,7 +38,7 @@ has_possible_sql_comment(const char *query)
 	if (query_len < 55 + 13 + 4)
 		return -1;
 
-	/* Check if we have comment at the begining */
+	/* Check if we have comment at the beginning */
 	if (query[0] == '/' && query[1] == '*')
 		return 0;
 
