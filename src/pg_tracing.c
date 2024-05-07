@@ -4,7 +4,7 @@
  *		Generate spans for distributed tracing from SQL query
  *
  * Spans will only be generated for sampled queries. A query is sampled if:
- * - It has a tracecontext propagated throught SQLCommenter and it passes the
+ * - It has a tracecontext propagated through SQLCommenter and it passes the
  *   caller_sample_rate.
  * - It has no SQLCommenter but the query randomly passes the global sample_rate
  *

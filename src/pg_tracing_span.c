@@ -4,15 +4,15 @@
  * 		pg_tracing span functions.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing_span.c
+ *	  src/pg_tracing_span.c
  *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
 
+#include "common/pg_prng.h"
 #include "nodes/extensible.h"
 #include "pg_tracing.h"
-#include "common/pg_prng.h"
 
 /*
  * Convert a node CmdType to the matching SpanType
