@@ -4,7 +4,7 @@
  * 		Store, retrieve and remove trace context for parallel workers.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing_parallel.c
+ *	  src/pg_tracing_parallel.c
  *
  *-------------------------------------------------------------------------
  */

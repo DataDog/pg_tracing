@@ -17,7 +17,7 @@
  * 01: trace flags (01 == sampled)
  *
  * If sampled, pg_tracing will generate spans for the current statement. A span
- * represents an operation with a start time, an end time and metadatas (block
+ * represents an operation with a start time, an end time and metadata (block
  * stats, wal stats...).
  *
  * We will track the following operations:
@@ -43,7 +43,7 @@
  * through the provided pg_tracing_consume_spans view and send them to a trace consumer.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing.c
+ *	  src/pg_tracing.c
  *-------------------------------------------------------------------------
  */
 
@@ -1411,7 +1411,7 @@ get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or
 	if (in_parse_or_plan && exec_nested_level == 0)
 
 		/*
-		 * A the root post parse and plan, we want to use trace_context's
+		 * The root post parse and plan, we want to use trace_context's
 		 * root_span as the top span in per_level_buffers might still be
 		 * ongoing.
 		 */
@@ -1536,7 +1536,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 		return;
 
 	/*
-	 * We want to avoid calling get_ns at the start of post parse as it will
+	 * We want to avoid calling GetCurrentTimestamp at the start of post parse as it will
 	 * impact all queries and we will only use it when the query is sampled.
 	 */
 	start_top_span = GetCurrentTimestamp();
@@ -1710,7 +1710,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 							queryDesc->sourceText, start_span_time, false);
 
 		/*
-		 * We only need full instrumenation if we generate spans from
+		 * We only need full instrumentation if we generate spans from
 		 * planstate
 		 */
 		if (pg_tracing_planstate_spans)
@@ -1956,7 +1956,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
  * during parse step.
  * Process utility may create nested queries (for example function CALL) so we need
  * to set the ProcessUtility span as the top span before going through the standard
- * codepath.
+ * code path.
  */
 static void
 pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
@@ -2045,7 +2045,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	PG_CATCH();
 	{
 		/*
-		 * Tracing may have been reset within processUtility, check for
+		 * Tracing may have been reset within ProcessUtility, check for
 		 * current_trace_spans
 		 */
 		if (current_trace_spans != NULL)

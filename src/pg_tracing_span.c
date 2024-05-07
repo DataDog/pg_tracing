@@ -130,7 +130,7 @@ end_span(Span * span, const TimestampTz *end_time_input)
 	Assert(!span->ended);
 	span->ended = true;
 
-	/* Set span duration with the end time before substrating the start */
+	/* Set span duration with the end time before subtracting the start */
 	if (end_time_input == NULL)
 		span->end = GetCurrentTimestamp();
 	else
@@ -139,13 +139,13 @@ end_span(Span * span, const TimestampTz *end_time_input)
 
 	if (span->type == SPAN_PLANNER || span->type == SPAN_PROCESS_UTILITY)
 	{
-		/* calc differences of buffer counters. */
+		/* calculate differences of buffer counters. */
 		memset(&buffer_usage, 0, sizeof(BufferUsage));
 		BufferUsageAccumDiff(&buffer_usage, &pgBufferUsage,
 							 &span->node_counters.buffer_usage);
 		span->node_counters.buffer_usage = buffer_usage;
 
-		/* calc differences of WAL counters. */
+		/* calculate differences of WAL counters. */
 		memset(&wal_usage, 0, sizeof(wal_usage));
 		WalUsageAccumDiff(&wal_usage, &pgWalUsage,
 						  &span->node_counters.wal_usage);

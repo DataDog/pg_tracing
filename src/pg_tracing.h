@@ -3,7 +3,7 @@
  * 		Header for pg_tracing.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing.h
+ *	  src/pg_tracing.h
  *-------------------------------------------------------------------------
  */
 #ifndef _PG_TRACING_H_

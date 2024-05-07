@@ -4,7 +4,7 @@
  * 		pg_tracing planstate manipulation functions.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing_planstate.c
+ *	  src/pg_tracing_planstate.c
  *
  *-------------------------------------------------------------------------
  */

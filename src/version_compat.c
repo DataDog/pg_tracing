@@ -4,7 +4,7 @@
  *    Compatibility macros and functions for writing code agnostic to PostgreSQL versions
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/version_compat.c
+ *	  src/version_compat.c
  *
  *-------------------------------------------------------------------------
  */

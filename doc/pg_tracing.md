@@ -31,7 +31,7 @@ When a query with SQLCommenter is detected, the trace context is extracted and u
 ## Sampling
 
 Spans will only be generated for sampled queries. A query is sampled if:
-- It has a trace context propagated throught SQLCommenter with the sampled flag enabled and it passes the `pg_tracing.caller_sample_rate`
+- It has a trace context propagated through SQLCommenter with the sampled flag enabled and it passes the `pg_tracing.caller_sample_rate`
 - It has no SQLCommenter but the query randomly passes the global `pg_tracing.sample_rate`
 
 With the default values `pg_tracing.caller_sample_rate = 1` and `pg_tracing.sample_rate = 0`, only queries with a trace context and a sampled flag `sampled := 01` will be sampled, effectively offloading sampling decision to the callers.

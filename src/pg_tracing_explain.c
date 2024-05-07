@@ -4,7 +4,7 @@
  * 		pg_tracing plan explain functions.
  *
  * IDENTIFICATION
- *	  contrib/pg_tracing/pg_tracing_explain.c
+ *	  src/pg_tracing_explain.c
  *
  *-------------------------------------------------------------------------
  */
@@ -20,7 +20,7 @@
 
 
 /*
- * Add the target relation of a scan or modity node to the stringinfo
+ * Add the target relation of a scan or modify node to the stringinfo
  */
 static void
 ExplainTargetRel(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, Index rti, StringInfo str)
@@ -138,7 +138,7 @@ ExplainModifyTarget(const planstateTraceContext * planstateTraceContext, const P
 }
 
 /*
- * Add some additioanl details about an IndexScan or IndexOnlyScan to the stringinfo
+ * Add some additional details about an IndexScan or IndexOnlyScan to the stringinfo
  */
 static void
 ExplainIndexScanDetails(Oid indexId, ScanDirection indexorderdir,

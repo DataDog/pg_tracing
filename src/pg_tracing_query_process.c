@@ -20,7 +20,7 @@
 /*
  * Check if we have a comment that could store SQLComment information at the
  * start or end of the query.
- * Returns 0 if there's possible comment at the begining, 1 at the end and -1
+ * Returns 0 if there's possible comment at the beginning, 1 at the end and -1
  * if no comments were detected.
  */
 static int
@@ -115,7 +115,7 @@ extract_trace_context_from_query(pgTracingTraceContext * trace_context,
 
 	if (possible_comment == 0)
 	{
-		/* We have a possible comment at the begining */
+		/* We have a possible comment at the beginning */
 		start_sqlcomment = query;
 		end_sqlcomment = strstr(query, "*/");
 		if (end_sqlcomment == NULL)
@@ -193,7 +193,7 @@ comp_location(const void *a, const void *b)
 /*
  * Normalise query: Comments are removed, Constants are replaced by $x, all tokens
  * are separated by a single space.
- * Parameters are put in the param_str wich will contain all parameters values
+ * Parameters are put in the param_str which will contain all parameters values
  * using the format: "$1 = 0, $2 = 'v'"
  */
 const char *
@@ -413,7 +413,7 @@ text_store_file(pgTracingSharedState * pg_tracing, const char *text, int text_le
 	CloseTransientFile(fd);
 
 	/*
-	 * Set offset once write was succesful
+	 * Set offset once write was successful
 	 */
 	*query_offset = off;
 
@@ -438,9 +438,6 @@ error:
  * there or insufficient memory.
  *
  * On success, the buffer size is also returned into *buffer_size.
- *
- * This can be called without any lock on pgss->lock, but in that case the
- * caller is responsible for verifying that the result is sane.
  */
 const char *
 qtext_load_file(Size *buffer_size)

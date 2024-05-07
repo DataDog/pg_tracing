@@ -16,7 +16,7 @@
 #include "utils/queryjumble.h"
 #define NS_PER_S	INT64CONST(1000000000)
 
-/* We need to explicitely declare _PG_init */
+/* We need to explicitly declare _PG_init */
 void
 			_PG_init(void);
 
