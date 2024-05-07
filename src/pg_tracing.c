@@ -220,6 +220,9 @@ static int	plan_nested_level = 0;
 /* Current nesting depth of ExecutorRun+ProcessUtility calls */
 int			exec_nested_level = 0;
 
+/* Whether we're in a cursor declaration */
+static bool within_declare_cursor = false;
+
 /* Number of spans initially allocated at the start of a trace. */
 static int	pg_tracing_initial_allocated_spans = 25;
 
@@ -1101,6 +1104,7 @@ cleanup_tracing(void)
 	reset_trace_context(&root_trace_context);
 	reset_trace_context(&current_trace_context);
 	max_nested_level = -1;
+	within_declare_cursor = false;
 	current_trace_spans = NULL;
 	per_level_buffers = NULL;
 	cleanup_planstarts();
@@ -1712,9 +1716,17 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 		/*
 		 * We only need full instrumentation if we generate spans from
-		 * planstate
+		 * planstate.
+		 *
+		 * If we're within a cursor declaration, we won't be able to generate
+		 * spans from planstate due to cursor behaviour. Fetches will only
+		 * call ExecutorRun and Closing the cursor will call ExecutorFinish
+		 * and ExecutorEnd. We won't have the start of the planstate available
+		 * and representing a node that has a fragmented execution doesn't fit
+		 * our current model. So we disable full query instrumentation for
+		 * cursors.
 		 */
-		if (pg_tracing_planstate_spans)
+		if (pg_tracing_planstate_spans && !within_declare_cursor)
 			queryDesc->instrument_options = INSTRUMENT_ALL;
 	}
 
@@ -1759,10 +1771,8 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 * ExecutorRun is the first hook called. Create the top span if it
 		 * doesn't already exist.
 		 */
-		initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-							queryDesc->sourceText, span_start_time, false);
-
-		parent_id = get_latest_top_span(exec_nested_level)->span_id;
+		parent_id = initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
+										queryDesc->sourceText, span_start_time, false);
 
 		/* Start ExecutorRun span as a new top span */
 		executor_run_span = allocate_new_top_span();
@@ -1780,12 +1790,12 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 			add_parallel_context(trace_context, executor_run_span->span_id,
 								 per_level_buffers[exec_nested_level].query_id);
 
-		if (pg_tracing_planstate_spans)
-
-			/*
-			 * Setup ExecProcNode override to capture node start if planstate
-			 * spans were requested
-			 */
+		/*
+		 * Setup ExecProcNode override to capture node start if planstate
+		 * spans were requested. If there's no query instrumentation, we can
+		 * skip ExecProcNode override.
+		 */
+		if (pg_tracing_planstate_spans && queryDesc->planstate->instrument)
 			setup_ExecProcNode_override(queryDesc);
 	}
 
@@ -1847,10 +1857,18 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	if (executor_sampled)
 	{
 		TimestampTz span_start_time = GetCurrentTimestamp();
-		uint64		parent_id = get_latest_top_span(exec_nested_level)->span_id;
+		uint64		parent_id;
+		Span	   *executor_finish_span;
+
+		/*
+		 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
+		 * called. Create the top span in this case.
+		 */
+		parent_id = initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
+										queryDesc->sourceText, span_start_time, false);
 
 		/* Create ExecutorFinish as a new potential top span */
-		Span	   *executor_finish_span = allocate_new_top_span();
+		executor_finish_span = allocate_new_top_span();
 
 		begin_span(trace_context->traceparent.trace_id,
 				   executor_finish_span, SPAN_EXECUTOR_FINISH,
@@ -1980,6 +1998,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	uint64		parent_id;
 	TimestampTz span_end_time;
 	TimestampTz span_start_time;
+	Node	   *parsetree;
 
 	/*
 	 * Save track utility value since this value could be modified by a SET
@@ -1993,6 +2012,17 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		/* We're at root level, copy the root trace_context */
 		*trace_context = root_trace_context;
 	}
+
+	parsetree = pstmt->utilityStmt;
+
+	/*
+	 * Keep track if we're in a declare cursor as we want to disable query
+	 * instrumentation in this case.
+	 */
+	if (nodeTag(parsetree) == T_DeclareCursorStmt)
+		within_declare_cursor = true;
+	else
+		within_declare_cursor = false;
 
 	if (!track_utility || !pg_tracing_enabled(trace_context, exec_nested_level))
 	{
