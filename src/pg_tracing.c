@@ -1536,8 +1536,9 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 		return;
 
 	/*
-	 * We want to avoid calling GetCurrentTimestamp at the start of post parse as it will
-	 * impact all queries and we will only use it when the query is sampled.
+	 * We want to avoid calling GetCurrentTimestamp at the start of post parse
+	 * as it will impact all queries and we will only use it when the query is
+	 * sampled.
 	 */
 	start_top_span = GetCurrentTimestamp();
 
@@ -1751,7 +1752,17 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	{
 		Span	   *executor_run_span;
 		TimestampTz span_start_time = GetCurrentTimestamp();
-		uint64		parent_id = get_latest_top_span(exec_nested_level)->span_id;
+		uint64		parent_id;
+
+		/*
+		 * When fetching an existing cursor, the portal already exists and
+		 * ExecutorRun is the first hook called. Create the top span if it
+		 * doesn't already exist.
+		 */
+		initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
+							queryDesc->sourceText, span_start_time, false);
+
+		parent_id = get_latest_top_span(exec_nested_level)->span_id;
 
 		/* Start ExecutorRun span as a new top span */
 		executor_run_span = allocate_new_top_span();
