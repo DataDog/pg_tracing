@@ -1565,7 +1565,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	uint64		parent_id;
 	Span	   *span_planner;
 	pgTracingTraceContext *trace_context = &root_trace_context;
-	TimestampTz start_span_time;
+	TimestampTz span_start_time;
 
 	if (exec_nested_level > 0)
 		/* We're in a nested query, grab the ongoing trace_context */
@@ -1586,7 +1586,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 		return result;
 	}
 
-	start_span_time = GetCurrentTimestamp();
+	span_start_time = GetCurrentTimestamp();
 
 	if (plan_nested_level == 0)
 
@@ -1595,7 +1595,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 		 * top span in this case.
 		 */
 		parent_id = initialize_top_span(trace_context, query->commandType, query,
-										NULL, NULL, query_string, start_span_time, true);
+										NULL, NULL, query_string, span_start_time, true);
 	else
 		/* We're in a nested plan, grab the latest top span */
 		parent_id = get_latest_top_span(exec_nested_level)->span_id;
@@ -1604,7 +1604,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	span_planner = allocate_new_top_span();
 	begin_span(trace_context->traceparent.trace_id, span_planner, SPAN_PLANNER,
 			   NULL, parent_id,
-			   per_level_buffers[exec_nested_level].query_id, &start_span_time);
+			   per_level_buffers[exec_nested_level].query_id, &span_start_time);
 
 	plan_nested_level++;
 	PG_TRY();
