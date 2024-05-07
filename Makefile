@@ -19,7 +19,7 @@ OBJS = \
 	src/pg_tracing_span.o \
 	src/version_compat.o
 
-REGRESSCHECKS = setup utility select insert trigger
+REGRESSCHECKS = setup utility select insert trigger cursor
 ifeq ($(PG_VERSION),15)
 REGRESSCHECKS += trigger_15
 else
