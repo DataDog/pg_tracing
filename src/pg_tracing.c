@@ -180,8 +180,8 @@ static struct pgTracingTraceContext parsed_trace_context;
 /* trace context used in nested levels or within executor hooks */
 static struct pgTracingTraceContext executor_trace_context;
 
-/* Latest trace id observed */
-static TraceId latest_trace_id;
+/* traceparent extracted at the start of a transaction */
+static pgTracingTraceparent tx_start_traceparent;
 
 /* Latest local transaction id traced */
 static LocalTransactionId latest_lxid = InvalidLocalTransactionId;
@@ -955,8 +955,15 @@ set_trace_id(struct pgTracingTraceContext *trace_context)
 {
 	bool		new_lxid = is_new_lxid();
 
+	/* trace id was already set, use it */
 	if (!traceid_zero(trace_context->traceparent.trace_id))
 	{
+		/*
+		 * Keep track of the trace context in case there are multiple
+		 * statement in the transaction
+		 */
+		if (new_lxid)
+			tx_start_traceparent = trace_context->traceparent;
 		return;
 	}
 
@@ -966,7 +973,9 @@ set_trace_id(struct pgTracingTraceContext *trace_context)
 	 */
 	if (!new_lxid)
 	{
-		trace_context->traceparent.trace_id = latest_trace_id;
+		/* We're in the same transaction, use the transaction trace context */
+		Assert(!traceid_zero(tx_start_traceparent.trace_id));
+		trace_context->traceparent = tx_start_traceparent;
 		return;
 	}
 
@@ -978,7 +987,8 @@ set_trace_id(struct pgTracingTraceContext *trace_context)
 
 	trace_context->traceparent.trace_id.traceid_left = pg_prng_int64(&pg_global_prng_state);
 	trace_context->traceparent.trace_id.traceid_right = pg_prng_int64(&pg_global_prng_state);
-	latest_trace_id = trace_context->traceparent.trace_id;
+	/* We're at the begining of a new local transaction, save trace context */
+	tx_start_traceparent = trace_context->traceparent;
 }
 
 /*
@@ -1520,6 +1530,9 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	bool		new_lxid = is_new_lxid();
 	bool		is_root_level = exec_nested_level + plan_nested_level == 0;
 
+	if (new_lxid)
+		/* We have a new local transaction, reset the begin tx traceparent */
+		reset_traceparent(&tx_start_traceparent);
 
 	if (!pg_tracing_mem_ctx->isReset && new_lxid && is_root_level)
 
@@ -1553,8 +1566,22 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	extract_trace_context(trace_context, pstate, query->queryId);
 
 	if (!trace_context->traceparent.sampled)
-		/* Query is not sampled, nothing to do */
-		return;
+	{
+		if (is_root_level && !new_lxid && tx_start_traceparent.sampled)
+		{
+			/*
+			 * We're in the same local transaction, use the trace context
+			 * extracted at the begining of the transaction
+			 */
+			Assert(!traceid_zero(tx_start_traceparent.trace_id));
+			trace_context->traceparent = tx_start_traceparent;
+		}
+		else
+		{
+			/* Query is not sampled, nothing to do. */
+			return;
+		}
+	}
 
 	/*
 	 * We want to avoid calling GetCurrentTimestamp at the start of post parse

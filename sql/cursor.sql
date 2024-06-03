@@ -1,8 +1,8 @@
-BEGIN;
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ DECLARE c CURSOR FOR SELECT * from pg_tracing_test;
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000002-01'*/ FETCH FORWARD 20 from c \gset
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000003-01'*/ FETCH BACKWARD 10 from c \gset
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000004-01'*/ CLOSE c;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
+DECLARE c CURSOR FOR SELECT * from pg_tracing_test;
+FETCH FORWARD 20 from c \gset
+FETCH BACKWARD 10 from c \gset
+CLOSE c;
 COMMIT;
 
 -- First declare
@@ -20,7 +20,8 @@ SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001' \gset
+        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
+          AND span_operation='DECLARE c CURSOR FOR SELECT * from pg_tracing_test;' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
@@ -57,7 +58,8 @@ SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000002' \gset
+        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
+          AND span_operation='FETCH FORWARD 20 from c' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
@@ -85,7 +87,8 @@ SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000003' \gset
+        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
+          AND span_operation='FETCH BACKWARD 10 from c' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
