@@ -821,6 +821,26 @@ reset_trace_context(pgTracingTraceContext * trace_context)
 	trace_context->root_span.span_id = 0;
 }
 
+static void
+update_latest_lxid()
+{
+#if PG_VERSION_NUM >= 170000
+	latest_lxid = MyProc->vxid.lxid;
+#else
+	latest_lxid = MyProc->lxid;
+#endif
+}
+
+static bool
+is_new_lxid()
+{
+#if PG_VERSION_NUM >= 170000
+	return MyProc->vxid.lxid != latest_lxid;
+#else
+	return MyProc->lxid != latest_lxid;
+#endif
+}
+
 /*
  * shmem_startup hook: allocate or attach to shared memory, Also create and
  * load the query-texts file, which is expected to exist (even if empty)
@@ -933,18 +953,10 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 static void
 set_trace_id(struct pgTracingTraceContext *trace_context)
 {
-	LocalTransactionId current_lxid;
-
-#if PG_VERSION_NUM >= 170000
-	current_lxid = MyProc->vxid.lxid;
-#else
-	current_lxid = MyProc->lxid;
-#endif
+	bool		new_lxid = is_new_lxid();
 
 	if (!traceid_zero(trace_context->traceparent.trace_id))
 	{
-		/* Update last lxid seen */
-		latest_lxid = current_lxid;
 		return;
 	}
 
@@ -952,7 +964,7 @@ set_trace_id(struct pgTracingTraceContext *trace_context)
 	 * We want to keep the same trace id for all statements within the same
 	 * transaction. For that, we check if we're in the same local xid.
 	 */
-	if (current_lxid == latest_lxid)
+	if (!new_lxid)
 	{
 		trace_context->traceparent.trace_id = latest_trace_id;
 		return;
@@ -967,7 +979,6 @@ set_trace_id(struct pgTracingTraceContext *trace_context)
 	trace_context->traceparent.trace_id.traceid_left = pg_prng_int64(&pg_global_prng_state);
 	trace_context->traceparent.trace_id.traceid_right = pg_prng_int64(&pg_global_prng_state);
 	latest_trace_id = trace_context->traceparent.trace_id;
-	latest_lxid = current_lxid;
 }
 
 /*
@@ -1035,19 +1046,19 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 
 	/* Safety check... */
 	if (!pg_tracing || !pg_tracking_level(exec_nested_level))
-		return;
+		goto cleanup;
 
 	/* sampling already started */
 	if (trace_context->traceparent.sampled)
-		return;
+		goto cleanup;
 
 	/* Don't start tracing if we're not at the root level */
 	if (exec_nested_level > 0)
-		return;
+		goto cleanup;
 
 	/* Both sampling rate are set to 0, no tracing will happen */
 	if (pg_tracing_sample_rate == 0 && pg_tracing_caller_sample_rate == 0)
-		return;
+		goto cleanup;
 
 	/*
 	 * In a parallel worker, check the parallel context shared buffer to see
@@ -1057,7 +1068,7 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 	{
 		if (pg_tracing_trace_parallel_workers)
 			fetch_parallel_context(trace_context);
-		return;
+		goto cleanup;
 	}
 
 	Assert(trace_context->root_span.span_id == 0);
@@ -1075,7 +1086,7 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 	statement_start_ts = GetCurrentStatementStartTimestamp();
 	if (trace_context->traceparent.sampled == 0
 		&& last_statement_check_for_sampling == statement_start_ts)
-		return;
+		goto cleanup;
 	/* First time we see this statement, save the time */
 	last_statement_check_for_sampling = statement_start_ts;
 
@@ -1095,6 +1106,10 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 	else
 		/* No sampling, reset the context */
 		reset_trace_context(trace_context);
+
+cleanup:
+	/* No matter what happens, we want to update the latest_lxid seen */
+	update_latest_lxid();
 }
 
 /*
@@ -1502,12 +1517,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 {
 	TimestampTz start_top_span;
 	pgTracingTraceContext *trace_context = &parsed_trace_context;
-	bool		new_lxid;
-#if PG_VERSION_NUM >= 170000
-	new_lxid = MyProc->vxid.lxid != latest_lxid;
-#else
-	new_lxid = MyProc->lxid != latest_lxid;
-#endif
+	bool		new_lxid = is_new_lxid();
 
 
 	if (!pg_tracing_mem_ctx->isReset
@@ -1539,7 +1549,10 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 
 	/* If disabled, don't trace utility statement */
 	if (query->utilityStmt && !pg_tracing_track_utility)
+	{
+		update_latest_lxid();
 		return;
+	}
 
 	/* Evaluate if query is sampled or not */
 	extract_trace_context(trace_context, pstate, query->queryId);
