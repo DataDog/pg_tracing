@@ -1518,11 +1518,10 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	TimestampTz start_top_span;
 	pgTracingTraceContext *trace_context = &parsed_trace_context;
 	bool		new_lxid = is_new_lxid();
+	bool		is_root_level = exec_nested_level + plan_nested_level == 0;
 
 
-	if (!pg_tracing_mem_ctx->isReset
-		&& new_lxid
-		&& exec_nested_level + plan_nested_level == 0)
+	if (!pg_tracing_mem_ctx->isReset && new_lxid && is_root_level)
 
 		/*
 		 * Some errors can happen outside of our PG_TRY (incorrect number of
@@ -1533,16 +1532,12 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 		 */
 		cleanup_tracing();
 
-	if (exec_nested_level + plan_nested_level == 0)
-
-		/*
-		 * At the root level, clean any leftover state of previous trace
-		 * context
-		 */
-		reset_trace_context(&parsed_trace_context);
-	else
+	if (!is_root_level)
 		/* We're in a nested query, grab the ongoing trace_context */
 		trace_context = &executor_trace_context;
+	else
+		/* At root level, we will start a new root span */
+		reset_trace_context(&parsed_trace_context);
 
 	if (prev_post_parse_analyze_hook)
 		prev_post_parse_analyze_hook(pstate, query, jstate);
