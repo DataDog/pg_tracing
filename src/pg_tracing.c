@@ -175,10 +175,10 @@ PG_FUNCTION_INFO_V1(pg_tracing_reset);
 MemoryContext pg_tracing_mem_ctx;
 
 /* trace context at the root level of parse/planning hook */
-static struct pgTracingTraceContext root_trace_context;
+static struct pgTracingTraceContext parsed_trace_context;
 
 /* trace context used in nested levels or within executor hooks */
-static struct pgTracingTraceContext current_trace_context;
+static struct pgTracingTraceContext executor_trace_context;
 
 /* Latest trace id observed */
 static TraceId latest_trace_id;
@@ -832,8 +832,8 @@ pg_tracing_shmem_startup(void)
 	/* Create or attach to the shared memory state */
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
-	reset_trace_context(&root_trace_context);
-	reset_trace_context(&current_trace_context);
+	reset_trace_context(&parsed_trace_context);
+	reset_trace_context(&executor_trace_context);
 	pg_tracing = ShmemInitStruct("PgTracing Shared", sizeof(pgTracingSharedState),
 								 &found_pg_tracing);
 	shared_spans = ShmemInitStruct("PgTracing Spans",
@@ -1094,15 +1094,15 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 static void
 cleanup_tracing(void)
 {
-	if (!root_trace_context.traceparent.sampled &&
-		!current_trace_context.traceparent.sampled)
+	if (!parsed_trace_context.traceparent.sampled &&
+		!executor_trace_context.traceparent.sampled)
 		/* No need for cleaning */
 		return;
 	if (pg_tracing_trace_parallel_workers)
 		remove_parallel_context();
 	MemoryContextReset(pg_tracing_mem_ctx);
-	reset_trace_context(&root_trace_context);
-	reset_trace_context(&current_trace_context);
+	reset_trace_context(&parsed_trace_context);
+	reset_trace_context(&executor_trace_context);
 	max_nested_level = -1;
 	within_declare_cursor = false;
 	current_trace_spans = NULL;
@@ -1492,7 +1492,7 @@ static void
 pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 {
 	TimestampTz start_top_span;
-	pgTracingTraceContext *trace_context = &root_trace_context;
+	pgTracingTraceContext *trace_context = &parsed_trace_context;
 	bool		new_lxid;
 #if PG_VERSION_NUM >= 170000
 	new_lxid = MyProc->vxid.lxid != latest_lxid;
@@ -1520,10 +1520,10 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 		 * At the root level, clean any leftover state of previous trace
 		 * context
 		 */
-		reset_trace_context(&root_trace_context);
+		reset_trace_context(&parsed_trace_context);
 	else
 		/* We're in a nested query, grab the ongoing trace_context */
-		trace_context = &current_trace_context;
+		trace_context = &executor_trace_context;
 
 	if (prev_post_parse_analyze_hook)
 		prev_post_parse_analyze_hook(pstate, query, jstate);
@@ -1569,12 +1569,12 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	PlannedStmt *result;
 	uint64		parent_id;
 	Span	   *span_planner;
-	pgTracingTraceContext *trace_context = &root_trace_context;
+	pgTracingTraceContext *trace_context = &parsed_trace_context;
 	TimestampTz span_start_time;
 
 	if (exec_nested_level > 0)
 		/* We're in a nested query, grab the ongoing trace_context */
-		trace_context = &current_trace_context;
+		trace_context = &executor_trace_context;
 
 	/* Evaluate if query is sampled or not */
 	extract_trace_context(trace_context, NULL, query->queryId);
@@ -1678,14 +1678,14 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 static void
 pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
-	pgTracingTraceContext *trace_context = &current_trace_context;
+	pgTracingTraceContext *trace_context = &executor_trace_context;
 	bool		executor_sampled;
 	bool		is_lazy_function;
 
 	if (exec_nested_level + plan_nested_level == 0)
 	{
 		/* We're at the root level, copy trace context from parsing/planning */
-		*trace_context = root_trace_context;
+		*trace_context = parsed_trace_context;
 	}
 
 	/* Evaluate if query is sampled or not */
@@ -1756,7 +1756,7 @@ static void
 pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 					   bool execute_once)
 {
-	pgTracingTraceContext *trace_context = &current_trace_context;
+	pgTracingTraceContext *trace_context = &executor_trace_context;
 	TimestampTz span_end_time;
 	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
 
@@ -1848,7 +1848,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 static void
 pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 {
-	pgTracingTraceContext *trace_context = &current_trace_context;
+	pgTracingTraceContext *trace_context = &executor_trace_context;
 	uint64		executor_finish_span_id;
 
 	TimestampTz span_end_time;
@@ -1934,7 +1934,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 static void
 pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 {
-	pgTracingTraceContext *trace_context = &current_trace_context;
+	pgTracingTraceContext *trace_context = &executor_trace_context;
 	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
 
 	if (executor_sampled)
@@ -1969,8 +1969,8 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		 * case, we can't end tracing as we still have unfinished spans.
 		 */
 		overlapping_trace_context = exec_nested_level == 0 &&
-			current_trace_context.root_span.span_id != root_trace_context.root_span.span_id &&
-			root_trace_context.traceparent.sampled;
+			executor_trace_context.root_span.span_id != parsed_trace_context.root_span.span_id &&
+			parsed_trace_context.traceparent.sampled;
 		if (overlapping_trace_context)
 			store_span(top_span);
 		else
@@ -2005,12 +2005,12 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	 * command
 	 */
 	bool		track_utility = pg_tracing_track_utility;
-	pgTracingTraceContext *trace_context = &current_trace_context;
+	pgTracingTraceContext *trace_context = &executor_trace_context;
 
 	if (exec_nested_level + plan_nested_level == 0)
 	{
 		/* We're at root level, copy the root trace_context */
-		*trace_context = root_trace_context;
+		*trace_context = parsed_trace_context;
 	}
 
 	parsetree = pstmt->utilityStmt;
@@ -2054,8 +2054,8 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		 */
 		if (!pg_tracing_mem_ctx->isReset && exec_nested_level == 0)
 		{
-			Assert(current_trace_context.traceparent.sampled ||
-				   root_trace_context.traceparent.sampled);
+			Assert(executor_trace_context.traceparent.sampled ||
+				   parsed_trace_context.traceparent.sampled);
 			end_tracing(trace_context, NULL);
 		}
 		return;
