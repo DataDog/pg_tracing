@@ -800,15 +800,24 @@ check_full_shared_spans(void)
 }
 
 /*
+ * Reset traceparent fields
+ */
+static void
+reset_traceparent(pgTracingTraceparent * traceparent)
+{
+	traceparent->sampled = 0;
+	traceparent->trace_id.traceid_right = 0;
+	traceparent->trace_id.traceid_left = 0;
+	traceparent->parent_id = 0;
+}
+
+/*
  * Reset trace_context fields
  */
 static void
 reset_trace_context(pgTracingTraceContext * trace_context)
 {
-	trace_context->traceparent.sampled = 0;
-	trace_context->traceparent.trace_id.traceid_right = 0;
-	trace_context->traceparent.trace_id.traceid_left = 0;
-	trace_context->traceparent.parent_id = 0;
+	reset_traceparent(&trace_context->traceparent);
 	trace_context->root_span.span_id = 0;
 }
 
