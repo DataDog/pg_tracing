@@ -211,13 +211,17 @@ SELECT 1\; SELECT 1, 2;
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
-  span_type   | span_operation | parameters | lvl 
---------------+----------------+------------+-----
- Select query | SELECT $1;     | $1 = 1     |   1
- Planner      | Planner        |            |   2
- Executor     | ExecutorRun    |            |   2
- Result       | Result         |            |   3
-(4 rows)
+  span_type   | span_operation |   parameters   | lvl 
+--------------+----------------+----------------+-----
+ Select query | SELECT $1;     | $1 = 1         |   1
+ Planner      | Planner        |                |   2
+ Executor     | ExecutorRun    |                |   2
+ Result       | Result         |                |   3
+ Select query | SELECT $1, $2; | $1 = 1, $2 = 2 |   1
+ Planner      | Planner        |                |   2
+ Executor     | ExecutorRun    |                |   2
+ Result       | Result         |                |   3
+(8 rows)
 
 CALL clean_spans();
 -- Check standalone trace
