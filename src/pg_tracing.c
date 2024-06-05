@@ -684,11 +684,11 @@ end_latest_top_span(const TimestampTz *end_time, bool pop_span)
 
 	top_span = get_latest_top_span(exec_nested_level);
 	end_span(top_span, end_time);
+	store_span(top_span);
 
 	/* Store span and remove it from the per_level_buffers */
 	if (pop_span)
 	{
-		store_span(top_span);
 		/* Restore previous top span */
 		pop_top_span();
 	}
@@ -729,6 +729,7 @@ end_nested_level(void)
 				top_span_end = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
 			}
 			end_span(top_span, &top_span_end);
+			store_span(top_span);
 		}
 	}
 
@@ -1167,7 +1168,7 @@ add_span_to_shared_buffer_locked(const Span * span)
  * the root level. This may happen either when query is finished or on a caught error.
  */
 static void
-end_tracing(pgTracingTraceContext * trace_context, Span * ongoing_span)
+end_tracing(pgTracingTraceContext * trace_context)
 {
 	Size		file_position = 0;
 
@@ -1186,28 +1187,11 @@ end_tracing(pgTracingTraceContext * trace_context, Span * ongoing_span)
 		/* Adjust file position of spans */
 		for (int i = 0; i < current_trace_spans->end; i++)
 			adjust_file_offset(current_trace_spans->spans + i, file_position);
-		for (int i = 0; i <= max_nested_level; i++)
-			for (int j = 0; j < per_level_buffers[i].top_spans->end; j++)
-				adjust_file_offset(per_level_buffers[i].top_spans->spans + j,
-								   file_position);
-		if (ongoing_span != NULL)
-			adjust_file_offset(ongoing_span, file_position);
 	}
 
 	/* We're at the end, add all stored spans to the shared memory */
 	for (int i = 0; i < current_trace_spans->end; i++)
 		add_span_to_shared_buffer_locked(&current_trace_spans->spans[i]);
-	/* And all top spans that were not pushed to current_trace_spans */
-	for (int i = 0; i <= max_nested_level; i++)
-		for (int j = 0; j < per_level_buffers[i].top_spans->end; j++)
-			add_span_to_shared_buffer_locked(&per_level_buffers[i].top_spans->spans[j]);
-
-	/*
-	 * We may have an ongoing span that was not allocated in
-	 * current_trace_spans nor per_level_buffers, add it to the shared spans
-	 */
-	if (ongoing_span != NULL)
-		add_span_to_shared_buffer_locked(ongoing_span);
 
 	/* Update our stats with the new trace */
 	pg_tracing->stats.processed_traces++;
@@ -1255,6 +1239,7 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 				/* Assign the error code to the latest top span */
 				span->sql_error_code = sql_error_code;
 				end_span(span, &span_end_time);
+				store_span(span);
 			}
 		}
 	}
@@ -1264,9 +1249,10 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 		ongoing_span->sql_error_code = sql_error_code;
 		if (!ongoing_span->ended)
 			end_span(ongoing_span, &span_end_time);
+		store_span(ongoing_span);
 	}
 
-	end_tracing(trace_context, ongoing_span);
+	end_tracing(trace_context);
 }
 
 /*
@@ -2003,6 +1989,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 
 		/* End top span */
 		end_span(top_span, &span_end_time);
+		store_span(top_span);
 
 		/*
 		 * if root trace context has a different root span index, it means
@@ -2015,10 +2002,8 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		overlapping_trace_context = exec_nested_level == 0 &&
 			executor_trace_context.root_span.span_id != parsed_trace_context.root_span.span_id &&
 			parsed_trace_context.traceparent.sampled;
-		if (overlapping_trace_context)
-			store_span(top_span);
-		else
-			end_tracing(trace_context, NULL);
+		if (!overlapping_trace_context)
+			end_tracing(trace_context);
 	}
 }
 
@@ -2100,7 +2085,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		{
 			Assert(executor_trace_context.traceparent.sampled ||
 				   parsed_trace_context.traceparent.sampled);
-			end_tracing(trace_context, NULL);
+			end_tracing(trace_context);
 		}
 		return;
 	}
@@ -2163,7 +2148,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	 * was restored and end tracing
 	 */
 	end_latest_top_span(&span_end_time, false);
-	end_tracing(trace_context, NULL);
+	end_tracing(trace_context);
 }
 
 /*
