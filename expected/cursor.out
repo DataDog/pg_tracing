@@ -153,7 +153,8 @@ SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00
  Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
  Utility query  | COMMIT;                                             |   1
  ProcessUtility | ProcessUtility                                      |   2
-(19 rows)
+ Commit         | Commit                                              |   1
+(20 rows)
 
 -- Clean created spans
 CALL clean_spans();

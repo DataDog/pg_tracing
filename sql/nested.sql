@@ -36,7 +36,7 @@ LANGUAGE plpgsql;
 SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans where parent_id='0000000000000051' \gset
+		from pg_tracing_peek_spans where parent_id='0000000000000051' AND span_type='Select query' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
@@ -76,7 +76,7 @@ SELECT
 		:span_h_end <= :span_g_end AS run_ends_after_select_end;
 
 -- Check that the root span is the longest one
-WITH max_end AS (select max(span_end) from pg_tracing_peek_spans)
+WITH max_end AS (select max(span_end) from pg_tracing_peek_spans WHERE span_type != 'Commit')
 SELECT span_end = max_end.max from pg_tracing_peek_spans, max_end
     where span_id = :'span_a_id';
 
@@ -162,7 +162,7 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
 SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans where parent_id='0000000000000058' \gset
+		from pg_tracing_peek_spans where parent_id='0000000000000058' AND span_type = 'Select query'  \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end

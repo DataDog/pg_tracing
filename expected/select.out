@@ -9,7 +9,7 @@ SET pg_tracing.caller_sample_rate = 1.0;
 (1 row)
 
 -- Get top span id
-SELECT span_id AS top_span_id from pg_tracing_peek_spans where parent_id='0000000000000001' and span_type!='Parse' \gset
+SELECT span_id AS top_span_id from pg_tracing_peek_spans where parent_id='0000000000000001' and span_type='Select query' \gset
 -- Check parameters
 SELECT parameters from pg_tracing_peek_spans where span_id=:'top_span_id';
  parameters 
@@ -32,7 +32,8 @@ SELECT span_type, span_operation from pg_tracing_peek_spans where trace_id='0000
  Planner      | Planner
  Executor     | ExecutorRun
  Result       | Result
-(4 rows)
+ Commit       | Commit
+(5 rows)
 
 -- Check userid
 SELECT userid = (SELECT usesysid FROM pg_user WHERE usename = current_user) FROM pg_tracing_peek_spans GROUP BY userid;
@@ -73,7 +74,8 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  Executor     | ExecutorRun                              |   2
  Aggregate    | Aggregate                                |   3
  FunctionScan | FunctionScan on current_database         |   4
-(5 rows)
+ Commit       | Commit                                   |   1
+(6 rows)
 
 -- Check expected reported number of trace
 SELECT processed_traces = :processed_traces + 1 from pg_tracing_info;
@@ -104,7 +106,8 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  Limit        | Limit                                                                                                                       |   3
  SubqueryScan | SubqueryScan on s                                                                                                           |   4
  SeqScan      | SeqScan on pg_class c                                                                                                       |   5
-(6 rows)
+ Commit       | Commit                                                                                                                      |   1
+(7 rows)
 
 -- Check that we're in a correct state after a timeout
 set statement_timeout=200;
@@ -137,7 +140,8 @@ SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans wh
  Planner      | Planner        | 00000          |   2
  Executor     | ExecutorRun    | 00000          |   2
  Result       | Result         | 00000          |   3
-(4 rows)
+ Commit       | Commit         | 00000          |   1
+(5 rows)
 
 -- Cleanup
 SET plan_cache_mode='auto';
@@ -154,7 +158,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  Planner             |                |   2
  ExecutorRun         |                |   2
  Limit               |                |   3
-(4 rows)
+ Commit              |                |   1
+(5 rows)
 
 -- Test multiple statements in a single query
 /*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000c-000000000000000c-01'*/ select 1; select 2;
@@ -175,7 +180,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
-(4 rows)
+ Commit         |            |   1
+(5 rows)
 
 -- Check that parameters are not exported when disabled
 SET pg_tracing.export_parameters=false;
@@ -192,7 +198,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  Planner            |            |   2
  ExecutorRun        |            |   2
  Result             |            |   3
-(4 rows)
+ Commit             |            |   1
+(5 rows)
 
 SET pg_tracing.export_parameters=true;
 -- Check multi statement query
@@ -221,7 +228,8 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Planner      | Planner        |                |   2
  Executor     | ExecutorRun    |                |   2
  Result       | Result         |                |   3
-(8 rows)
+ Commit       | Commit         |                |   1
+(9 rows)
 
 CALL clean_spans();
 -- Check standalone trace
@@ -239,7 +247,8 @@ SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
      1
      1
      1
-(4 rows)
+     1
+(5 rows)
 
 -- Trigger a planner error
 SELECT '\xDEADBEEF'::bytea::text::int;
@@ -272,6 +281,7 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
 ----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------+-----
  Utility query  | CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement) RETURNS SETOF anyelement LANGUAGE sql AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)'; |                                  |   1
  ProcessUtility | ProcessUtility                                                                                                                                                                                          |                                  |   2
+ Commit         | Commit                                                                                                                                                                                                  |                                  |   1
  Select query   | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3)) as t;                                                                                                                                             | $1 = '{1,2,3,4}', $2 = 1, $3 = 2 |   1
  Planner        | Planner                                                                                                                                                                                                 |                                  |   2
  Executor       | ExecutorRun                                                                                                                                                                                             |                                  |   2
@@ -279,7 +289,8 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Result         | Result                                                                                                                                                                                                  |                                  |   4
  Select query   | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | $1 = 1, $2 = 1, $3 = 1           |   4
  Planner        | Planner                                                                                                                                                                                                 |                                  |   5
-(9 rows)
+ Commit         | Commit                                                                                                                                                                                                  |                                  |   1
+(11 rows)
 
 CALL clean_spans();
 -- Check function calls that don't have sources in pg_proc
@@ -304,7 +315,8 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Planner      | Planner                                                                                |            |   4
  Executor     | ExecutorRun                                                                            |            |   4
  Result       | Result                                                                                 |            |   5
-(12 rows)
+ Commit       | Commit                                                                                 |            |   1
+(13 rows)
 
 -- Cleanup
 CALL clean_spans();

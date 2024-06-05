@@ -63,7 +63,7 @@ CREATE TRIGGER employee_insert_trigger_2
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
-		from pg_tracing_peek_spans where parent_id='0000000000000001' \gset
+		from pg_tracing_peek_spans where parent_id='0000000000000001' AND span_type='Insert query' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end

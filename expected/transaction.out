@@ -8,7 +8,7 @@ SET pg_tracing.caller_sample_rate = 1.0;
         1
 (1 row)
 
-SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000001';
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000001' AND span_type!='Commit';
    span_type    | span_operation | lvl 
 ----------------+----------------+-----
  Utility query  | BEGIN;         |   1
@@ -29,7 +29,7 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
         1
 (1 row)
 
-SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000002';
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000002' AND span_type!='Commit';
    span_type    | span_operation | lvl 
 ----------------+----------------+-----
  Utility query  | BEGIN;         |   1

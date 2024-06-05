@@ -136,21 +136,25 @@ select span_operation, parameters, lvl from peek_ordered_spans;
  PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   1
  ProcessUtility                                            |            |   2
  PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   3
+ Commit                                                    |            |   1
  EXECUTE test_prepared_one_param_2(100);                   |            |   1
  ProcessUtility                                            |            |   2
  PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; | $1 = '100' |   3
  Planner                                                   |            |   4
  ExecutorRun                                               |            |   4
  Result                                                    |            |   5
-(9 rows)
+ Commit                                                    |            |   1
+(11 rows)
 
 -- Check the top span (standalone top span has trace_id=parent_id)
 select span_operation, parameters, lvl from peek_ordered_spans where right(trace_id, 16) = parent_id;
                       span_operation                       | parameters | lvl 
 -----------------------------------------------------------+------------+-----
  PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   1
+ Commit                                                    |            |   1
  EXECUTE test_prepared_one_param_2(100);                   |            |   1
-(2 rows)
+ Commit                                                    |            |   1
+(4 rows)
 
 CALL clean_spans();
 -- Test prepared statement with generic plan
@@ -175,23 +179,29 @@ select span_operation, parameters, lvl from peek_ordered_spans;
 ---------------------------------------------------------+------------+-----
  SET plan_cache_mode='force_generic_plan';               |            |   1
  ProcessUtility                                          |            |   2
+ Commit                                                  |            |   1
  EXECUTE test_prepared_one_param(200);                   |            |   1
  ProcessUtility                                          |            |   2
  PREPARE test_prepared_one_param (integer) AS SELECT $1; |            |   3
  ExecutorRun                                             |            |   4
  Result                                                  |            |   5
+ Commit                                                  |            |   1
  SET plan_cache_mode TO DEFAULT;                         |            |   1
  ProcessUtility                                          |            |   2
-(9 rows)
+ Commit                                                  |            |   1
+(12 rows)
 
 -- Check the top span (standalone top span has trace_id=parent_id)
 select span_operation, parameters, lvl from peek_ordered_spans where right(trace_id, 16) = parent_id;
               span_operation               | parameters | lvl 
 -------------------------------------------+------------+-----
  SET plan_cache_mode='force_generic_plan'; |            |   1
+ Commit                                    |            |   1
  EXECUTE test_prepared_one_param(200);     |            |   1
+ Commit                                    |            |   1
  SET plan_cache_mode TO DEFAULT;           |            |   1
-(3 rows)
+ Commit                                    |            |   1
+(6 rows)
 
 CALL clean_spans();
 -- Second create extension should generate an error that is captured by span
@@ -212,7 +222,8 @@ select trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 ----------------------------------+----------------+-----------------------------------------------------+-----
  00000000000000000000000000000002 | Utility query  | CREATE TABLE test_create_table (a int, b char(20)); |   1
  00000000000000000000000000000002 | ProcessUtility | ProcessUtility                                      |   2
-(2 rows)
+ 00000000000000000000000000000002 | Commit         | Commit                                              |   1
+(3 rows)
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ CREATE INDEX test_create_table_index ON test_create_table (a);
 -- Check create index spans
@@ -221,7 +232,8 @@ select trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 ----------------------------------+----------------+----------------------------------------------------------------+-----
  00000000000000000000000000000003 | Utility query  | CREATE INDEX test_create_table_index ON test_create_table (a); |   1
  00000000000000000000000000000003 | ProcessUtility | ProcessUtility                                                 |   2
-(2 rows)
+ 00000000000000000000000000000003 | Commit         | Commit                                                         |   1
+(3 rows)
 
 CREATE OR REPLACE FUNCTION function_with_error(IN anyarray, OUT x anyelement, OUT n int)
     RETURNS SETOF RECORD
@@ -250,7 +262,8 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 ----------------------------------+----------------+----------------------------+----------------+-----
  00000000000000000000000000000005 | Utility query  | ANALYZE test_create_table; | 00000          |   1
  00000000000000000000000000000005 | ProcessUtility | ProcessUtility             | 00000          |   2
-(2 rows)
+ 00000000000000000000000000000005 | Commit         | Commit                     | 00000          |   1
+(3 rows)
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000006-01'*/ DROP TABLE test_create_table;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000006';
@@ -258,7 +271,8 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 ----------------------------------+----------------+-------------------------------+----------------+-----
  00000000000000000000000000000006 | Utility query  | DROP TABLE test_create_table; | 00000          |   1
  00000000000000000000000000000006 | ProcessUtility | ProcessUtility                | 00000          |   2
-(2 rows)
+ 00000000000000000000000000000006 | Commit         | Commit                        | 00000          |   1
+(3 rows)
 
 -- Cleanup
 CALL clean_spans();

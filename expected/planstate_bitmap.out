@@ -17,7 +17,8 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 1)                           |                        |   5
  BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 2)                           |                        |   5
  BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 3)                           |                        |   5
-(8 rows)
+ Commit                                                    |                                               |                        |   1
+(9 rows)
 
 --
 -- +----------------------------------------------------------------------------------------------+

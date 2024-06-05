@@ -15,7 +15,8 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  SeqScan on pg_tracing_test r                                             |                    |            |   5
  Hash                                                                     |                    |            |   5
  SeqScan on pg_tracing_test s                                             |                    |            |   6
-(8 rows)
+ Commit                                                                   |                    |            |   1
+(9 rows)
 
 -- +-----------------------------------------+
 -- | A: HashJoin                             |

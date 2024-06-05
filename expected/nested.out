@@ -35,7 +35,7 @@ LANGUAGE plpgsql;
 SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans where parent_id='0000000000000051' \gset
+		from pg_tracing_peek_spans where parent_id='0000000000000051' AND span_type='Select query' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
@@ -79,7 +79,7 @@ SELECT
 (1 row)
 
 -- Check that the root span is the longest one
-WITH max_end AS (select max(span_end) from pg_tracing_peek_spans)
+WITH max_end AS (select max(span_end) from pg_tracing_peek_spans WHERE span_type != 'Commit')
 SELECT span_end = max_end.max from pg_tracing_peek_spans, max_end
     where span_id = :'span_a_id';
  ?column? 
@@ -104,7 +104,7 @@ SET pg_tracing.track = 'top';
 SELECT count(*) from pg_tracing_consume_spans where trace_id='00000000000000000000000000000052';
  count 
 -------
-     5
+     6
 (1 row)
 
 -- Check tracking with no tracking
@@ -142,7 +142,8 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  Planner             |   4
  ExecutorRun         |   4
  Result              |   5
-(7 rows)
+ Commit              |   1
+(8 rows)
 
 -- Test again with utility tracking disabled
 SET pg_tracing.track_utility=off;
@@ -170,7 +171,8 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  Planner                             |   3
  ExecutorRun                         |   2
  Result                              |   3
-(5 rows)
+ Commit                              |   1
+(6 rows)
 
 -- Create function with generate series
 CREATE OR REPLACE FUNCTION test_generate_series(IN anyarray, OUT x anyelement)
@@ -204,7 +206,8 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  Result                                                                                 |   4
  select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4) |   4
  Planner                                                                                |   5
-(7 rows)
+ Commit                                                                                 |   1
+(8 rows)
 
 -- +-----------------------------------------------------------+
 -- | A: Select test_function(1);                               |
@@ -228,7 +231,7 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
 SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans where parent_id='0000000000000058' \gset
+		from pg_tracing_peek_spans where parent_id='0000000000000058' AND span_type = 'Select query'  \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
@@ -253,7 +256,8 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  ExecutorRun                                     |   5
  Insert on pg_tracing_test                       |   6
  Result                                          |   7
-(9 rows)
+ Commit                                          |   1
+(10 rows)
 
 -- Cleanup
 CALL clean_spans();

@@ -54,7 +54,7 @@ CREATE TRIGGER employee_insert_trigger_2
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
-		from pg_tracing_peek_spans where parent_id='0000000000000001' \gset
+		from pg_tracing_peek_spans where parent_id='0000000000000001' AND span_type='Insert query' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
@@ -150,7 +150,8 @@ SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00
  Executor     | ExecutorRun                                                                                                         |   4
  Insert       | Insert on employee_audit                                                                                            |   5
  Result       | Result                                                                                                              |   6
-(16 rows)
+ Commit       | Commit                                                                                                              |   1
+(17 rows)
 
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans where trace_id='00000000000000000000000000000001';
@@ -195,7 +196,8 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
  00000000000000000000000000000001 | Select query | SELECT 'SELECT 1'                                               |   5
  00000000000000000000000000000001 | Executor     | ExecutorRun                                                     |   6
  00000000000000000000000000000001 | Result       | Result                                                          |   7
-(13 rows)
+ 00000000000000000000000000000001 | Commit       | Commit                                                          |   1
+(14 rows)
 
 -- Call before trigger update
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ UPDATE before_trigger_table set a=1;
@@ -214,7 +216,8 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
  00000000000000000000000000000002 | Select query | SELECT 'SELECT 1'                     |   3
  00000000000000000000000000000002 | Executor     | ExecutorRun                           |   4
  00000000000000000000000000000002 | Result       | Result                                |   5
-(12 rows)
+ 00000000000000000000000000000002 | Commit       | Commit                                |   1
+(13 rows)
 
 -- Call before trigger delete
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ DELETE FROM before_trigger_table where a=1;
@@ -233,7 +236,8 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
  00000000000000000000000000000003 | Select query | SELECT 'SELECT 1'                            |   3
  00000000000000000000000000000003 | Executor     | ExecutorRun                                  |   4
  00000000000000000000000000000003 | Result       | Result                                       |   5
-(12 rows)
+ 00000000000000000000000000000003 | Commit       | Commit                                       |   1
+(13 rows)
 
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans;
