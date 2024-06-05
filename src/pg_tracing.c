@@ -226,6 +226,9 @@ static bool within_declare_cursor = false;
 /* Number of spans initially allocated at the start of a trace. */
 static int	pg_tracing_initial_allocated_spans = 25;
 
+/* Commit span used in xact callbacks */
+static Span commit_span;
+
 static pgTracingPerLevelBuffer * per_level_buffers = NULL;
 static pgTracingQueryIdFilter * query_id_filter = NULL;
 
@@ -268,6 +271,7 @@ static bool check_filter_query_ids(char **newval, void **extra, GucSource source
 static void assign_filter_query_ids(const char *newval, void *extra);
 
 static void cleanup_tracing(void);
+static void pg_tracing_xact_callback(XactEvent event, void *arg);
 
 /*
  * Module load callback
@@ -449,6 +453,8 @@ _PG_init(void)
 
 	prev_ProcessUtility = ProcessUtility_hook;
 	ProcessUtility_hook = pg_tracing_ProcessUtility;
+
+	RegisterXactCallback(pg_tracing_xact_callback, NULL);
 }
 
 /*
@@ -1133,8 +1139,6 @@ cleanup_tracing(void)
 		!executor_trace_context.traceparent.sampled)
 		/* No need for cleaning */
 		return;
-	if (pg_tracing_trace_parallel_workers)
-		remove_parallel_context();
 	MemoryContextReset(pg_tracing_mem_ctx);
 	reset_trace_context(&parsed_trace_context);
 	reset_trace_context(&executor_trace_context);
@@ -1251,8 +1255,6 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 			end_span(ongoing_span, &span_end_time);
 		store_span(ongoing_span);
 	}
-
-	end_tracing(trace_context);
 }
 
 /*
@@ -1855,6 +1857,10 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	}
 	PG_END_TRY();
 
+	/* We can remove our parallel context here */
+	if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
+		remove_parallel_context();
+
 	/*
 	 * Same as above, tracing could have been aborted, check for
 	 * current_trace_spans
@@ -1984,7 +1990,6 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	if (executor_sampled)
 	{
 		TimestampTz span_end_time = GetCurrentTimestamp();
-		bool		overlapping_trace_context;
 		Span	   *top_span = get_latest_top_span(exec_nested_level);
 
 		/* End top span */
@@ -1992,18 +1997,14 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		store_span(top_span);
 
 		/*
-		 * if root trace context has a different root span index, it means
-		 * that we may have started to trace the next statement while still
-		 * processing the current one. This may happen with a transaction
-		 * block using extended protocol, the parsing of the next statement
-		 * happens before the ExecutorEnd of the current statement. In this
-		 * case, we can't end tracing as we still have unfinished spans.
+		 * Special case: we're inside a transaction block and a single
+		 * statement was traced, not the whole transaction. We can't rely on
+		 * the xact callback to end tracing so do it here
 		 */
-		overlapping_trace_context = exec_nested_level == 0 &&
-			executor_trace_context.root_span.span_id != parsed_trace_context.root_span.span_id &&
-			parsed_trace_context.traceparent.sampled;
-		if (!overlapping_trace_context)
+		if (IsInTransactionBlock(true) && tx_start_traceparent.sampled == false && exec_nested_level == 0)
+		{
 			end_tracing(trace_context);
+		}
 	}
 }
 
@@ -2028,6 +2029,12 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	TimestampTz span_end_time;
 	TimestampTz span_start_time;
 	Node	   *parsetree;
+
+	/*
+	 * Save whether we're in an aborted transaction. A rollback will reset the
+	 * state after standard_ProcessUtility
+	 */
+	bool		in_aborted_transaction = IsAbortedTransactionBlockState();
 
 	/*
 	 * Save track utility value since this value could be modified by a SET
@@ -2076,17 +2083,6 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		if (!track_utility)
 			exec_nested_level--;
 
-		/*
-		 * Tracing may have been started within the utility call without going
-		 * through ExecutorEnd (ex: prepare statement). Check and end tracing
-		 * here in this case.
-		 */
-		if (!pg_tracing_mem_ctx->isReset && exec_nested_level == 0)
-		{
-			Assert(executor_trace_context.traceparent.sampled ||
-				   parsed_trace_context.traceparent.sampled);
-			end_tracing(trace_context);
-		}
 		return;
 	}
 
@@ -2145,11 +2141,58 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 
 	/*
 	 * We're at a potential end for the query, end the parent top span that
-	 * was restored and end tracing
+	 * was restored
 	 */
 	end_latest_top_span(&span_end_time, false);
-	end_tracing(trace_context);
+
+	/*
+	 * If we're in an aborted transaction, xact callback won't be called so we
+	 * need to end tracing here
+	 */
+	if (in_aborted_transaction)
+		end_tracing(trace_context);
 }
+
+/*
+ * Handle xact callback events
+ *
+ * Create a commit span between pre-commit and commit event and end ongoing tracing
+ */
+static void
+pg_tracing_xact_callback(XactEvent event, void *arg)
+{
+	pgTracingTraceContext *trace_context = &executor_trace_context;
+
+	if (!parsed_trace_context.traceparent.sampled &&
+		!executor_trace_context.traceparent.sampled)
+		return;
+
+	if (!executor_trace_context.traceparent.sampled)
+		trace_context = &parsed_trace_context;
+
+	switch (event)
+	{
+		case XACT_EVENT_PRE_COMMIT:
+			begin_span(trace_context->traceparent.trace_id, &commit_span,
+					   SPAN_COMMIT, NULL, trace_context->traceparent.parent_id,
+					   per_level_buffers[exec_nested_level].query_id, NULL);
+			break;
+		case XACT_EVENT_COMMIT:
+			Assert(commit_span.span_id > 0);
+			end_span(&commit_span, NULL);
+			store_span(&commit_span);
+
+			end_tracing(trace_context);
+			commit_span.span_id = 0;
+			break;
+		case XACT_EVENT_ABORT:
+			end_tracing(trace_context);
+			commit_span.span_id = 0;
+		default:
+			break;
+	}
+}
+
 
 /*
  * Add plan counters to the Datum output
