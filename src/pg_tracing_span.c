@@ -171,6 +171,8 @@ get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size)
 
 	switch (span->type)
 	{
+		case SPAN_COMMIT:
+			return "Commit";
 		case SPAN_PLANNER:
 			return "Planner";
 		case SPAN_FUNCTION:
@@ -222,6 +224,8 @@ get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 
 	switch (span->type)
 	{
+		case SPAN_COMMIT:
+			return "Commit";
 		case SPAN_PLANNER:
 			return "Planner";
 		case SPAN_FUNCTION:
