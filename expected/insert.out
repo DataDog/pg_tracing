@@ -9,7 +9,8 @@ SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00
  ProcessUtility | ProcessUtility                                                                                                                    |   2
  Utility query  | CREATE TABLE IF NOT EXISTS pg_tracing_test_table_with_constraint (a int, b char(20), CONSTRAINT PK_tracing_test PRIMARY KEY (a)); |   3
  ProcessUtility | ProcessUtility                                                                                                                    |   4
-(4 rows)
+ Commit         | Commit                                                                                                                            |   1
+(5 rows)
 
 -- Simple insertion
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ INSERT INTO pg_tracing_test_table_with_constraint VALUES(1, 'aaa');
@@ -21,7 +22,8 @@ SELECT span_type, span_operation from peek_ordered_spans where trace_id='0000000
  Executor     | ExecutorRun
  Insert       | Insert on pg_tracing_test_table_with_constraint
  Result       | Result
-(5 rows)
+ Commit       | Commit
+(6 rows)
 
 -- Trigger constraint violation
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ INSERT INTO pg_tracing_test_table_with_constraint VALUES(1, 'aaa');

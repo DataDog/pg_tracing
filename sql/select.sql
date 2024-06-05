@@ -5,7 +5,7 @@ SET pg_tracing.caller_sample_rate = 1.0;
 -- Run a simple query
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1;
 -- Get top span id
-SELECT span_id AS top_span_id from pg_tracing_peek_spans where parent_id='0000000000000001' and span_type!='Parse' \gset
+SELECT span_id AS top_span_id from pg_tracing_peek_spans where parent_id='0000000000000001' and span_type='Select query' \gset
 -- Check parameters
 SELECT parameters from pg_tracing_peek_spans where span_id=:'top_span_id';
 -- Check the number of children

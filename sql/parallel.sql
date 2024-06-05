@@ -28,3 +28,7 @@ SELECT trace_id from pg_tracing_peek_spans group by trace_id;
 
 -- Check number of executor spans
 SELECT count(*) from pg_tracing_consume_spans where span_type='Executor';
+
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();

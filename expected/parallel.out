@@ -60,3 +60,6 @@ SELECT count(*) from pg_tracing_consume_spans where span_type='Executor';
      7
 (1 row)
 
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();

@@ -14,7 +14,8 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Planner      | Planner        |                    |   2
  Executor     | ExecutorRun    |                    |   2
  Result       | Result         |                    |   3
-(4 rows)
+ Commit       | Commit         |                    |   1
+(5 rows)
 
 CALL clean_spans();
 -- Trigger an error due to mismatching number of parameters
@@ -68,7 +69,8 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Result         | Result         |                    |   3
  Utility query  | COMMIT;        |                    |   1
  ProcessUtility | ProcessUtility |                    |   2
-(12 rows)
+ Commit         | Commit         |                    |   1
+(13 rows)
 
 CALL clean_spans();
 -- Mix extended protocol and simple protocol
@@ -118,7 +120,8 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Result         | Result             |                        |   3
  Utility query  | COMMIT;            |                        |   1
  ProcessUtility | ProcessUtility     |                        |   2
-(16 rows)
+ Commit         | Commit             |                        |   1
+(17 rows)
 
 CALL clean_spans();
 -- gdesc calls a single parse command then execute a query. Make sure we handle this case
@@ -131,11 +134,13 @@ SELECT 1 \gdesc
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
   span_type   |                           span_operation                           |             parameters              | lvl 
 --------------+--------------------------------------------------------------------+-------------------------------------+-----
+ Commit       | Commit                                                             |                                     |   1
  Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| $1 = '?column?', $2 = '23', $3 = -1 |   1
               | FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm)         |                                     | 
  Planner      | Planner                                                            |                                     |   2
  Executor     | ExecutorRun                                                        |                                     |   2
  Result       | Result                                                             |                                     |   3
-(4 rows)
+ Commit       | Commit                                                             |                                     |   1
+(6 rows)
 
 CALL clean_spans();
