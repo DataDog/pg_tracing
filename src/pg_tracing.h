@@ -290,12 +290,22 @@ extern void adjust_file_offset(Span * span, Size file_position);
 extern bool traceid_zero(TraceId trace_id);
 
 
+/* pg_tracing_sql_functions.c */
+pgTracingStats get_empty_pg_tracing_stats(void);
+
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
+extern pgTracingSharedState * pg_tracing_shared_state;
+extern pgTracingSpans * shared_spans;
+
 extern int	exec_nested_level;
 extern void
 			store_span(const Span * span);
 extern int
 			add_str_to_trace_buffer(const char *str, int str_len);
+extern void
+			cleanup_tracing(void);
+extern void
+			drop_all_spans_locked(void);
 
 #endif

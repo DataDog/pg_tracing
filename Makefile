@@ -17,6 +17,7 @@ OBJS = \
 	src/pg_tracing_planstate.o \
 	src/pg_tracing_explain.o \
 	src/pg_tracing_span.o \
+	src/pg_tracing_sql_functions.o \
 	src/version_compat.o
 
 REGRESSCHECKS = setup utility select insert trigger cursor transaction
