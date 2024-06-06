@@ -78,21 +78,6 @@ typedef enum
 }			pgTracingBufferMode;
 
 /*
- * Structure to store per exec level informations
- */
-typedef struct pgTracingPerLevelBuffer
-{
-	uint64		query_id;		/* Query id by for this level when available */
-	pgTracingSpans *top_spans;	/* top spans for the nested level */
-	uint64		executor_run_span_id;	/* executor run span id for this
-										 * level. Executor run is used as
-										 * parent for spans generated from
-										 * planstate */
-	TimestampTz executor_start;
-	TimestampTz executor_end;
-}			pgTracingPerLevelBuffer;
-
-/*
  * Structure to store Query id filtering array of query id used for filtering
  */
 typedef struct pgTracingQueryIdFilter
@@ -214,8 +199,8 @@ static int	pg_tracing_initial_allocated_spans = 25;
 /* Commit span used in xact callbacks */
 static Span commit_span;
 
-static pgTracingPerLevelBuffer * per_level_buffers = NULL;
 static pgTracingQueryIdFilter * query_id_filter = NULL;
+pgTracingPerLevelBuffer * per_level_buffers = NULL;
 
 static void pg_tracing_shmem_request(void);
 static void pg_tracing_shmem_startup(void);
@@ -600,62 +585,6 @@ store_span(const Span * span)
 		MemoryContextSwitchTo(oldcxt);
 	}
 	current_trace_spans->spans[current_trace_spans->end++] = *span;
-}
-
-/*
- * Get the latest span for a specific level. The span must exists
- */
-static Span *
-get_latest_top_span(int nested_level)
-{
-	pgTracingSpans *top_spans;
-
-	Assert(nested_level <= max_nested_level);
-	Assert(nested_level >= 0);
-	top_spans = per_level_buffers[nested_level].top_spans;
-	Assert(top_spans->end > 0);
-	return &top_spans->spans[top_spans->end - 1];
-}
-
-/*
- * Create a new top_span for the current exec nested level
- */
-static Span *
-allocate_new_top_span(void)
-{
-	pgTracingSpans *top_spans;
-	Span	   *top_span;
-
-	top_spans = per_level_buffers[exec_nested_level].top_spans;
-	if (top_spans->end >= top_spans->max)
-	{
-		MemoryContext oldcxt;
-		int			old_spans_max = top_spans->max;
-
-		top_spans->max *= 2;
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		top_spans = repalloc0(top_spans,
-							  sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
-							  sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
-		per_level_buffers[exec_nested_level].top_spans = top_spans;
-		MemoryContextSwitchTo(oldcxt);
-	}
-	top_span = &top_spans->spans[top_spans->end++];
-	Assert(top_span->span_id == 0);
-	return top_span;
-}
-
-/*
- * Drop the latest top span for the current nested level
- */
-static void
-pop_top_span(void)
-{
-	pgTracingSpans *top_spans = per_level_buffers[exec_nested_level].top_spans;
-
-	Assert(top_spans->end > 0);
-	/* Reset span id of the discarded span since it could be reused */
-	top_spans->spans[--top_spans->end].span_id = 0;
 }
 
 /*

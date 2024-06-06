@@ -220,6 +220,21 @@ typedef struct pgTracingSpans
 	Span		spans[FLEXIBLE_ARRAY_MEMBER];
 }			pgTracingSpans;
 
+/*
+ * Structure to store per exec level informations
+ */
+typedef struct pgTracingPerLevelBuffer
+{
+	uint64		query_id;		/* Query id by for this level when available */
+	pgTracingSpans *top_spans;	/* top spans for the nested level */
+	uint64		executor_run_span_id;	/* executor run span id for this
+										 * level. Executor run is used as
+										 * parent for spans generated from
+										 * planstate */
+	TimestampTz executor_start;
+	TimestampTz executor_end;
+}			pgTracingPerLevelBuffer;
+
 /* pg_tracing_explain.c */
 extern const char *plan_to_node_type(const Plan *plan);
 extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
@@ -293,10 +308,19 @@ extern bool traceid_zero(TraceId trace_id);
 /* pg_tracing_sql_functions.c */
 pgTracingStats get_empty_pg_tracing_stats(void);
 
+/* pg_tracing_top_spans.c */
+Span *
+get_latest_top_span(int nested_level);
+Span *
+allocate_new_top_span(void);
+void
+pop_top_span(void);
+
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
 extern pgTracingSharedState * pg_tracing_shared_state;
 extern pgTracingSpans * shared_spans;
+extern pgTracingPerLevelBuffer * per_level_buffers;
 
 extern int	exec_nested_level;
 extern void
