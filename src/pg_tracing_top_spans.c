@@ -56,6 +56,19 @@ allocate_new_top_span(void)
 }
 
 /*
+ * Get the latest top span
+ */
+Span *
+peek_top_span(void)
+{
+	pgTracingSpans *top_spans;
+
+	top_spans = per_level_buffers[exec_nested_level].top_spans;
+	Assert(top_spans->end > 0);
+	return &top_spans->spans[top_spans->end - 1];
+}
+
+/*
  * Drop the latest top span for the current nested level
  */
 void

@@ -315,6 +315,8 @@ Span *
 allocate_new_top_span(void);
 void
 pop_top_span(void);
+Span *
+peek_top_span(void);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
