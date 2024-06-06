@@ -78,16 +78,6 @@ typedef enum
 }			pgTracingBufferMode;
 
 /*
- * Structure to store flexible array of spans
- */
-typedef struct pgTracingSpans
-{
-	int			end;			/* Index of last element */
-	int			max;			/* Maximum number of element */
-	Span		spans[FLEXIBLE_ARRAY_MEMBER];
-}			pgTracingSpans;
-
-/*
  * Structure to store per exec level informations
  */
 typedef struct pgTracingPerLevelBuffer
