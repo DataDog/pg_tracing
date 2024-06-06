@@ -210,6 +210,16 @@ typedef struct pgTracingParallelWorkers
 	pgTracingParallelContext trace_contexts[FLEXIBLE_ARRAY_MEMBER];
 }			pgTracingParallelWorkers;
 
+/*
+ * Structure to store flexible array of spans
+ */
+typedef struct pgTracingSpans
+{
+	int			end;			/* Index of last element */
+	int			max;			/* Maximum number of element */
+	Span		spans[FLEXIBLE_ARRAY_MEMBER];
+}			pgTracingSpans;
+
 /* pg_tracing_explain.c */
 extern const char *plan_to_node_type(const Plan *plan);
 extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
