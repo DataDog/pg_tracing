@@ -151,11 +151,6 @@ static const struct config_enum_entry buffer_mode_options[] =
 	(trace_context->traceparent.sampled && pg_tracking_level(level))
 
 #define US_IN_S INT64CONST(1000000)
-#define INT64_HEX_FORMAT "%016" INT64_MODIFIER "x"
-
-PG_FUNCTION_INFO_V1(pg_tracing_info);
-PG_FUNCTION_INFO_V1(pg_tracing_spans);
-PG_FUNCTION_INFO_V1(pg_tracing_reset);
 
 /*
  * Global variables
@@ -177,14 +172,14 @@ static pgTracingTraceparent tx_start_traceparent;
 static LocalTransactionId latest_lxid = InvalidLocalTransactionId;
 
 /* Shared state with stats and file external state */
-static pgTracingSharedState * pg_tracing = NULL;
+pgTracingSharedState *pg_tracing_shared_state = NULL;
 
 /*
  * Shared buffer storing spans. Query with sampled flag will add new spans to the
  * shared state at the end of the traced query.
  * Those spans will be consumed during calls to pg_tracing_consume_spans.
  */
-static pgTracingSpans * shared_spans = NULL;
+pgTracingSpans *shared_spans = NULL;
 
 /*
  * Store spans for the current trace.
@@ -255,14 +250,11 @@ static void pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryStrin
 									  QueryEnvironment *queryEnv,
 									  DestReceiver *dest, QueryCompletion *qc);
 
-static pgTracingStats get_empty_pg_tracing_stats(void);
-
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
 
 static void initialize_trace_level(void);
 
-static void cleanup_tracing(void);
 static void pg_tracing_xact_callback(XactEvent event, void *arg);
 
 /*
@@ -922,14 +914,14 @@ finish:
  * Drop all spans from the shared buffer and truncate the query file.
  * Exclusive lock on pg_tracing->lock should be acquired beforehand.
  */
-static void
+void
 drop_all_spans_locked(void)
 {
 	/* Drop all spans */
 	shared_spans->end = 0;
 
 	/* Reset query file position */
-	pg_tracing->extent = 0;
+	pg_tracing_shared_state->extent = 0;
 	pg_truncate(PG_TRACING_TEXT_FILE, 0);
 }
 
@@ -945,7 +937,7 @@ check_full_shared_spans(void)
 {
 	bool		full_buffer = false;
 
-	LWLockAcquire(pg_tracing->lock, LW_SHARED);
+	LWLockAcquire(pg_tracing_shared_state->lock, LW_SHARED);
 	full_buffer = shared_spans->end >= shared_spans->max;
 	if (full_buffer && pg_tracing_buffer_mode != PG_TRACING_DROP_ON_FULL)
 	{
@@ -953,11 +945,11 @@ check_full_shared_spans(void)
 		 * Buffer is full and we want to keep existing spans. Drop the new
 		 * trace.
 		 */
-		pg_tracing->stats.dropped_traces++;
-		LWLockRelease(pg_tracing->lock);
+		pg_tracing_shared_state->stats.dropped_traces++;
+		LWLockRelease(pg_tracing_shared_state->lock);
 		return full_buffer;
 	}
-	LWLockRelease(pg_tracing->lock);
+	LWLockRelease(pg_tracing_shared_state->lock);
 
 	if (!full_buffer)
 		/* We have room in the shared buffer */
@@ -967,15 +959,15 @@ check_full_shared_spans(void)
 	 * We have a full buffer and we want to drop everything, get an exclusive
 	 * lock
 	 */
-	LWLockAcquire(pg_tracing->lock, LW_EXCLUSIVE);
+	LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);
 	/* Recheck for full buffer */
 	full_buffer = shared_spans->end >= shared_spans->max;
 	if (full_buffer)
 	{
-		pg_tracing->stats.dropped_spans += shared_spans->end;
+		pg_tracing_shared_state->stats.dropped_spans += shared_spans->end;
 		drop_all_spans_locked();
 	}
-	LWLockRelease(pg_tracing->lock);
+	LWLockRelease(pg_tracing_shared_state->lock);
 
 	return full_buffer;
 }
@@ -1037,15 +1029,15 @@ pg_tracing_shmem_startup(void)
 		prev_shmem_startup_hook();
 
 	/* reset in case this is a restart within the postmaster */
-	pg_tracing = NULL;
+	pg_tracing_shared_state = NULL;
 
 	/* Create or attach to the shared memory state */
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 	reset_trace_context(&parsed_trace_context);
 	reset_trace_context(&executor_trace_context);
-	pg_tracing = ShmemInitStruct("PgTracing Shared", sizeof(pgTracingSharedState),
-								 &found_pg_tracing);
+	pg_tracing_shared_state = ShmemInitStruct("PgTracing Shared", sizeof(pgTracingSharedState),
+											  &found_pg_tracing);
 	shared_spans = ShmemInitStruct("PgTracing Spans",
 								   sizeof(pgTracingSpans) +
 								   pg_tracing_max_span * sizeof(Span),
@@ -1062,8 +1054,8 @@ pg_tracing_shmem_startup(void)
 	/* First time, let's init shared state */
 	if (!found_pg_tracing)
 	{
-		pg_tracing->stats = get_empty_pg_tracing_stats();
-		pg_tracing->lock = &(GetNamedLWLockTranche("pg_tracing"))->lock;
+		pg_tracing_shared_state->stats = get_empty_pg_tracing_stats();
+		pg_tracing_shared_state->lock = &(GetNamedLWLockTranche("pg_tracing"))->lock;
 	}
 	if (!found_shared_spans)
 	{
@@ -1236,7 +1228,7 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 	TimestampTz statement_start_ts;
 
 	/* Safety check... */
-	if (!pg_tracing || !pg_tracking_level(exec_nested_level))
+	if (!pg_tracing_shared_state || !pg_tracking_level(exec_nested_level))
 		goto cleanup;
 
 	/* sampling already started */
@@ -1306,7 +1298,7 @@ cleanup:
 /*
  * Reset pg_tracing memory context and global state.
  */
-static void
+void
 cleanup_tracing(void)
 {
 	if (!parsed_trace_context.traceparent.sampled &&
@@ -1325,7 +1317,7 @@ cleanup_tracing(void)
 
 /*
  * Add span to the shared memory.
- * Exclusive lock on pg_tracing->lock must be acquired beforehand.
+ * Exclusive lock on pg_tracing_shared_state->lock must be acquired beforehand.
  */
 static void
 add_span_to_shared_buffer_locked(const Span * span)
@@ -1333,10 +1325,10 @@ add_span_to_shared_buffer_locked(const Span * span)
 	/* Spans must be ended before adding them to the shared buffer */
 	Assert(span->ended);
 	if (shared_spans->end >= shared_spans->max)
-		pg_tracing->stats.dropped_spans++;
+		pg_tracing_shared_state->stats.dropped_spans++;
 	else
 	{
-		pg_tracing->stats.processed_spans++;
+		pg_tracing_shared_state->stats.processed_spans++;
 		shared_spans->spans[shared_spans->end++] = *span;
 	}
 }
@@ -1354,12 +1346,12 @@ end_tracing(pgTracingTraceContext * trace_context)
 	if (exec_nested_level + plan_nested_level > 0)
 		return;
 
-	LWLockAcquire(pg_tracing->lock, LW_EXCLUSIVE);
+	LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);
 
 	if (current_trace_text->len > 0)
 	{
 		/* Dump all buffered texts in file */
-		text_store_file(pg_tracing, current_trace_text->data, current_trace_text->len,
+		text_store_file(pg_tracing_shared_state, current_trace_text->data, current_trace_text->len,
 						&file_position);
 
 		/* Adjust file position of spans */
@@ -1372,8 +1364,8 @@ end_tracing(pgTracingTraceContext * trace_context)
 		add_span_to_shared_buffer_locked(&current_trace_spans->spans[i]);
 
 	/* Update our stats with the new trace */
-	pg_tracing->stats.processed_traces++;
-	LWLockRelease(pg_tracing->lock);
+	pg_tracing_shared_state->stats.processed_traces++;
+	LWLockRelease(pg_tracing_shared_state->lock);
 
 	/* We can reset the memory context here */
 	cleanup_tracing();
@@ -2183,304 +2175,4 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 		default:
 			break;
 	}
-}
-
-
-/*
- * Add plan counters to the Datum output
- */
-static int
-add_plan_counters(const PlanCounters * plan_counters, int i, Datum *values)
-{
-	values[i++] = Float8GetDatumFast(plan_counters->startup_cost);
-	values[i++] = Float8GetDatumFast(plan_counters->total_cost);
-	values[i++] = Float8GetDatumFast(plan_counters->plan_rows);
-	values[i++] = Int32GetDatum(plan_counters->plan_width);
-	return i;
-}
-
-/*
- * Add node counters to the Datum output
- */
-static int
-add_node_counters(const NodeCounters * node_counters, int i, Datum *values)
-{
-	Datum		wal_bytes;
-	char		buf[256];
-	double		blk_read_time,
-				blk_write_time,
-				temp_blk_read_time,
-				temp_blk_write_time;
-	double		generation_counter,
-				inlining_counter,
-				optimization_counter,
-				emission_counter;
-	int64		jit_created_functions;
-
-	values[i++] = Int64GetDatumFast(node_counters->rows);
-	values[i++] = Int64GetDatumFast(node_counters->nloops);
-
-	/* Buffer usage */
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.shared_blks_hit);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.shared_blks_read);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.shared_blks_dirtied);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.shared_blks_written);
-
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.local_blks_hit);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.local_blks_read);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.local_blks_dirtied);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.local_blks_written);
-
-#if PG_VERSION_NUM >= 170000
-	blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.shared_blk_read_time);
-	blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.shared_blk_write_time);
-#else
-	blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.blk_read_time);
-	blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.blk_write_time);
-#endif
-
-	temp_blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_read_time);
-	temp_blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_write_time);
-
-	values[i++] = Float8GetDatumFast(blk_read_time);
-	values[i++] = Float8GetDatumFast(blk_write_time);
-	values[i++] = Float8GetDatumFast(temp_blk_read_time);
-	values[i++] = Float8GetDatumFast(temp_blk_write_time);
-
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.temp_blks_read);
-	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.temp_blks_written);
-
-	/* WAL usage */
-	values[i++] = Int64GetDatumFast(node_counters->wal_usage.wal_records);
-	values[i++] = Int64GetDatumFast(node_counters->wal_usage.wal_fpi);
-	snprintf(buf, sizeof buf, UINT64_FORMAT, node_counters->wal_usage.wal_bytes);
-
-	/* Convert to numeric. */
-	wal_bytes = DirectFunctionCall3(numeric_in,
-									CStringGetDatum(buf),
-									ObjectIdGetDatum(0),
-									Int32GetDatum(-1));
-	values[i++] = wal_bytes;
-
-	/* JIT usage */
-	generation_counter = INSTR_TIME_GET_MILLISEC(node_counters->jit_usage.generation_counter);
-	inlining_counter = INSTR_TIME_GET_MILLISEC(node_counters->jit_usage.inlining_counter);
-	optimization_counter = INSTR_TIME_GET_MILLISEC(node_counters->jit_usage.optimization_counter);
-	emission_counter = INSTR_TIME_GET_MILLISEC(node_counters->jit_usage.emission_counter);
-	jit_created_functions = node_counters->jit_usage.created_functions;
-
-	values[i++] = Int64GetDatumFast(jit_created_functions);
-	values[i++] = Float8GetDatumFast(generation_counter);
-	values[i++] = Float8GetDatumFast(inlining_counter);
-	values[i++] = Float8GetDatumFast(optimization_counter);
-	values[i++] = Float8GetDatumFast(emission_counter);
-
-	return i;
-}
-
-/*
- * Build the tuple for a Span and add it to the output
- */
-static void
-add_result_span(ReturnSetInfo *rsinfo, Span * span,
-				const char *qbuffer, Size qbuffer_size)
-{
-#define PG_TRACING_TRACES_COLS	44
-	Datum		values[PG_TRACING_TRACES_COLS] = {0};
-	bool		nulls[PG_TRACING_TRACES_COLS] = {0};
-	const char *span_type;
-	const char *operation_name;
-	const char *sql_error_code;
-	int			i = 0;
-	char		trace_id[33];
-	char		parent_id[17];
-	char		span_id[17];
-
-	span_type = get_span_type(span, qbuffer, qbuffer_size);
-	operation_name = get_operation_name(span, qbuffer, qbuffer_size);
-	sql_error_code = unpack_sql_state(span->sql_error_code);
-
-	pg_snprintf(trace_id, 33, INT64_HEX_FORMAT INT64_HEX_FORMAT,
-				span->trace_id.traceid_left,
-				span->trace_id.traceid_right);
-	pg_snprintf(parent_id, 17, INT64_HEX_FORMAT, span->parent_id);
-	pg_snprintf(span_id, 17, INT64_HEX_FORMAT, span->span_id);
-
-	Assert(span_type != NULL);
-	Assert(operation_name != NULL);
-	Assert(sql_error_code != NULL);
-
-	values[i++] = CStringGetTextDatum(trace_id);
-	values[i++] = CStringGetTextDatum(parent_id);
-	values[i++] = CStringGetTextDatum(span_id);
-	values[i++] = UInt64GetDatum(span->query_id);
-	values[i++] = CStringGetTextDatum(span_type);
-	values[i++] = CStringGetTextDatum(operation_name);
-	values[i++] = Int64GetDatumFast(span->start);
-	values[i++] = Int64GetDatumFast(span->end);
-
-	values[i++] = CStringGetTextDatum(sql_error_code);
-	values[i++] = UInt32GetDatum(span->be_pid);
-	values[i++] = ObjectIdGetDatum(span->user_id);
-	values[i++] = ObjectIdGetDatum(span->database_id);
-	values[i++] = UInt8GetDatum(span->subxact_count);
-
-	/* Only node and top spans have counters */
-	if ((span->type >= SPAN_NODE && span->type <= SPAN_TOP_UNKNOWN)
-		|| span->type == SPAN_PLANNER)
-	{
-		i = add_plan_counters(&span->plan_counters, i, values);
-		i = add_node_counters(&span->node_counters, i, values);
-		values[i++] = Int64GetDatumFast(span->startup);
-
-		if (span->parameter_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->parameter_offset)
-			values[i++] = CStringGetTextDatum(qbuffer + span->parameter_offset);
-		else
-			nulls[i++] = 1;
-
-		if (span->deparse_info_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->deparse_info_offset)
-			values[i++] = CStringGetTextDatum(qbuffer + span->deparse_info_offset);
-	}
-
-	for (int j = i; j < PG_TRACING_TRACES_COLS; j++)
-		nulls[j] = 1;
-
-	tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
-}
-
-/*
- * Return spans as a result set.
- *
- * Accept a consume parameter. When consume is set,
- * we empty the shared buffer and truncate query text.
- */
-Datum
-pg_tracing_spans(PG_FUNCTION_ARGS)
-{
-	bool		consume;
-	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	Span	   *span;
-	const char *qbuffer;
-	Size		qbuffer_size = 0;
-	LWLockMode	lock_mode = LW_SHARED;
-
-	consume = PG_GETARG_BOOL(0);
-
-	/*
-	 * We need an exclusive lock to truncate and empty the shared buffer when
-	 * we consume
-	 */
-	if (consume)
-		lock_mode = LW_EXCLUSIVE;
-
-	if (!pg_tracing)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("pg_tracing must be loaded via shared_preload_libraries")));
-	InitMaterializedSRF(fcinfo, 0);
-
-	/*
-	 * If this query was sampled and we're consuming tracing_spans buffer, the
-	 * spans will target a query string that doesn't exist anymore in the
-	 * query file. Better abort the sampling and clean ongoing traces. Since
-	 * this will be called within an ExecutorRun, we will need to check for
-	 * current_trace_spans at the end of the ExecutorRun hook.
-	 */
-	cleanup_tracing();
-
-	qbuffer = qtext_load_file(&qbuffer_size);
-	if (qbuffer == NULL)
-
-		/*
-		 * It's possible to get NULL if file was truncated while we read it.
-		 * Abort in this case.
-		 */
-		return (Datum) 0;
-
-	LWLockAcquire(pg_tracing->lock, lock_mode);
-	for (int i = 0; i < shared_spans->end; i++)
-	{
-		span = shared_spans->spans + i;
-		add_result_span(rsinfo, span, qbuffer, qbuffer_size);
-	}
-
-	/* Consume is set, remove spans from the shared buffer */
-	if (consume)
-		drop_all_spans_locked();
-	pg_tracing->stats.last_consume = GetCurrentTimestamp();
-	LWLockRelease(pg_tracing->lock);
-
-	return (Datum) 0;
-}
-
-/*
- * Return statistics of pg_tracing.
- */
-Datum
-pg_tracing_info(PG_FUNCTION_ARGS)
-{
-#define PG_TRACING_INFO_COLS	6
-	pgTracingStats stats;
-	TupleDesc	tupdesc;
-	Datum		values[PG_TRACING_INFO_COLS] = {0};
-	bool		nulls[PG_TRACING_INFO_COLS] = {0};
-	int			i = 0;
-
-	if (!pg_tracing)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("pg_tracing must be loaded via shared_preload_libraries")));
-
-	/* Build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-		elog(ERROR, "return type must be a row type");
-
-	/* Get a copy of the pg_tracing stats */
-	LWLockAcquire(pg_tracing->lock, LW_SHARED);
-	stats = pg_tracing->stats;
-	LWLockRelease(pg_tracing->lock);
-
-	values[i++] = Int64GetDatum(stats.processed_traces);
-	values[i++] = Int64GetDatum(stats.processed_spans);
-	values[i++] = Int64GetDatum(stats.dropped_traces);
-	values[i++] = Int64GetDatum(stats.dropped_spans);
-	values[i++] = TimestampTzGetDatum(stats.last_consume);
-	values[i++] = TimestampTzGetDatum(stats.stats_reset);
-
-	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
-}
-
-/*
- * Get an empty pgTracingStats
- */
-static pgTracingStats
-get_empty_pg_tracing_stats(void)
-{
-	pgTracingStats stats;
-
-	stats.processed_traces = 0;
-	stats.processed_spans = 0;
-	stats.dropped_traces = 0;
-	stats.dropped_spans = 0;
-	stats.last_consume = 0;
-	stats.stats_reset = GetCurrentTimestamp();
-	return stats;
-}
-
-/*
- * Reset pg_tracing statistics.
- */
-Datum
-pg_tracing_reset(PG_FUNCTION_ARGS)
-{
-	/*
-	 * Reset statistics for pg_tracing since all entries are removed.
-	 */
-	pgTracingStats empty_stats = get_empty_pg_tracing_stats();
-
-	LWLockAcquire(pg_tracing->lock, LW_EXCLUSIVE);
-	pg_tracing->stats = empty_stats;
-	LWLockRelease(pg_tracing->lock);
-
-	PG_RETURN_VOID();
 }
