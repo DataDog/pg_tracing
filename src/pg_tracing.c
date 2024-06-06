@@ -200,7 +200,7 @@ static int	pg_tracing_initial_allocated_spans = 25;
 static Span commit_span;
 
 static pgTracingQueryIdFilter * query_id_filter = NULL;
-pgTracingPerLevelBuffer * per_level_buffers = NULL;
+pgTracingPerLevelBuffer *per_level_buffers = NULL;
 
 static void pg_tracing_shmem_request(void);
 static void pg_tracing_shmem_startup(void);
@@ -648,7 +648,7 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		parent_planstate_index = get_parent_traced_planstate_index(exec_nested_level);
 		if (parent_planstate_index > -1)
 			parent_traced_planstate = get_traced_planstate_from_index(parent_planstate_index);
-		latest_top_span = get_latest_top_span(exec_nested_level - 1);
+		latest_top_span = peek_nested_level_top_span(exec_nested_level - 1);
 
 		/*
 		 * Both planstate and previous top span can be the parent for the new
@@ -719,40 +719,6 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 	if (query_len > 0)
 		top_span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
 																  query_len);
-}
-
-/*
- * Get the ongoing top span if it exists or create it
- */
-static Span *
-get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan)
-{
-	Span	   *span;
-
-	if (in_parse_or_plan && exec_nested_level == 0)
-
-		/*
-		 * The root post parse and plan, we want to use trace_context's
-		 * root_span as the top span in per_level_buffers might still be
-		 * ongoing.
-		 */
-		return &trace_context->root_span;
-
-	if (per_level_buffers[exec_nested_level].top_spans->end == 0)
-		/* No spans were created in this level, allocate a new one */
-		span = allocate_new_top_span();
-	else
-		span = peek_top_span();
-
-	if (exec_nested_level == 0)
-
-		/*
-		 * At root level and outside of parse/plan hook, we need to copy the
-		 * root span content
-		 */
-		*span = trace_context->root_span;
-
-	return span;
 }
 
 /*
@@ -1859,7 +1825,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	 */
 	if (max_nested_level > exec_nested_level)
 	{
-		Span	   *nested_span = get_latest_top_span(exec_nested_level + 1);
+		Span	   *nested_span = peek_nested_level_top_span(exec_nested_level + 1);
 
 		/* Check if the child matches ExecutorFinish's id */
 		if (nested_span->parent_id != executor_finish_span_id)

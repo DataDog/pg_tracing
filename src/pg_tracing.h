@@ -309,14 +309,12 @@ extern bool traceid_zero(TraceId trace_id);
 pgTracingStats get_empty_pg_tracing_stats(void);
 
 /* pg_tracing_top_spans.c */
-Span *
-get_latest_top_span(int nested_level);
-Span *
-allocate_new_top_span(void);
+Span	   *peek_nested_level_top_span(int nested_level);
+Span	   *allocate_new_top_span(void);
 void
-pop_top_span(void);
-Span *
-peek_top_span(void);
+			pop_top_span(void);
+Span	   *peek_top_span(void);
+Span	   *get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
