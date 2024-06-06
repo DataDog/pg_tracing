@@ -315,6 +315,11 @@ void
 			pop_top_span(void);
 Span	   *peek_top_span(void);
 Span	   *get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan);
+void
+begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
+			   CmdType commandType, const Query *query, const JumbleState *jstate,
+			   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
+               bool export_parameters);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
