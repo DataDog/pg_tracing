@@ -601,7 +601,7 @@ end_latest_top_span(const TimestampTz *end_time, bool pop_span)
 	if (exec_nested_level > max_nested_level)
 		return;
 
-	top_span = get_latest_top_span(exec_nested_level);
+	top_span = peek_top_span();
 	end_span(top_span, end_time);
 	store_span(top_span);
 
@@ -742,7 +742,7 @@ get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or
 		/* No spans were created in this level, allocate a new one */
 		span = allocate_new_top_span();
 	else
-		span = get_latest_top_span(exec_nested_level);
+		span = peek_top_span();
 
 	if (exec_nested_level == 0)
 
@@ -1002,7 +1002,7 @@ static void
 process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *queryDesc,
 				   int sql_error_code, TimestampTz parent_end)
 {
-	NodeCounters *node_counters = &get_latest_top_span(exec_nested_level)->node_counters;
+	NodeCounters *node_counters = &peek_top_span()->node_counters;
 
 	/* Process total counters */
 	if (queryDesc->totaltime)
@@ -1548,7 +1548,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 										NULL, NULL, query_string, span_start_time, true);
 	else
 		/* We're in a nested plan, grab the latest top span */
-		parent_id = get_latest_top_span(exec_nested_level)->span_id;
+		parent_id = peek_top_span()->span_id;
 
 	/* Create and start the planner span */
 	span_planner = allocate_new_top_span();
@@ -1606,7 +1606,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 				/* The root span at level 0 is stored in trace_context, use it */
 				top_span = &trace_context->root_span;
 			else
-				top_span = get_latest_top_span(exec_nested_level);
+				top_span = peek_top_span();
 			top_span->parameter_offset = add_str_to_trace_buffer(paramStr,
 																 strlen(paramStr));
 		}
@@ -1903,7 +1903,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	if (executor_sampled)
 	{
 		TimestampTz span_end_time = GetCurrentTimestamp();
-		Span	   *top_span = get_latest_top_span(exec_nested_level);
+		Span	   *top_span = peek_top_span();
 
 		/* End top span */
 		end_span(top_span, &span_end_time);
@@ -2045,7 +2045,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	span_end_time = end_nested_level();
 
 	/* buffer may have been repalloced, grab a fresh pointer */
-	process_utility_span = get_latest_top_span(exec_nested_level);
+	process_utility_span = peek_top_span();
 	if (qc != NULL)
 		process_utility_span->node_counters.rows = qc->nprocessed;
 
