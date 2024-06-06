@@ -584,12 +584,12 @@ end_nested_level(void)
 
 	if (exec_nested_level > max_nested_level)
 		/* No nested level were created */
-		goto finish;
+		return span_end_time;
 
 	top_spans = per_level_buffers[exec_nested_level].top_spans;
 	if (top_spans->end == 0)
 		/* No top spans to end */
-		goto finish;
+		return span_end_time;
 
 	for (int i = 0; i < top_spans->end; i++)
 	{
@@ -611,9 +611,6 @@ end_nested_level(void)
 			store_span(top_span);
 		}
 	}
-
-finish:
-	exec_nested_level--;
 	return span_end_time;
 }
 
@@ -1550,6 +1547,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		if (current_trace_spans != NULL && executor_sampled)
 		{
 			span_end_time = end_nested_level();
+			exec_nested_level--;
 			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
 		}
 		else
@@ -1569,6 +1567,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	if (current_trace_spans != NULL && executor_sampled)
 	{
 		span_end_time = end_nested_level();
+		exec_nested_level--;
 		/* End ExecutorRun span and store it */
 		per_level_buffers[exec_nested_level].executor_end = span_end_time;
 		end_latest_top_span(&span_end_time, true);
@@ -1631,6 +1630,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		else
 		{
 			span_end_time = end_nested_level();
+			exec_nested_level--;
 			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
 		}
 		PG_RE_THROW();
@@ -1642,6 +1642,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		return;
 	}
 	span_end_time = end_nested_level();
+	exec_nested_level--;
 
 	/*
 	 * We only trace executorFinish when it has a nested query, check if we
@@ -1822,6 +1823,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		if (current_trace_spans != NULL)
 		{
 			span_end_time = end_nested_level();
+			exec_nested_level--;
 			handle_pg_error(trace_context, NULL, NULL, span_end_time);
 		}
 		PG_RE_THROW();
@@ -1835,6 +1837,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		return;
 	}
 	span_end_time = end_nested_level();
+	exec_nested_level--;
 
 	/* buffer may have been repalloced, grab a fresh pointer */
 	process_utility_span = peek_top_span();
