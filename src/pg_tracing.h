@@ -228,7 +228,6 @@ typedef struct pgTracingSpans
 typedef struct pgTracingPerLevelBuffer
 {
 	uint64		query_id;		/* Query id by for this level when available */
-	pgTracingSpans *top_spans;	/* top spans for the nested level */
 	uint64		executor_run_span_id;	/* executor run span id for this
 										 * level. Executor run is used as
 										 * parent for spans generated from
@@ -313,8 +312,9 @@ pgTracingStats get_empty_pg_tracing_stats(void);
 /* pg_tracing_top_spans.c */
 Span	   *peek_nested_level_top_span(int nested_level);
 Span	   *allocate_new_top_span(void);
-void
-			pop_top_span(void);
+
+Span
+* pop_top_span(void);
 Span	   *peek_top_span(void);
 Span	   *get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan);
 void
@@ -328,7 +328,8 @@ uint64
 								const char *query_text, TimestampTz start_time,
 								bool in_parse_or_plan, bool export_parameters);
 void
-			end_latest_top_span(const TimestampTz *end_time, bool pop_span);
+			end_latest_top_span(const TimestampTz *end_time);
+void		cleanup_top_spans(void);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
