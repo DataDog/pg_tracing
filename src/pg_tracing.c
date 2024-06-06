@@ -580,20 +580,15 @@ static TimestampTz
 end_nested_level(void)
 {
 	TimestampTz span_end_time = GetCurrentTimestamp();
-	pgTracingSpans *top_spans;
+	Span	   *top_span;
 
 	if (exec_nested_level > max_nested_level)
 		/* No nested level were created */
 		return span_end_time;
 
-	top_spans = per_level_buffers[exec_nested_level].top_spans;
-	if (top_spans->end == 0)
-		/* No top spans to end */
-		return span_end_time;
-
-	for (int i = 0; i < top_spans->end; i++)
+	top_span = peek_top_span();
+	while (top_span != NULL && top_span->nested_level == exec_nested_level)
 	{
-		Span	   *top_span = top_spans->spans + i;
 		TimestampTz top_span_end = span_end_time;
 
 		if (!top_span->ended)
@@ -610,6 +605,8 @@ end_nested_level(void)
 			end_span(top_span, &top_span_end);
 			store_span(top_span);
 		}
+		pop_top_span();
+		top_span = peek_top_span();
 	}
 	return span_end_time;
 }
@@ -1009,6 +1006,7 @@ cleanup_tracing(void)
 		!executor_trace_context.traceparent.sampled)
 		/* No need for cleaning */
 		return;
+	cleanup_top_spans();
 	MemoryContextReset(pg_tracing_mem_ctx);
 	reset_trace_context(&parsed_trace_context);
 	reset_trace_context(&executor_trace_context);
@@ -1089,6 +1087,7 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 				TimestampTz span_end_time)
 {
 	int			sql_error_code;
+	Span	   *top_span;
 
 	/* If we're not sampling the query, bail out */
 	if (!pg_tracing_enabled(trace_context, exec_nested_level))
@@ -1099,23 +1098,17 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 	if (queryDesc != NULL)
 		process_query_desc(trace_context, queryDesc, sql_error_code, span_end_time);
 
-	/* End all ongoing top spans */
-	for (int i = 0; i <= max_nested_level; i++)
+	top_span = pop_top_span();
+	while (top_span != NULL)
 	{
-		pgTracingSpans *top_spans = per_level_buffers[i].top_spans;
-
-		for (int j = 0; j < top_spans->end; j++)
+		if (!top_span->ended)
 		{
-			Span	   *span = &top_spans->spans[j];
-
-			if (!span->ended)
-			{
-				/* Assign the error code to the latest top span */
-				span->sql_error_code = sql_error_code;
-				end_span(span, &span_end_time);
-				store_span(span);
-			}
+			/* Assign the error code to the latest top span */
+			top_span->sql_error_code = sql_error_code;
+			end_span(top_span, &span_end_time);
+			store_span(top_span);
 		}
+		top_span = pop_top_span();
 	}
 
 	if (ongoing_span != NULL)
@@ -1154,12 +1147,6 @@ initialize_trace_level(void)
 		allocated_nested_level = 1;
 		per_level_buffers = palloc0(allocated_nested_level *
 									sizeof(pgTracingPerLevelBuffer));
-		for (int i = 0; i < allocated_nested_level; i++)
-		{
-			per_level_buffers[i].top_spans = palloc0(sizeof(pgTracingSpans) +
-													 sizeof(Span));
-			per_level_buffers[i].top_spans->max = 1;
-		}
 		current_trace_spans = palloc0(sizeof(pgTracingSpans) +
 									  pg_tracing_initial_allocated_spans * sizeof(Span));
 		current_trace_spans->max = pg_tracing_initial_allocated_spans;
@@ -1177,12 +1164,6 @@ initialize_trace_level(void)
 		allocated_nested_level++;
 		per_level_buffers = repalloc0(per_level_buffers, old_allocated_nested_level * sizeof(pgTracingPerLevelBuffer),
 									  allocated_nested_level * sizeof(pgTracingPerLevelBuffer));
-		for (int i = old_allocated_nested_level; i < allocated_nested_level; i++)
-		{
-			per_level_buffers[i].top_spans = palloc0(sizeof(pgTracingSpans) +
-													 sizeof(Span));
-			per_level_buffers[i].top_spans->max = 1;
-		}
 		MemoryContextSwitchTo(oldcxt);
 	}
 	max_nested_level = exec_nested_level;
@@ -1371,7 +1352,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	plan_nested_level--;
 
 	/* End planner span */
-	end_latest_top_span(NULL, true);
+	end_latest_top_span(NULL);
 
 	/* If we have a prepared statement, add bound parameters to the top span */
 	if (params != NULL && pg_tracing_export_parameters)
@@ -1570,7 +1551,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		exec_nested_level--;
 		/* End ExecutorRun span and store it */
 		per_level_buffers[exec_nested_level].executor_end = span_end_time;
-		end_latest_top_span(&span_end_time, true);
+		end_latest_top_span(&span_end_time);
 	}
 	else
 		exec_nested_level--;
@@ -1658,7 +1639,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 			pop_top_span();
 		else
 			/* End ExecutorFinish span and store it */
-			end_latest_top_span(&span_end_time, true);
+			end_latest_top_span(&span_end_time);
 	}
 	else
 		/* No child for ExecutorFinish, discard it */
@@ -1694,7 +1675,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	if (executor_sampled)
 	{
 		TimestampTz span_end_time = GetCurrentTimestamp();
-		Span	   *top_span = peek_top_span();
+		Span	   *top_span = pop_top_span();
 
 		/* End top span */
 		end_span(top_span, &span_end_time);
@@ -1845,19 +1826,19 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		process_utility_span->node_counters.rows = qc->nprocessed;
 
 	/* End ProcessUtility span and store it */
-	end_latest_top_span(&span_end_time, true);
+	end_latest_top_span(&span_end_time);
 
-	/*
-	 * We're at a potential end for the query, end the parent top span that
-	 * was restored
-	 */
-	end_latest_top_span(&span_end_time, false);
+/* 	/* */
+/* 	 * We're at a potential end for the query, end the parent top span that */
+/* 	 * was restored */
+	 /* 	 */ */
+/* 	end_latest_top_span(&span_end_time, true); */
 
 	/*
 	 * If we're in an aborted transaction, xact callback won't be called so we
 	 * need to end tracing here
 	 */
-	if (in_aborted_transaction)
+		if (in_aborted_transaction)
 		end_tracing(trace_context);
 }
 
@@ -1887,6 +1868,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 			break;
 		case XACT_EVENT_COMMIT:
 			Assert(commit_span.span_id > 0);
+			end_nested_level();
 			end_span(&commit_span, NULL);
 			store_span(&commit_span);
 

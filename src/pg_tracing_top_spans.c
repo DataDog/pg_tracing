@@ -13,6 +13,8 @@
 #include "pg_tracing.h"
 #include "access/parallel.h"
 
+static pgTracingSpans * top_spans = NULL;
+
 /*
  * Add the worker name to the provided stringinfo
  */
@@ -24,16 +26,28 @@ add_worker_name_to_trace_buffer(int parallel_worker_number)
 	return add_str_to_trace_buffer(worker_name, strlen(worker_name));
 }
 
+void
+cleanup_top_spans(void)
+{
+	top_spans = NULL;
+}
+
 /*
  * Create a new top_span for the current exec nested level
  */
 Span *
 allocate_new_top_span(void)
 {
-	pgTracingSpans *top_spans;
-	Span	   *top_span;
+	if (top_spans == NULL)
+	{
+		MemoryContext oldcxt;
 
-	top_spans = per_level_buffers[exec_nested_level].top_spans;
+		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
+		top_spans = palloc0(sizeof(pgTracingSpans) + 10 * sizeof(Span));
+		MemoryContextSwitchTo(oldcxt);
+		top_spans->max = 10;
+	}
+
 	if (top_spans->end >= top_spans->max)
 	{
 		MemoryContext oldcxt;
@@ -44,12 +58,10 @@ allocate_new_top_span(void)
 		top_spans = repalloc0(top_spans,
 							  sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
 							  sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
-		per_level_buffers[exec_nested_level].top_spans = top_spans;
 		MemoryContextSwitchTo(oldcxt);
 	}
-	top_span = &top_spans->spans[top_spans->end++];
-	Assert(top_span->span_id == 0);
-	return top_span;
+
+	return &top_spans->spans[top_spans->end++];
 }
 
 /*
@@ -69,7 +81,7 @@ get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or
 		 */
 		return &trace_context->root_span;
 
-	if (per_level_buffers[exec_nested_level].top_spans->end == 0)
+	if (top_spans == NULL || top_spans->end == 0)
 		/* No spans were created in this level, allocate a new one */
 		span = allocate_new_top_span();
 	else
@@ -92,10 +104,8 @@ get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or
 Span *
 peek_top_span(void)
 {
-	pgTracingSpans *top_spans;
-
-	top_spans = per_level_buffers[exec_nested_level].top_spans;
-	Assert(top_spans->end > 0);
+	if (top_spans->end == 0)
+		return NULL;
 	return &top_spans->spans[top_spans->end - 1];
 }
 
@@ -105,10 +115,7 @@ peek_top_span(void)
 Span *
 peek_nested_level_top_span(int nested_level)
 {
-	pgTracingSpans *top_spans;
-
 	Assert(nested_level >= 0);
-	top_spans = per_level_buffers[nested_level].top_spans;
 	Assert(top_spans->end > 0);
 	return &top_spans->spans[top_spans->end - 1];
 }
@@ -116,14 +123,14 @@ peek_nested_level_top_span(int nested_level)
 /*
  * Drop the latest top span for the current nested level
  */
-void
+Span *
 pop_top_span(void)
 {
-	pgTracingSpans *top_spans = per_level_buffers[exec_nested_level].top_spans;
+	if (top_spans->end == 0)
+		return NULL;
 
 	Assert(top_spans->end > 0);
-	/* Reset span id of the discarded span since it could be reused */
-	top_spans->spans[--top_spans->end].span_id = 0;
+	return &top_spans->spans[--top_spans->end];
 }
 
 /*
@@ -241,7 +248,7 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
  * from the per level buffers.
  */
 void
-end_latest_top_span(const TimestampTz *end_time, bool pop_span)
+end_latest_top_span(const TimestampTz *end_time)
 {
 	Span	   *top_span;
 
@@ -253,12 +260,8 @@ end_latest_top_span(const TimestampTz *end_time, bool pop_span)
 	end_span(top_span, end_time);
 	store_span(top_span);
 
-	/* Store span and remove it from the per_level_buffers */
-	if (pop_span)
-	{
-		/* Restore previous top span */
-		pop_top_span();
-	}
+	/* Restore previous top span */
+	pop_top_span();
 }
 
 /*
