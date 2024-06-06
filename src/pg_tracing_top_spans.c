@@ -13,6 +13,16 @@
 #include "pg_tracing.h"
 #include "access/parallel.h"
 
+/*
+ * Add the worker name to the provided stringinfo
+ */
+static int
+add_worker_name_to_trace_buffer(int parallel_worker_number)
+{
+	char	   *worker_name = psprintf("Worker %d", parallel_worker_number);
+
+	return add_str_to_trace_buffer(worker_name, strlen(worker_name));
+}
 
 /*
  * Create a new top_span for the current exec nested level
@@ -117,16 +127,6 @@ pop_top_span(void)
 }
 
 /*
- * Add the worker name to the provided stringinfo
- */
-static int
-add_worker_name_to_trace_buffer(int parallel_worker_number)
-{
-    char *worker_name = psprintf("Worker %d", parallel_worker_number);
-	return add_str_to_trace_buffer(worker_name, strlen(worker_name));
-}
-
-/*
  * Start a new top span if we've entered a new nested level or if the previous
  * span at the same level ended.
  */
@@ -134,7 +134,7 @@ void
 begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 			   CmdType commandType, const Query *query, const JumbleState *jstate,
 			   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
-               bool export_parameters)
+			   bool export_parameters)
 {
 	int			query_len;
 	const char *normalised_query;
@@ -233,4 +233,64 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 	if (query_len > 0)
 		top_span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
 																  query_len);
+}
+
+/*
+ * End the latest top span for the current nested level.
+ * If pop_span is true, store the span in the current_trace_spans and remove it
+ * from the per level buffers.
+ */
+void
+end_latest_top_span(const TimestampTz *end_time, bool pop_span)
+{
+	Span	   *top_span;
+
+	/* Check if the level was allocated */
+	if (exec_nested_level > max_nested_level)
+		return;
+
+	top_span = peek_top_span();
+	end_span(top_span, end_time);
+	store_span(top_span);
+
+	/* Store span and remove it from the per_level_buffers */
+	if (pop_span)
+	{
+		/* Restore previous top span */
+		pop_top_span();
+	}
+}
+
+/*
+ * Initialise buffers if we are in a new nested level and start associated top span.
+ * If the top span already exists for the current nested level, this has no effect.
+ *
+ * This needs to be called every time a top span could be started: post parse,
+ * planner, executor start and process utility
+ */
+uint64
+initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
+					Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+					const char *query_text, TimestampTz start_time,
+					bool in_parse_or_plan, bool export_parameters)
+{
+	Span	   *top_span;
+
+	top_span = get_or_allocate_top_span(trace_context, in_parse_or_plan);
+
+	/* If the top_span is still ongoing, use it as it is */
+	if (top_span->span_id > 0 && top_span->ended == false)
+		return top_span->span_id;
+
+	if (top_span->span_id > 0)
+	{
+		/* The previous top span was closed, create a new one */
+		Assert(top_span->ended);
+		top_span = allocate_new_top_span();
+	}
+
+	/* This is a new top span, start it */
+	begin_top_span(trace_context, top_span, commandType, query, jstate, pstmt,
+				   query_text, start_time, export_parameters);
+	return top_span->span_id;
 }

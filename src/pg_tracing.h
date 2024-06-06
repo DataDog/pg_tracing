@@ -316,10 +316,17 @@ void
 Span	   *peek_top_span(void);
 Span	   *get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan);
 void
-begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
-			   CmdType commandType, const Query *query, const JumbleState *jstate,
-			   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
-               bool export_parameters);
+			begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
+						   CmdType commandType, const Query *query, const JumbleState *jstate,
+						   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
+						   bool export_parameters);
+uint64
+			initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
+								Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+								const char *query_text, TimestampTz start_time,
+								bool in_parse_or_plan, bool export_parameters);
+void
+			end_latest_top_span(const TimestampTz *end_time, bool pop_span);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;
@@ -328,6 +335,7 @@ extern pgTracingSpans * shared_spans;
 extern pgTracingPerLevelBuffer * per_level_buffers;
 
 extern int	exec_nested_level;
+extern int	max_nested_level;
 extern void
 			store_span(const Span * span);
 extern int

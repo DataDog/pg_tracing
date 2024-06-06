@@ -178,17 +178,17 @@ static pgTracingSpans * current_trace_spans;
 */
 static StringInfo current_trace_text;
 
-/*
- * Maximum nested level for a query to know how many top spans we need to
- * copy in shared_spans.
- */
-static int	max_nested_level = -1;
-
 /* Current nesting depth of planner calls */
 static int	plan_nested_level = 0;
 
 /* Current nesting depth of ExecutorRun+ProcessUtility calls */
 int			exec_nested_level = 0;
+
+/*
+ * Maximum nested level for a query to know how many top spans we need to
+ * copy in shared_spans.
+ */
+int			max_nested_level = -1;
 
 /* Whether we're in a cursor declaration */
 static bool within_declare_cursor = false;
@@ -571,72 +571,6 @@ store_span(const Span * span)
 		MemoryContextSwitchTo(oldcxt);
 	}
 	current_trace_spans->spans[current_trace_spans->end++] = *span;
-}
-
-/*
- * End the latest top span for the current nested level.
- * If pop_span is true, store the span in the current_trace_spans and remove it
- * from the per level buffers.
- */
-static void
-end_latest_top_span(const TimestampTz *end_time, bool pop_span)
-{
-	Span	   *top_span;
-
-	/* Check if the level was allocated */
-	if (exec_nested_level > max_nested_level)
-		return;
-
-	top_span = peek_top_span();
-	end_span(top_span, end_time);
-	store_span(top_span);
-
-	/* Store span and remove it from the per_level_buffers */
-	if (pop_span)
-	{
-		/* Restore previous top span */
-		pop_top_span();
-	}
-}
-
-/*
- * Initialise buffers if we are in a new nested level and start associated top span.
- * If the top span already exists for the current nested level, this has no effect.
- *
- * This needs to be called every time a top span could be started: post parse,
- * planner, executor start and process utility
- */
-static uint64
-initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
-					Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-					const char *query_text, TimestampTz start_time,
-					bool in_parse_or_plan)
-{
-	Span	   *top_span;
-
-	/* Make sure we have allocated the level */
-	initialize_trace_level();
-
-	top_span = get_or_allocate_top_span(trace_context, in_parse_or_plan);
-
-	/* If the top_span is still ongoing, use it as it is */
-	if (top_span->span_id > 0 && top_span->ended == false)
-		return top_span->span_id;
-
-	/* current_trace_spans buffer should have been allocated */
-	Assert(current_trace_spans != NULL);
-
-	if (top_span->span_id > 0)
-	{
-		/* The previous top span was closed, create a new one */
-		Assert(top_span->ended);
-		top_span = allocate_new_top_span();
-	}
-
-	/* This is a new top span, start it */
-	begin_top_span(trace_context, top_span, commandType, query, jstate, pstmt,
-				   query_text, start_time, pg_tracing_export_parameters);
-	return top_span->span_id;
 }
 
 /*
@@ -1335,6 +1269,8 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	 */
 	start_top_span = GetCurrentTimestamp();
 
+	initialize_trace_level();
+
 	/*
 	 * Either we're inside a nested sampled query or we've parsed a query with
 	 * the sampled flag, start a new level with a top span
@@ -1342,7 +1278,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	initialize_top_span(trace_context, query->commandType,
 						query, jstate, NULL,
 						pstate->p_sourcetext, start_top_span,
-						true);
+						true, pg_tracing_export_parameters);
 }
 
 /*
@@ -1380,7 +1316,11 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 		return result;
 	}
 
+	/* statement is sampled */
+
 	span_start_time = GetCurrentTimestamp();
+
+	initialize_trace_level();
 
 	if (plan_nested_level == 0)
 
@@ -1389,7 +1329,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 		 * top span in this case.
 		 */
 		parent_id = initialize_top_span(trace_context, query->commandType, query,
-										NULL, NULL, query_string, span_start_time, true);
+										NULL, NULL, query_string, span_start_time, true, pg_tracing_export_parameters);
 	else
 		/* We're in a nested plan, grab the latest top span */
 		parent_id = peek_top_span()->span_id;
@@ -1496,12 +1436,14 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	{
 		TimestampTz start_span_time = GetCurrentTimestamp();
 
+		initialize_trace_level();
+
 		/*
 		 * In case of a cached plan, we haven't gone through neither parsing
 		 * nor planner hook. Create the top case in this case.
 		 */
 		initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-							queryDesc->sourceText, start_span_time, false);
+							queryDesc->sourceText, start_span_time, false, pg_tracing_export_parameters);
 
 		/*
 		 * We only need full instrumentation if we generate spans from
@@ -1555,13 +1497,15 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		TimestampTz span_start_time = GetCurrentTimestamp();
 		uint64		parent_id;
 
+		initialize_trace_level();
+
 		/*
 		 * When fetching an existing cursor, the portal already exists and
 		 * ExecutorRun is the first hook called. Create the top span if it
 		 * doesn't already exist.
 		 */
 		parent_id = initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-										queryDesc->sourceText, span_start_time, false);
+										queryDesc->sourceText, span_start_time, false, pg_tracing_export_parameters);
 
 		/* Start ExecutorRun span as a new top span */
 		executor_run_span = allocate_new_top_span();
@@ -1653,12 +1597,14 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		uint64		parent_id;
 		Span	   *executor_finish_span;
 
+		initialize_trace_level();
+
 		/*
 		 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
 		 * called. Create the top span in this case.
 		 */
 		parent_id = initialize_top_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-										queryDesc->sourceText, span_start_time, false);
+										queryDesc->sourceText, span_start_time, false, pg_tracing_export_parameters);
 
 		/* Create ExecutorFinish as a new potential top span */
 		executor_finish_span = allocate_new_top_span();
@@ -1846,8 +1792,10 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	/* Statement is sampled */
 	span_start_time = GetCurrentTimestamp();
 
+	initialize_trace_level();
+
 	parent_id = initialize_top_span(trace_context, pstmt->commandType, NULL,
-									NULL, pstmt, queryString, span_start_time, false);
+									NULL, pstmt, queryString, span_start_time, false, pg_tracing_export_parameters);
 	process_utility_span = allocate_new_top_span();
 
 	/* Build the process utility span. */
