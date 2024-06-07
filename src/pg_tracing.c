@@ -178,9 +178,6 @@ static pgTracingSpans * current_trace_spans;
 */
 static StringInfo current_trace_text;
 
-/* Current nesting depth of planner calls */
-static int	plan_nested_level = 0;
-
 /* Current nesting depth of ExecutorRun+ProcessUtility calls */
 int			exec_nested_level = 0;
 
@@ -1053,7 +1050,7 @@ end_tracing(pgTracingTraceContext * trace_context)
 	Size		file_position = 0;
 
 	/* We're still a nested query, tracing is not finished */
-	if (exec_nested_level + plan_nested_level > 0)
+	if (exec_nested_level > 0)
 		return;
 
 	LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);
@@ -1193,7 +1190,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	TimestampTz start_top_span;
 	pgTracingTraceContext *trace_context = &parsed_trace_context;
 	bool		new_lxid = is_new_lxid();
-	bool		is_root_level = exec_nested_level + plan_nested_level == 0;
+	bool		is_root_level = exec_nested_level == 0;
 
 	if (new_lxid)
 		/* We have a new local transaction, reset the begin tx traceparent */
@@ -1282,15 +1279,27 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	Span	   *span_planner;
 	pgTracingTraceContext *trace_context = &parsed_trace_context;
 	TimestampTz span_start_time;
+	TimestampTz span_end_time;
 
 	if (exec_nested_level > 0)
-		/* We're in a nested query, grab the ongoing trace_context */
-		trace_context = &executor_trace_context;
+	{
+		if (!executor_trace_context.traceparent.sampled
+			&& parsed_trace_context.traceparent.sampled)
+
+			/*
+			 * If we have nested planning, we need to use the
+			 * parsed_trace_context
+			 */
+			trace_context = &parsed_trace_context;
+		else
+			/* We're in a nested query, grab the ongoing trace_context */
+			trace_context = &executor_trace_context;
+	}
 
 	/* Evaluate if query is sampled or not */
 	extract_trace_context(trace_context, NULL, query->queryId);
 
-	if (!pg_tracing_enabled(trace_context, plan_nested_level + exec_nested_level))
+	if (!pg_tracing_enabled(trace_context, exec_nested_level))
 	{
 		/* No sampling */
 		if (prev_planner_hook)
@@ -1308,17 +1317,8 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 
 	initialize_trace_level();
 
-	if (plan_nested_level == 0)
-
-		/*
-		 * We may have skipped parsing if statement was prepared, create a new
-		 * top span in this case.
-		 */
-		parent_id = initialize_top_span(trace_context, query->commandType, query,
-										NULL, NULL, query_string, span_start_time, true, pg_tracing_export_parameters);
-	else
-		/* We're in a nested plan, grab the latest top span */
-		parent_id = peek_top_span()->span_id;
+	parent_id = initialize_top_span(trace_context, query->commandType, query,
+									NULL, NULL, query_string, span_start_time, true, pg_tracing_export_parameters);
 
 	/* Create and start the planner span */
 	span_planner = allocate_new_top_span();
@@ -1326,7 +1326,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 			   NULL, parent_id,
 			   per_level_buffers[exec_nested_level].query_id, &span_start_time);
 
-	plan_nested_level++;
+	exec_nested_level++;
 	PG_TRY();
 	{
 		if (prev_planner_hook)
@@ -1336,10 +1336,11 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	}
 	PG_CATCH();
 	{
-		TimestampTz span_end_time = GetCurrentTimestamp();
 		Span	   *root_span = NULL;
 
-		plan_nested_level--;
+		span_end_time = GetCurrentTimestamp();
+
+		exec_nested_level--;
 		span_planner->sql_error_code = geterrcode();
 		if (exec_nested_level == 0)
 		{
@@ -1357,10 +1358,11 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-	plan_nested_level--;
+	span_end_time = end_nested_level();
+	exec_nested_level--;
 
 	/* End planner span */
-	end_latest_top_span(NULL);
+	end_latest_top_span(&span_end_time);
 
 	/* If we have a prepared statement, add bound parameters to the top span */
 	if (params != NULL && pg_tracing_export_parameters)
@@ -1397,7 +1399,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	bool		executor_sampled;
 	bool		is_lazy_function;
 
-	if (exec_nested_level + plan_nested_level == 0)
+	if (exec_nested_level == 0)
 	{
 		/* We're at the root level, copy trace context from parsing/planning */
 		*trace_context = parsed_trace_context;
@@ -1575,10 +1577,13 @@ static void
 pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 {
 	pgTracingTraceContext *trace_context = &executor_trace_context;
-	uint64		executor_finish_span_id;
 
 	TimestampTz span_end_time;
 	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
+	int			num_stored_spans = 0;
+
+	if (current_trace_spans != NULL)
+		num_stored_spans = current_trace_spans->end;
 
 	if (executor_sampled)
 	{
@@ -1602,7 +1607,6 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 				   executor_finish_span, SPAN_EXECUTOR_FINISH,
 				   NULL, parent_id,
 				   per_level_buffers[exec_nested_level].query_id, &span_start_time);
-		executor_finish_span_id = executor_finish_span->span_id;
 	}
 
 	exec_nested_level++;
@@ -1638,20 +1642,9 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	 * We only trace executorFinish when it has a nested query, check if we
 	 * have a possible child
 	 */
-	if (max_nested_level > exec_nested_level)
-	{
-		Span	   *nested_span = peek_nested_level_top_span(exec_nested_level + 1);
-
-		/* Check if the child matches ExecutorFinish's id */
-		if (nested_span->parent_id != executor_finish_span_id)
-			/* No child for executor finish, discard it */
-			pop_top_span();
-		else
-			/* End ExecutorFinish span and store it */
-			end_latest_top_span(&span_end_time);
-	}
+	if (current_trace_spans->end > num_stored_spans)
+		end_latest_top_span(&span_end_time);
 	else
-		/* No child for ExecutorFinish, discard it */
 		pop_top_span();
 }
 
@@ -1737,7 +1730,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	bool		track_utility = pg_tracing_track_utility;
 	pgTracingTraceContext *trace_context = &executor_trace_context;
 
-	if (exec_nested_level + plan_nested_level == 0)
+	if (exec_nested_level == 0)
 	{
 		/* We're at root level, copy the root trace_context */
 		*trace_context = parsed_trace_context;
@@ -1837,18 +1830,13 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 
 	/* End ProcessUtility span and store it */
 	end_latest_top_span(&span_end_time);
-
-/* 	/* */
-/* 	 * We're at a potential end for the query, end the parent top span that */
-/* 	 * was restored */
-	 /* 	 */ */
-/* 	end_latest_top_span(&span_end_time, true); */
+	end_latest_top_span(&span_end_time);
 
 	/*
 	 * If we're in an aborted transaction, xact callback won't be called so we
 	 * need to end tracing here
 	 */
-		if (in_aborted_transaction)
+	if (in_aborted_transaction)
 		end_tracing(trace_context);
 }
 
