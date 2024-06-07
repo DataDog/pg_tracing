@@ -65,45 +65,8 @@ allocate_new_top_span(void)
 
 	top_span = &top_spans->spans[top_spans->end++];
 	top_span->nested_level = exec_nested_level;
+	top_span->span_id = 0;
 	return top_span;
-}
-
-/*
- * Get the ongoing top span if it exists or create it
- */
-static Span *
-get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan)
-{
-	Span	   *span;
-
-	if (in_parse_or_plan && exec_nested_level == 0)
-
-		/*
-		 * The root post parse and plan, we want to use trace_context's
-		 * root_span as the top span in per_level_buffers might still be
-		 * ongoing.
-		 */
-		return &trace_context->root_span;
-
-	if (top_spans == NULL || top_spans->end == 0)
-	{
-		/* No spans were created in this level, allocate a new one */
-		span = allocate_new_top_span();
-		Assert(exec_nested_level == 0);
-        /* At root level, we need to copy the root span content */
-        *span = trace_context->root_span;
-        trace_context->root_span.span_id = 0;
-	}
-	else
-	{
-		span = peek_top_span();
-		if (span->nested_level < exec_nested_level)
-			/* Span belongs to a previous level, create a new one */
-			span = allocate_new_top_span();
-	}
-
-
-	return span;
 }
 
 /*
@@ -270,21 +233,43 @@ initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
 					const char *query_text, TimestampTz start_time,
 					bool in_parse_or_plan, bool export_parameters)
 {
-	Span	   *top_span;
+	Span	   *span;
     Span       *parent_span;
 
     /* Get latest ongoing span to be used as parent */
     parent_span = peek_top_span();
-	top_span = get_or_allocate_top_span(trace_context, in_parse_or_plan);
 
-	/* If the top_span is still ongoing, use it as it is */
-	if (top_span->nested_level == exec_nested_level
-		&& top_span->span_id > 0
-		&& top_span->ended == false)
-		return top_span->span_id;
+    if (in_parse_or_plan && exec_nested_level == 0)
+
+        /*
+         * The root post parse and plan, we want to use trace_context's
+         * root_span as the top span in per_level_buffers might still be
+         * ongoing.
+        */
+        span = &trace_context->root_span;
+    else {
+        if (top_spans == NULL || top_spans->end == 0)
+        {
+            /* first creation of ongoing spans */
+            span = allocate_new_top_span();
+            Assert(exec_nested_level == 0);
+            /* we need to copy the root span content */
+            *span = trace_context->root_span;
+            return span->span_id;
+        }
+        span = peek_top_span();
+        if (span->nested_level < exec_nested_level)
+            /* Span belongs to a previous level, create a new one */
+            span = allocate_new_top_span();
+    }
+
+	/* If the span is still ongoing, use it as it is */
+	if (span->nested_level == exec_nested_level
+		&& span->span_id > 0)
+		return span->span_id;
 
 	/* This is a new top span, start it */
-	begin_top_span(trace_context, top_span, commandType, query, jstate, pstmt,
+	begin_top_span(trace_context, span, commandType, query, jstate, pstmt,
 				   query_text, start_time, export_parameters, parent_span);
-	return top_span->span_id;
+	return span->span_id;
 }
