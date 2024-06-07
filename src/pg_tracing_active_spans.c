@@ -199,7 +199,7 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 	}
 	if (query_len > 0)
 		span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
-																  query_len);
+															  query_len);
 }
 
 /*
