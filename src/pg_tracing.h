@@ -313,9 +313,9 @@ Span	   *allocate_new_active_span(void);
 Span	   *pop_active_span(void);
 Span	   *peek_active_span(void);
 uint64		initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
-									Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-									const char *query_text, TimestampTz start_time,
-									bool in_parse_or_plan, bool export_parameters);
+								   Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+								   const char *query_text, TimestampTz start_time,
+								   bool in_parse_or_plan, bool export_parameters);
 void
 			end_latest_active_span(const TimestampTz *end_time);
 void		cleanup_active_spans(void);
