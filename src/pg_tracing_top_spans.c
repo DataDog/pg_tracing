@@ -38,6 +38,8 @@ cleanup_top_spans(void)
 Span *
 allocate_new_top_span(void)
 {
+	Span	   *top_span;
+
 	if (top_spans == NULL)
 	{
 		MemoryContext oldcxt;
@@ -61,7 +63,9 @@ allocate_new_top_span(void)
 		MemoryContextSwitchTo(oldcxt);
 	}
 
-	return &top_spans->spans[top_spans->end++];
+	top_span = &top_spans->spans[top_spans->end++];
+	top_span->nested_level = exec_nested_level;
+	return top_span;
 }
 
 /*
