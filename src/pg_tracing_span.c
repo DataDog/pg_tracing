@@ -77,7 +77,6 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, uint64 *spa
 	span->database_id = MyDatabaseId;
 	span->user_id = GetUserId();
 	span->subxact_count = MyProc->subxidStatus.count;
-	span->ended = false;
 	span->query_id = query_id;
 	memset(&span->node_counters, 0, sizeof(NodeCounters));
 	memset(&span->plan_counters, 0, sizeof(PlanCounters));
@@ -126,10 +125,6 @@ end_span(Span * span, const TimestampTz *end_time_input)
 	WalUsage	wal_usage;
 
 	Assert(!traceid_zero(span->trace_id));
-
-	/* Span should be ended only once */
-	Assert(!span->ended);
-	span->ended = true;
 
 	/* Set span duration with the end time before subtracting the start */
 	if (end_time_input == NULL)
