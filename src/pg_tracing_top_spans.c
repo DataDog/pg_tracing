@@ -116,12 +116,20 @@ peek_top_span(void)
 /*
  * Get the latest span for a specific level. The span must exists
  */
-Span *
+static Span *
 peek_nested_level_top_span(int nested_level)
 {
+	Span	   *top_span = NULL;
+
 	Assert(nested_level >= 0);
 	Assert(top_spans->end > 0);
-	return &top_spans->spans[top_spans->end - 1];
+	for (int i = 0; i < top_spans->end; i++)
+	{
+		if (top_spans->spans[i].nested_level > nested_level)
+			return top_span;
+		top_span = &top_spans->spans[i];
+	}
+	return NULL;
 }
 
 /*
