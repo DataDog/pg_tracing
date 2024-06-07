@@ -256,12 +256,9 @@ end_latest_top_span(const TimestampTz *end_time)
 	if (exec_nested_level > max_nested_level)
 		return;
 
-	top_span = peek_top_span();
+	top_span = pop_top_span();
 	end_span(top_span, end_time);
 	store_span(top_span);
-
-	/* Restore previous top span */
-	pop_top_span();
 }
 
 /*
