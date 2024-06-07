@@ -1011,7 +1011,6 @@ cleanup_tracing(void)
 		!executor_trace_context.traceparent.sampled)
 		/* No need for cleaning */
 		return;
-	cleanup_top_spans();
 	MemoryContextReset(pg_tracing_mem_ctx);
 	reset_trace_context(&parsed_trace_context);
 	reset_trace_context(&executor_trace_context);
@@ -1020,6 +1019,7 @@ cleanup_tracing(void)
 	current_trace_spans = NULL;
 	per_level_buffers = NULL;
 	cleanup_planstarts();
+	cleanup_top_spans();
 }
 
 /*
