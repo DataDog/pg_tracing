@@ -553,7 +553,6 @@ add_str_to_trace_buffer(const char *str, int str_len)
 void
 store_span(const Span * span)
 {
-	Assert(span->ended);
 	Assert(span->span_id > 0);
 
 	if (current_trace_spans->end >= current_trace_spans->max)
@@ -596,20 +595,17 @@ end_nested_level(void)
 	{
 		TimestampTz top_span_end = span_end_time;
 
-		if (!span->ended)
+		if (span->parent_planstate_index > -1)
 		{
-			if (span->parent_planstate_index > -1)
-			{
-				/* We have a parent planstate, use it for the span end */
-				TracedPlanstate *traced_planstate = get_traced_planstate_from_index(span->parent_planstate_index);
+			/* We have a parent planstate, use it for the span end */
+			TracedPlanstate *traced_planstate = get_traced_planstate_from_index(span->parent_planstate_index);
 
-				/* Make sure to end instrumentation */
-				InstrEndLoop(traced_planstate->planstate->instrument);
-				top_span_end = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
-			}
-			end_span(span, &top_span_end);
-			store_span(span);
+			/* Make sure to end instrumentation */
+			InstrEndLoop(traced_planstate->planstate->instrument);
+			top_span_end = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
 		}
+		end_span(span, &top_span_end);
+		store_span(span);
 		pop_active_span();
 		span = peek_active_span();
 	}
@@ -1029,8 +1025,6 @@ cleanup_tracing(void)
 static void
 add_span_to_shared_buffer_locked(const Span * span)
 {
-	/* Spans must be ended before adding them to the shared buffer */
-	Assert(span->ended);
 	if (shared_spans->end >= shared_spans->max)
 		pg_tracing_shared_state->stats.dropped_spans++;
 	else
@@ -1106,21 +1100,17 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 	span = pop_active_span();
 	while (span != NULL)
 	{
-		if (!span->ended)
-		{
-			/* Assign the error code to the latest top span */
-			span->sql_error_code = sql_error_code;
-			end_span(span, &span_end_time);
-			store_span(span);
-		}
+		/* Assign the error code to the latest top span */
+		span->sql_error_code = sql_error_code;
+		end_span(span, &span_end_time);
+		store_span(span);
 		span = pop_active_span();
 	}
 
 	if (ongoing_span != NULL)
 	{
 		ongoing_span->sql_error_code = sql_error_code;
-		if (!ongoing_span->ended)
-			end_span(ongoing_span, &span_end_time);
+		end_span(ongoing_span, &span_end_time);
 		store_span(ongoing_span);
 	}
 }
@@ -1259,9 +1249,9 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	 * the sampled flag, start a new level with a top span
 	 */
 	initialize_active_span(trace_context, query->commandType,
-							query, jstate, NULL,
-							pstate->p_sourcetext, start_top_span,
-							true, pg_tracing_export_parameters);
+						   query, jstate, NULL,
+						   pstate->p_sourcetext, start_top_span,
+						   true, pg_tracing_export_parameters);
 }
 
 /*
@@ -1318,7 +1308,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	initialize_trace_level();
 
 	parent_id = initialize_active_span(trace_context, query->commandType, query,
-										NULL, NULL, query_string, span_start_time, true, pg_tracing_export_parameters);
+									   NULL, NULL, query_string, span_start_time, true, pg_tracing_export_parameters);
 
 	/* Create and start the planner span */
 	span_planner = allocate_new_active_span();
@@ -1432,7 +1422,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		 * nor planner hook. Create the top case in this case.
 		 */
 		initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-								queryDesc->sourceText, start_span_time, false, pg_tracing_export_parameters);
+							   queryDesc->sourceText, start_span_time, false, pg_tracing_export_parameters);
 
 		/*
 		 * We only need full instrumentation if we generate spans from
@@ -1494,7 +1484,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 * doesn't already exist.
 		 */
 		parent_id = initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-											queryDesc->sourceText, span_start_time, false, pg_tracing_export_parameters);
+										   queryDesc->sourceText, span_start_time, false, pg_tracing_export_parameters);
 
 		/* Start ExecutorRun span as a new top span */
 		executor_run_span = allocate_new_active_span();
@@ -1598,7 +1588,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		 * called. Create the top span in this case.
 		 */
 		parent_id = initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
-											queryDesc->sourceText, span_start_time, false, pg_tracing_export_parameters);
+										   queryDesc->sourceText, span_start_time, false, pg_tracing_export_parameters);
 
 		/* Create ExecutorFinish as a new potential top span */
 		executor_finish_span = allocate_new_active_span();
@@ -1780,7 +1770,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	initialize_trace_level();
 
 	parent_id = initialize_active_span(trace_context, pstmt->commandType, NULL,
-										NULL, pstmt, queryString, span_start_time, false, pg_tracing_export_parameters);
+									   NULL, pstmt, queryString, span_start_time, false, pg_tracing_export_parameters);
 	process_utility_span = allocate_new_active_span();
 
 	/* Build the process utility span. */

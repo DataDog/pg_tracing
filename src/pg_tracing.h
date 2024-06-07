@@ -107,8 +107,6 @@ typedef struct Span
 
 	SpanType	type;			/* Type of the span. Used to generate the
 								 * span's name */
-	bool		ended;			/* Track if the span was already ended.
-								 * Internal usage only */
 	int8		nested_level;	/* Nested level of this span this span.
 								 * Internal usage only */
 	int8		parent_planstate_index; /* Index to the parent planstate of
