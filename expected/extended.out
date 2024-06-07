@@ -134,6 +134,7 @@ SELECT 1 \gdesc
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
   span_type   |                           span_operation                           |             parameters              | lvl 
 --------------+--------------------------------------------------------------------+-------------------------------------+-----
+ Select query | SELECT $1                                                          | $1 = 1                              |   1
  Commit       | Commit                                                             |                                     |   1
  Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| $1 = '?column?', $2 = '23', $3 = -1 |   1
               | FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm)         |                                     | 
@@ -141,6 +142,6 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Executor     | ExecutorRun                                                        |                                     |   2
  Result       | Result                                                             |                                     |   3
  Commit       | Commit                                                             |                                     |   1
-(6 rows)
+(7 rows)
 
 CALL clean_spans();
