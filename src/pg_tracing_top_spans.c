@@ -118,25 +118,6 @@ peek_top_span(void)
 }
 
 /*
- * Get the latest span for a specific level. The span must exists
- */
-static Span *
-peek_nested_level_top_span(int nested_level)
-{
-	Span	   *top_span = NULL;
-
-	Assert(nested_level >= 0);
-	Assert(top_spans->end > 0);
-	for (int i = 0; i < top_spans->end; i++)
-	{
-		if (top_spans->spans[i].nested_level > nested_level)
-			return top_span;
-		top_span = &top_spans->spans[i];
-	}
-	return NULL;
-}
-
-/*
  * Drop the latest top span for the current nested level
  */
 Span *
@@ -153,11 +134,11 @@ pop_top_span(void)
  * Start a new top span if we've entered a new nested level or if the previous
  * span at the same level ended.
  */
-void
+static void
 begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 			   CmdType commandType, const Query *query, const JumbleState *jstate,
 			   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
-			   bool export_parameters)
+			   bool export_parameters, Span *parent_span)
 {
 	int			query_len;
 	const char *normalised_query;
@@ -170,13 +151,13 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 	else if (trace_context->query_id > 0)
 		per_level_buffers[exec_nested_level].query_id = trace_context->query_id;
 
-	if (exec_nested_level <= 0)
+	if (exec_nested_level == 0)
 		/* Root top span, use the parent id from the trace context */
 		parent_id = trace_context->traceparent.parent_id;
 	else
 	{
 		TracedPlanstate *parent_traced_planstate = NULL;
-		Span	   *latest_top_span = NULL;
+        Assert(parent_span != NULL);
 
 		/*
 		 * We're in a nested level, check if we have a parent planstate and
@@ -185,16 +166,15 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 		parent_planstate_index = get_parent_traced_planstate_index(exec_nested_level);
 		if (parent_planstate_index > -1)
 			parent_traced_planstate = get_traced_planstate_from_index(parent_planstate_index);
-		latest_top_span = peek_nested_level_top_span(exec_nested_level - 1);
 
 		/*
 		 * Both planstate and previous top span can be the parent for the new
 		 * top span, we use the most recent as a parent
 		 */
-		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start >= latest_top_span->start)
+		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start >= parent_span->start)
 			parent_id = parent_traced_planstate->span_id;
 		else
-			parent_id = latest_top_span->span_id;
+			parent_id = parent_span->span_id;
 	}
 
 	begin_span(trace_context->traceparent.trace_id, top_span,
@@ -291,7 +271,10 @@ initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
 					bool in_parse_or_plan, bool export_parameters)
 {
 	Span	   *top_span;
+    Span       *parent_span;
 
+    /* Get latest ongoing span to be used as parent */
+    parent_span = peek_top_span();
 	top_span = get_or_allocate_top_span(trace_context, in_parse_or_plan);
 
 	/* If the top_span is still ongoing, use it as it is */
@@ -309,6 +292,6 @@ initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
 
 	/* This is a new top span, start it */
 	begin_top_span(trace_context, top_span, commandType, query, jstate, pstmt,
-				   query_text, start_time, export_parameters);
+				   query_text, start_time, export_parameters, parent_span);
 	return top_span->span_id;
 }
