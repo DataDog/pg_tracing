@@ -315,7 +315,6 @@ Span	   *allocate_new_top_span(void);
 Span
 * pop_top_span(void);
 Span	   *peek_top_span(void);
-Span	   *get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan);
 uint64
 			initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
 								Query *query, JumbleState *jstate, const PlannedStmt *pstmt,

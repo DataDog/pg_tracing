@@ -71,7 +71,7 @@ allocate_new_top_span(void)
 /*
  * Get the ongoing top span if it exists or create it
  */
-Span *
+static Span *
 get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or_plan)
 {
 	Span	   *span;
@@ -282,13 +282,6 @@ initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
 		&& top_span->span_id > 0
 		&& top_span->ended == false)
 		return top_span->span_id;
-
-	if (top_span->span_id > 0)
-	{
-		/* The previous top span was closed, create a new one */
-		Assert(top_span->ended);
-		top_span = allocate_new_top_span();
-	}
 
 	/* This is a new top span, start it */
 	begin_top_span(trace_context, top_span, commandType, query, jstate, pstmt,
