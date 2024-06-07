@@ -178,8 +178,8 @@ static pgTracingSpans * current_trace_spans;
 */
 static StringInfo current_trace_text;
 
-/* Current nesting depth of ExecutorRun+ProcessUtility calls */
-int			exec_nested_level = 0;
+/* Current nesting depth of Planner+ExecutorRun+ProcessUtility calls */
+int			nested_level = 0;
 
 /*
  * Maximum nested level for a query to know how many top spans we need to
@@ -578,12 +578,12 @@ end_nested_level(void)
 	TimestampTz span_end_time = GetCurrentTimestamp();
 	Span	   *span;
 
-	if (exec_nested_level > max_nested_level)
+	if (nested_level > max_nested_level)
 		/* No nested level were created */
 		return span_end_time;
 
 	span = peek_active_span();
-	if (span == NULL && parsed_trace_context.root_span.span_id > 0 && exec_nested_level == 0)
+	if (span == NULL && parsed_trace_context.root_span.span_id > 0 && nested_level == 0)
 
 		/*
 		 * If we only had a parse command (like calling \gdesc), the span will
@@ -591,7 +591,7 @@ end_nested_level(void)
 		 */
 		span = &parsed_trace_context.root_span;
 
-	while (span != NULL && span->nested_level == exec_nested_level)
+	while (span != NULL && span->nested_level == nested_level)
 	{
 		TimestampTz top_span_end = span_end_time;
 
@@ -800,9 +800,9 @@ process_query_desc(pgTracingTraceContext * trace_context, const QueryDesc *query
 		Bitmapset  *rels_used = NULL;
 		planstateTraceContext planstateTraceContext;
 		TimestampTz latest_end = 0;
-		uint64		parent_id = per_level_buffers[exec_nested_level].executor_run_span_id;
-		uint64		query_id = per_level_buffers[exec_nested_level].query_id;
-		TimestampTz parent_start = per_level_buffers[exec_nested_level].executor_start;
+		uint64		parent_id = per_level_buffers[nested_level].executor_run_span_id;
+		uint64		query_id = per_level_buffers[nested_level].query_id;
+		TimestampTz parent_start = per_level_buffers[nested_level].executor_start;
 
 		planstateTraceContext.rtable_names = select_rtable_names_for_explain(queryDesc->plannedstmt->rtable, rels_used);
 		planstateTraceContext.trace_id = trace_context->traceparent.trace_id;
@@ -930,7 +930,7 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 	TimestampTz statement_start_ts;
 
 	/* Safety check... */
-	if (!pg_tracing_shared_state || !pg_tracking_level(exec_nested_level))
+	if (!pg_tracing_shared_state || !pg_tracking_level(nested_level))
 		goto cleanup;
 
 	/* sampling already started */
@@ -938,7 +938,7 @@ extract_trace_context(struct pgTracingTraceContext *trace_context, ParseState *p
 		goto cleanup;
 
 	/* Don't start tracing if we're not at the root level */
-	if (exec_nested_level > 0)
+	if (nested_level > 0)
 		goto cleanup;
 
 	/* Both sampling rate are set to 0, no tracing will happen */
@@ -1044,7 +1044,7 @@ end_tracing(pgTracingTraceContext * trace_context)
 	Size		file_position = 0;
 
 	/* We're still a nested query, tracing is not finished */
-	if (exec_nested_level > 0)
+	if (nested_level > 0)
 		return;
 
 	LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);
@@ -1089,7 +1089,7 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 	Span	   *span;
 
 	/* If we're not sampling the query, bail out */
-	if (!pg_tracing_enabled(trace_context, exec_nested_level))
+	if (!pg_tracing_enabled(trace_context, nested_level))
 		return;
 
 	sql_error_code = geterrcode();
@@ -1124,10 +1124,10 @@ initialize_trace_level(void)
 	/* Number of allocated levels. */
 	static int	allocated_nested_level = 0;
 
-	Assert(exec_nested_level >= 0);
+	Assert(nested_level >= 0);
 
 	/* Check if we've already created a top span for this nested level */
-	if (exec_nested_level <= max_nested_level)
+	if (nested_level <= max_nested_level)
 		return;
 
 	/* First time */
@@ -1149,7 +1149,7 @@ initialize_trace_level(void)
 
 		MemoryContextSwitchTo(oldcxt);
 	}
-	else if (exec_nested_level >= allocated_nested_level)
+	else if (nested_level >= allocated_nested_level)
 	{
 		/* New nested level, allocate more memory */
 		MemoryContext oldcxt;
@@ -1161,7 +1161,7 @@ initialize_trace_level(void)
 									  allocated_nested_level * sizeof(pgTracingPerLevelBuffer));
 		MemoryContextSwitchTo(oldcxt);
 	}
-	max_nested_level = exec_nested_level;
+	max_nested_level = nested_level;
 }
 
 /*
@@ -1180,7 +1180,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	TimestampTz start_top_span;
 	pgTracingTraceContext *trace_context = &parsed_trace_context;
 	bool		new_lxid = is_new_lxid();
-	bool		is_root_level = exec_nested_level == 0;
+	bool		is_root_level = nested_level == 0;
 
 	if (new_lxid)
 		/* We have a new local transaction, reset the begin tx traceparent */
@@ -1271,7 +1271,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	TimestampTz span_start_time;
 	TimestampTz span_end_time;
 
-	if (exec_nested_level > 0)
+	if (nested_level > 0)
 	{
 		if (!executor_trace_context.traceparent.sampled
 			&& parsed_trace_context.traceparent.sampled)
@@ -1289,7 +1289,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	/* Evaluate if query is sampled or not */
 	extract_trace_context(trace_context, NULL, query->queryId);
 
-	if (!pg_tracing_enabled(trace_context, exec_nested_level))
+	if (!pg_tracing_enabled(trace_context, nested_level))
 	{
 		/* No sampling */
 		if (prev_planner_hook)
@@ -1314,9 +1314,9 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	span_planner = allocate_new_active_span();
 	begin_span(trace_context->traceparent.trace_id, span_planner, SPAN_PLANNER,
 			   NULL, parent_id,
-			   per_level_buffers[exec_nested_level].query_id, &span_start_time);
+			   per_level_buffers[nested_level].query_id, &span_start_time);
 
-	exec_nested_level++;
+	nested_level++;
 	PG_TRY();
 	{
 		if (prev_planner_hook)
@@ -1330,9 +1330,9 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 
 		span_end_time = GetCurrentTimestamp();
 
-		exec_nested_level--;
+		nested_level--;
 		span_planner->sql_error_code = geterrcode();
-		if (exec_nested_level == 0)
+		if (nested_level == 0)
 		{
 			/*
 			 * The root span at level 0 is stored in trace_context. Ideally,
@@ -1349,7 +1349,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	}
 	PG_END_TRY();
 	span_end_time = end_nested_level();
-	exec_nested_level--;
+	nested_level--;
 
 	/* End planner span */
 	end_latest_active_span(&span_end_time);
@@ -1364,7 +1364,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 		{
 			Span	   *span;
 
-			if (exec_nested_level == 0)
+			if (nested_level == 0)
 				/* The root span at level 0 is stored in trace_context, use it */
 				span = &trace_context->root_span;
 			else
@@ -1389,7 +1389,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	bool		executor_sampled;
 	bool		is_lazy_function;
 
-	if (exec_nested_level == 0)
+	if (nested_level == 0)
 	{
 		/* We're at the root level, copy trace context from parsing/planning */
 		*trace_context = parsed_trace_context;
@@ -1408,7 +1408,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	 */
 	is_lazy_function = nodeTag(queryDesc->plannedstmt->planTree) == T_FunctionScan
 		&& eflags == EXEC_FLAG_SKIP_TRIGGERS;
-	executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level)
+	executor_sampled = pg_tracing_enabled(trace_context, nested_level)
 		&& !is_lazy_function;
 
 	if (executor_sampled)
@@ -1468,7 +1468,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 {
 	pgTracingTraceContext *trace_context = &executor_trace_context;
 	TimestampTz span_end_time;
-	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
+	bool		executor_sampled = pg_tracing_enabled(trace_context, nested_level) && queryDesc->totaltime != NULL;
 
 	if (executor_sampled)
 	{
@@ -1490,9 +1490,9 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		executor_run_span = allocate_new_active_span();
 		begin_span(trace_context->traceparent.trace_id, executor_run_span,
 				   SPAN_EXECUTOR_RUN, NULL, parent_id,
-				   per_level_buffers[exec_nested_level].query_id, &span_start_time);
-		per_level_buffers[exec_nested_level].executor_run_span_id = executor_run_span->span_id;
-		per_level_buffers[exec_nested_level].executor_start = executor_run_span->start;
+				   per_level_buffers[nested_level].query_id, &span_start_time);
+		per_level_buffers[nested_level].executor_run_span_id = executor_run_span->span_id;
+		per_level_buffers[nested_level].executor_start = executor_run_span->start;
 
 		/*
 		 * If this query starts parallel worker, push the trace context for
@@ -1500,7 +1500,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 */
 		if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
 			add_parallel_context(trace_context, executor_run_span->span_id,
-								 per_level_buffers[exec_nested_level].query_id);
+								 per_level_buffers[nested_level].query_id);
 
 		/*
 		 * Setup ExecProcNode override to capture node start if planstate
@@ -1511,7 +1511,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 			setup_ExecProcNode_override(queryDesc);
 	}
 
-	exec_nested_level++;
+	nested_level++;
 	PG_TRY();
 	{
 		if (prev_ExecutorRun)
@@ -1529,11 +1529,11 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		if (current_trace_spans != NULL && executor_sampled)
 		{
 			span_end_time = end_nested_level();
-			exec_nested_level--;
+			nested_level--;
 			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
 		}
 		else
-			exec_nested_level--;
+			nested_level--;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1549,13 +1549,13 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	if (current_trace_spans != NULL && executor_sampled)
 	{
 		span_end_time = end_nested_level();
-		exec_nested_level--;
+		nested_level--;
 		/* End ExecutorRun span and store it */
-		per_level_buffers[exec_nested_level].executor_end = span_end_time;
+		per_level_buffers[nested_level].executor_end = span_end_time;
 		end_latest_active_span(&span_end_time);
 	}
 	else
-		exec_nested_level--;
+		nested_level--;
 }
 
 /*
@@ -1569,7 +1569,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	pgTracingTraceContext *trace_context = &executor_trace_context;
 
 	TimestampTz span_end_time;
-	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
+	bool		executor_sampled = pg_tracing_enabled(trace_context, nested_level) && queryDesc->totaltime != NULL;
 	int			num_stored_spans = 0;
 
 	if (current_trace_spans != NULL)
@@ -1596,10 +1596,10 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		begin_span(trace_context->traceparent.trace_id,
 				   executor_finish_span, SPAN_EXECUTOR_FINISH,
 				   NULL, parent_id,
-				   per_level_buffers[exec_nested_level].query_id, &span_start_time);
+				   per_level_buffers[nested_level].query_id, &span_start_time);
 	}
 
-	exec_nested_level++;
+	nested_level++;
 	PG_TRY();
 	{
 		if (prev_ExecutorFinish)
@@ -1610,11 +1610,11 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	PG_CATCH();
 	{
 		if (current_trace_spans == NULL || !executor_sampled)
-			exec_nested_level--;
+			nested_level--;
 		else
 		{
 			span_end_time = end_nested_level();
-			exec_nested_level--;
+			nested_level--;
 			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
 		}
 		PG_RE_THROW();
@@ -1622,11 +1622,11 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	PG_END_TRY();
 	if (current_trace_spans == NULL || !executor_sampled)
 	{
-		exec_nested_level--;
+		nested_level--;
 		return;
 	}
 	span_end_time = end_nested_level();
-	exec_nested_level--;
+	nested_level--;
 
 	/*
 	 * We only trace executorFinish when it has a nested query, check if we
@@ -1648,14 +1648,14 @@ static void
 pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 {
 	pgTracingTraceContext *trace_context = &executor_trace_context;
-	bool		executor_sampled = pg_tracing_enabled(trace_context, exec_nested_level) && queryDesc->totaltime != NULL;
+	bool		executor_sampled = pg_tracing_enabled(trace_context, nested_level) && queryDesc->totaltime != NULL;
 
 	if (executor_sampled)
 	{
-		TimestampTz parent_end = per_level_buffers[exec_nested_level].executor_end;
+		TimestampTz parent_end = per_level_buffers[nested_level].executor_end;
 
 		process_query_desc(trace_context, queryDesc, 0, parent_end);
-		drop_traced_planstate(exec_nested_level);
+		drop_traced_planstate(nested_level);
 	}
 
 	/* No need to increment nested level here */
@@ -1678,7 +1678,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		 * statement was traced, not the whole transaction. We can't rely on
 		 * the xact callback to end tracing so do it here
 		 */
-		if (IsInTransactionBlock(true) && tx_start_traceparent.sampled == false && exec_nested_level == 0)
+		if (IsInTransactionBlock(true) && tx_start_traceparent.sampled == false && nested_level == 0)
 		{
 			end_tracing(trace_context);
 		}
@@ -1720,7 +1720,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	bool		track_utility = pg_tracing_track_utility;
 	pgTracingTraceContext *trace_context = &executor_trace_context;
 
-	if (exec_nested_level == 0)
+	if (nested_level == 0)
 	{
 		/* We're at root level, copy the root trace_context */
 		*trace_context = parsed_trace_context;
@@ -1738,7 +1738,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	else
 		within_declare_cursor = false;
 
-	if (!track_utility || !pg_tracing_enabled(trace_context, exec_nested_level))
+	if (!track_utility || !pg_tracing_enabled(trace_context, nested_level))
 	{
 		/*
 		 * When utility tracking is disabled, we want to avoid tracing nested
@@ -1747,7 +1747,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		 * wasn't traced
 		 */
 		if (!track_utility)
-			exec_nested_level++;
+			nested_level++;
 
 		/* No sampling, just go through the standard process utility */
 		if (prev_ProcessUtility)
@@ -1759,7 +1759,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 									context, params, queryEnv,
 									dest, qc);
 		if (!track_utility)
-			exec_nested_level--;
+			nested_level--;
 
 		return;
 	}
@@ -1776,9 +1776,9 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	/* Build the process utility span. */
 	begin_span(trace_context->traceparent.trace_id, process_utility_span,
 			   SPAN_PROCESS_UTILITY, NULL, parent_id,
-			   per_level_buffers[exec_nested_level].query_id, &span_start_time);
+			   per_level_buffers[nested_level].query_id, &span_start_time);
 
-	exec_nested_level++;
+	nested_level++;
 	PG_TRY();
 	{
 		if (prev_ProcessUtility)
@@ -1797,7 +1797,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		if (current_trace_spans != NULL)
 		{
 			span_end_time = end_nested_level();
-			exec_nested_level--;
+			nested_level--;
 			handle_pg_error(trace_context, NULL, NULL, span_end_time);
 		}
 		PG_RE_THROW();
@@ -1807,11 +1807,11 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	/* Same as above, abort if tracing was disabled within process utility */
 	if (current_trace_spans == NULL)
 	{
-		exec_nested_level--;
+		nested_level--;
 		return;
 	}
 	span_end_time = end_nested_level();
-	exec_nested_level--;
+	nested_level--;
 
 	/* buffer may have been repalloced, grab a fresh pointer */
 	process_utility_span = peek_active_span();
@@ -1852,7 +1852,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_PRE_COMMIT:
 			begin_span(trace_context->traceparent.trace_id, &commit_span,
 					   SPAN_COMMIT, NULL, trace_context->traceparent.parent_id,
-					   per_level_buffers[exec_nested_level].query_id, NULL);
+					   per_level_buffers[nested_level].query_id, NULL);
 			break;
 		case XACT_EVENT_COMMIT:
 			Assert(commit_span.span_id > 0);
