@@ -309,20 +309,18 @@ extern bool traceid_zero(TraceId trace_id);
 /* pg_tracing_sql_functions.c */
 pgTracingStats get_empty_pg_tracing_stats(void);
 
-/* pg_tracing_top_spans.c */
-Span	   *allocate_new_top_span(void);
+/* pg_tracing_active_spans.c */
+Span	   *allocate_new_active_span(void);
 
-Span
-* pop_top_span(void);
-Span	   *peek_top_span(void);
-uint64
-			initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
-								Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-								const char *query_text, TimestampTz start_time,
-								bool in_parse_or_plan, bool export_parameters);
+Span	   *pop_active_span(void);
+Span	   *peek_active_span(void);
+uint64		initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
+									Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+									const char *query_text, TimestampTz start_time,
+									bool in_parse_or_plan, bool export_parameters);
 void
-			end_latest_top_span(const TimestampTz *end_time);
-void		cleanup_top_spans(void);
+			end_latest_active_span(const TimestampTz *end_time);
+void		cleanup_active_spans(void);
 
 /* pg_tracing.c */
 extern MemoryContext pg_tracing_mem_ctx;

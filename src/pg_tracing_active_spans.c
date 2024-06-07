@@ -1,10 +1,10 @@
 /*-------------------------------------------------------------------------
  *
- * pg_tracing_top_spans.c
- * 		functions managing top_spans.
+ * pg_tracing_active_spans.c
+ * 		functions managing active spans.
  *
  * IDENTIFICATION
- *	  src/pg_tracing_top_spans.c
+ *	  src/pg_tracing_active_spans.c
  *
  *-------------------------------------------------------------------------
  */
@@ -13,7 +13,7 @@
 #include "pg_tracing.h"
 #include "access/parallel.h"
 
-static pgTracingSpans * top_spans = NULL;
+static pgTracingSpans * active_spans = NULL;
 
 /*
  * Add the worker name to the provided stringinfo
@@ -27,70 +27,70 @@ add_worker_name_to_trace_buffer(int parallel_worker_number)
 }
 
 void
-cleanup_top_spans(void)
+cleanup_active_spans(void)
 {
-	top_spans = NULL;
+	active_spans = NULL;
 }
 
 /*
- * Create a new top_span for the current exec nested level
+ * Push a new active span to the active_spans stack
  */
 Span *
-allocate_new_top_span(void)
+allocate_new_active_span(void)
 {
-	Span	   *top_span;
+	Span	   *span;
 
-	if (top_spans == NULL)
+	if (active_spans == NULL)
 	{
 		MemoryContext oldcxt;
 
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		top_spans = palloc0(sizeof(pgTracingSpans) + 10 * sizeof(Span));
+		active_spans = palloc0(sizeof(pgTracingSpans) + 10 * sizeof(Span));
 		MemoryContextSwitchTo(oldcxt);
-		top_spans->max = 10;
+		active_spans->max = 10;
 	}
 
-	if (top_spans->end >= top_spans->max)
+	if (active_spans->end >= active_spans->max)
 	{
 		MemoryContext oldcxt;
-		int			old_spans_max = top_spans->max;
+		int			old_spans_max = active_spans->max;
 
-		top_spans->max *= 2;
+		active_spans->max *= 2;
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		top_spans = repalloc0(top_spans,
-							  sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
-							  sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
+		active_spans = repalloc0(active_spans,
+								  sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
+								  sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
 		MemoryContextSwitchTo(oldcxt);
 	}
 
-	top_span = &top_spans->spans[top_spans->end++];
-	top_span->nested_level = exec_nested_level;
-	top_span->span_id = 0;
-	return top_span;
+	span = &active_spans->spans[active_spans->end++];
+	span->nested_level = exec_nested_level;
+	span->span_id = 0;
+	return span;
 }
 
 /*
  * Get the latest top span
  */
 Span *
-peek_top_span(void)
+peek_active_span(void)
 {
-	if (top_spans == NULL || top_spans->end == 0)
+	if (active_spans == NULL || active_spans->end == 0)
 		return NULL;
-	return &top_spans->spans[top_spans->end - 1];
+	return &active_spans->spans[active_spans->end - 1];
 }
 
 /*
  * Drop the latest top span for the current nested level
  */
 Span *
-pop_top_span(void)
+pop_active_span(void)
 {
-	if (top_spans == NULL || top_spans->end == 0)
+	if (active_spans == NULL || active_spans->end == 0)
 		return NULL;
 
-	Assert(top_spans->end > 0);
-	return &top_spans->spans[--top_spans->end];
+	Assert(active_spans->end > 0);
+	return &active_spans->spans[--active_spans->end];
 }
 
 /*
@@ -98,10 +98,10 @@ pop_top_span(void)
  * span at the same level ended.
  */
 static void
-begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
-			   CmdType commandType, const Query *query, const JumbleState *jstate,
-			   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
-			   bool export_parameters, Span *parent_span)
+begin_active_span(pgTracingTraceContext * trace_context, Span * top_span,
+				   CmdType commandType, const Query *query, const JumbleState *jstate,
+				   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
+				   bool export_parameters, Span * parent_span)
 {
 	int			query_len;
 	const char *normalised_query;
@@ -120,7 +120,8 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
 	else
 	{
 		TracedPlanstate *parent_traced_planstate = NULL;
-        Assert(parent_span != NULL);
+
+		Assert(parent_span != NULL);
 
 		/*
 		 * We're in a nested level, check if we have a parent planstate and
@@ -207,7 +208,7 @@ begin_top_span(pgTracingTraceContext * trace_context, Span * top_span,
  * from the per level buffers.
  */
 void
-end_latest_top_span(const TimestampTz *end_time)
+end_latest_active_span(const TimestampTz *end_time)
 {
 	Span	   *top_span;
 
@@ -215,7 +216,7 @@ end_latest_top_span(const TimestampTz *end_time)
 	if (exec_nested_level > max_nested_level)
 		return;
 
-	top_span = pop_top_span();
+	top_span = pop_active_span();
 	end_span(top_span, end_time);
 	store_span(top_span);
 }
@@ -228,48 +229,49 @@ end_latest_top_span(const TimestampTz *end_time)
  * planner, executor start and process utility
  */
 uint64
-initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
-					Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-					const char *query_text, TimestampTz start_time,
-					bool in_parse_or_plan, bool export_parameters)
+initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
+						Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+						const char *query_text, TimestampTz start_time,
+						bool in_parse_or_plan, bool export_parameters)
 {
 	Span	   *span;
-    Span       *parent_span;
+	Span	   *parent_span;
 
-    /* Get latest ongoing span to be used as parent */
-    parent_span = peek_top_span();
+	/* Get latest active span to be used as parent */
+	parent_span = peek_active_span();
 
-    if (in_parse_or_plan && exec_nested_level == 0)
+	if (in_parse_or_plan && exec_nested_level == 0)
 
-        /*
-         * The root post parse and plan, we want to use trace_context's
-         * root_span as the top span in per_level_buffers might still be
-         * ongoing.
-        */
-        span = &trace_context->root_span;
-    else {
-        if (top_spans == NULL || top_spans->end == 0)
-        {
-            /* first creation of ongoing spans */
-            span = allocate_new_top_span();
-            Assert(exec_nested_level == 0);
-            /* we need to copy the root span content */
-            *span = trace_context->root_span;
-            return span->span_id;
-        }
-        span = peek_top_span();
-        if (span->nested_level < exec_nested_level)
-            /* Span belongs to a previous level, create a new one */
-            span = allocate_new_top_span();
-    }
+		/*
+		 * The root post parse and plan, we want to use trace_context's
+		 * root_span as the top span in per_level_buffers might still be
+		 * active.
+		 */
+		span = &trace_context->root_span;
+	else
+	{
+		if (active_spans == NULL || active_spans->end == 0)
+		{
+			/* first creation of active spans */
+			span = allocate_new_active_span();
+			Assert(exec_nested_level == 0);
+			/* we need to copy the root span content */
+			*span = trace_context->root_span;
+			return span->span_id;
+		}
+		span = peek_active_span();
+		if (span->nested_level < exec_nested_level)
+			/* Span belongs to a previous level, create a new one */
+			span = allocate_new_active_span();
+	}
 
-	/* If the span is still ongoing, use it as it is */
+	/* If the span is still active, use it as it is */
 	if (span->nested_level == exec_nested_level
 		&& span->span_id > 0)
 		return span->span_id;
 
 	/* This is a new top span, start it */
-	begin_top_span(trace_context, span, commandType, query, jstate, pstmt,
-				   query_text, start_time, export_parameters, parent_span);
+	begin_active_span(trace_context, span, commandType, query, jstate, pstmt,
+					   query_text, start_time, export_parameters, parent_span);
 	return span->span_id;
 }
