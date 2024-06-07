@@ -104,7 +104,7 @@ get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or
 Span *
 peek_top_span(void)
 {
-	if (top_spans->end == 0)
+	if (top_spans == NULL || top_spans->end == 0)
 		return NULL;
 	return &top_spans->spans[top_spans->end - 1];
 }
@@ -126,7 +126,7 @@ peek_nested_level_top_span(int nested_level)
 Span *
 pop_top_span(void)
 {
-	if (top_spans->end == 0)
+	if (top_spans == NULL || top_spans->end == 0)
 		return NULL;
 
 	Assert(top_spans->end > 0);
