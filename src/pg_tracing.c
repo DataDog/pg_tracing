@@ -587,6 +587,14 @@ end_nested_level(void)
 		return span_end_time;
 
 	top_span = peek_top_span();
+	if (top_span == NULL && parsed_trace_context.root_span.span_id > 0 && exec_nested_level == 0)
+
+		/*
+		 * If we only had a parse command (like calling \gdesc), the span will
+		 * only be stored in the parsed_trace_context, use it
+		 */
+		top_span = &parsed_trace_context.root_span;
+
 	while (top_span != NULL && top_span->nested_level == exec_nested_level)
 	{
 		TimestampTz top_span_end = span_end_time;
