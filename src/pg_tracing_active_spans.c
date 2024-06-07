@@ -58,8 +58,8 @@ allocate_new_active_span(void)
 		active_spans->max *= 2;
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
 		active_spans = repalloc0(active_spans,
-								  sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
-								  sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
+								 sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
+								 sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
 		MemoryContextSwitchTo(oldcxt);
 	}
 
@@ -99,9 +99,9 @@ pop_active_span(void)
  */
 static void
 begin_active_span(pgTracingTraceContext * trace_context, Span * top_span,
-				   CmdType commandType, const Query *query, const JumbleState *jstate,
-				   const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
-				   bool export_parameters, Span * parent_span)
+				  CmdType commandType, const Query *query, const JumbleState *jstate,
+				  const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
+				  bool export_parameters, Span * parent_span)
 {
 	int			query_len;
 	const char *normalised_query;
@@ -230,9 +230,9 @@ end_latest_active_span(const TimestampTz *end_time)
  */
 uint64
 initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
-						Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-						const char *query_text, TimestampTz start_time,
-						bool in_parse_or_plan, bool export_parameters)
+					   Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+					   const char *query_text, TimestampTz start_time,
+					   bool in_parse_or_plan, bool export_parameters)
 {
 	Span	   *span;
 	Span	   *parent_span;
@@ -272,6 +272,6 @@ initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandTyp
 
 	/* This is a new top span, start it */
 	begin_active_span(trace_context, span, commandType, query, jstate, pstmt,
-					   query_text, start_time, export_parameters, parent_span);
+					  query_text, start_time, export_parameters, parent_span);
 	return span->span_id;
 }
