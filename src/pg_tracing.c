@@ -1401,6 +1401,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	{
 		/* We're at the root level, copy trace context from parsing/planning */
 		*trace_context = parsed_trace_context;
+		reset_trace_context(&parsed_trace_context);
 	}
 
 	/* Evaluate if query is sampled or not */
@@ -1740,6 +1741,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	{
 		/* We're at root level, copy the root trace_context */
 		*trace_context = parsed_trace_context;
+		reset_trace_context(&parsed_trace_context);
 	}
 
 	parsetree = pstmt->utilityStmt;
