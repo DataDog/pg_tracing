@@ -72,7 +72,6 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, uint64 *spa
 	span->deparse_info_offset = -1;
 	span->sql_error_code = 0;
 	span->startup = 0;
-	span->nested_level = exec_nested_level;
 	span->be_pid = MyProcPid;
 	span->database_id = MyDatabaseId;
 	span->user_id = GetUserId();

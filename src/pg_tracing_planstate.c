@@ -44,14 +44,14 @@ cleanup_planstarts(void)
  * Drop all traced_planstates after the provided nested level
  */
 void
-drop_traced_planstate(int exec_nested_level)
+drop_traced_planstate(int level)
 {
 	int			i;
 	int			new_index_start = 0;
 
 	for (i = index_planstart; i > 0; i--)
 	{
-		if (traced_planstates[i - 1].nested_level <= exec_nested_level)
+		if (traced_planstates[i - 1].nested_level <= level)
 		{
 			/*
 			 * Found a new planstate from a previous nested level, we can stop
@@ -104,7 +104,7 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 	traced_planstates[index_planstart].planstate = node;
 	traced_planstates[index_planstart].node_start = GetCurrentTimestamp();
 	traced_planstates[index_planstart].span_id = pg_prng_uint64(&pg_global_prng_state);
-	traced_planstates[index_planstart].nested_level = exec_nested_level;
+	traced_planstates[index_planstart].nested_level = nested_level;
 	index_planstart++;
 
 exit:

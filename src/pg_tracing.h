@@ -188,7 +188,7 @@ typedef struct pgTracingTraceContext
 {
 	pgTracingTraceparent traceparent;
 	uint64		query_id;		/* Query id of the current statement */
-	Span		root_span;		/* Top span for exec_nested_level 0 */
+	Span		root_span;		/* Top span for nested_level 0 */
 }			pgTracingTraceContext;
 
 /*
@@ -277,7 +277,7 @@ get_traced_planstate_from_index(int index);
 extern int
 			get_parent_traced_planstate_index(int nested_level);
 extern void
-			drop_traced_planstate(int exec_nested_level);
+			drop_traced_planstate(int nested_level);
 extern TimestampTz
 			get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end);
 
@@ -326,7 +326,7 @@ extern pgTracingSharedState * pg_tracing_shared_state;
 extern pgTracingSpans * shared_spans;
 extern pgTracingPerLevelBuffer * per_level_buffers;
 
-extern int	exec_nested_level;
+extern int	nested_level;
 extern int	max_nested_level;
 extern void
 			store_span(const Span * span);
