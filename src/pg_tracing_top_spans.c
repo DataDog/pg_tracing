@@ -283,7 +283,9 @@ initialize_top_span(pgTracingTraceContext * trace_context, CmdType commandType,
 	top_span = get_or_allocate_top_span(trace_context, in_parse_or_plan);
 
 	/* If the top_span is still ongoing, use it as it is */
-	if (top_span->span_id > 0 && top_span->ended == false)
+	if (top_span->nested_level == exec_nested_level
+		&& top_span->span_id > 0
+		&& top_span->ended == false)
 		return top_span->span_id;
 
 	if (top_span->span_id > 0)
