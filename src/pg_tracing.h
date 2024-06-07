@@ -310,7 +310,6 @@ extern bool traceid_zero(TraceId trace_id);
 pgTracingStats get_empty_pg_tracing_stats(void);
 
 /* pg_tracing_top_spans.c */
-Span	   *peek_nested_level_top_span(int nested_level);
 Span	   *allocate_new_top_span(void);
 
 Span
