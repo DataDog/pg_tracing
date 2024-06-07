@@ -86,18 +86,22 @@ get_or_allocate_top_span(pgTracingTraceContext * trace_context, bool in_parse_or
 		return &trace_context->root_span;
 
 	if (top_spans == NULL || top_spans->end == 0)
+	{
 		/* No spans were created in this level, allocate a new one */
 		span = allocate_new_top_span();
+		Assert(exec_nested_level == 0);
+        /* At root level, we need to copy the root span content */
+        *span = trace_context->root_span;
+        trace_context->root_span.span_id = 0;
+	}
 	else
+	{
 		span = peek_top_span();
+		if (span->nested_level < exec_nested_level)
+			/* Span belongs to a previous level, create a new one */
+			span = allocate_new_top_span();
+	}
 
-	if (exec_nested_level == 0)
-
-		/*
-		 * At root level and outside of parse/plan hook, we need to copy the
-		 * root span content
-		 */
-		*span = trace_context->root_span;
 
 	return span;
 }
