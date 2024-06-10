@@ -15,34 +15,6 @@
 #include "pg_tracing.h"
 
 /*
- * Convert a node CmdType to the matching SpanType
- */
-SpanType
-command_type_to_span_type(CmdType cmd_type)
-{
-	switch (cmd_type)
-	{
-		case CMD_SELECT:
-			return SPAN_TOP_SELECT;
-		case CMD_INSERT:
-			return SPAN_TOP_INSERT;
-		case CMD_UPDATE:
-			return SPAN_TOP_UPDATE;
-		case CMD_DELETE:
-			return SPAN_TOP_DELETE;
-		case CMD_MERGE:
-			return SPAN_TOP_MERGE;
-		case CMD_UTILITY:
-			return SPAN_TOP_UTILITY;
-		case CMD_NOTHING:
-			return SPAN_TOP_NOTHING;
-		case CMD_UNKNOWN:
-			return SPAN_TOP_UNKNOWN;
-	}
-	return SPAN_TOP_UNKNOWN;
-}
-
-/*
  * Initialize span fields
  */
 static void
