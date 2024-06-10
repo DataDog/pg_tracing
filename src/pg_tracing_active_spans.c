@@ -13,7 +13,15 @@
 #include "pg_tracing.h"
 #include "access/parallel.h"
 
+/* Stack of active spans */
 static pgTracingSpans * active_spans = NULL;
+
+/*
+ * Active parse for the next statement. Used to deal with extended
+ * protocol parsing the next statement while tracing of the previous
+ * statement is still ongoing. We save the span in next_active_span and
+ * restore it once tracing of the previous statement is finished.
+ */
 static Span next_active_span;
 
 /*
