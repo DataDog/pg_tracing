@@ -327,7 +327,6 @@ extern pgTracingSpans * shared_spans;
 extern pgTracingPerLevelBuffer * per_level_buffers;
 
 extern int	nested_level;
-extern int	max_nested_level;
 extern void
 			store_span(const Span * span);
 extern int

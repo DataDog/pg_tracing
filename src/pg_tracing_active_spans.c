@@ -210,13 +210,9 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 void
 end_latest_active_span(const TimestampTz *end_time)
 {
-	Span	   *span;
+	Span	   *span = pop_active_span();
 
-	/* Check if the level was allocated */
-	if (nested_level > max_nested_level)
-		return;
-
-	span = pop_active_span();
+	Assert(span->nested_level == nested_level);
 	end_span(span, end_time);
 	store_span(span);
 }
