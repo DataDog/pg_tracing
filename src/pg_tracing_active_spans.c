@@ -71,7 +71,7 @@ allocate_new_active_span(void)
 }
 
 /*
- * Get the latest top span
+ * Get the latest active span
  */
 Span *
 peek_active_span(void)
@@ -99,7 +99,7 @@ static Span * peek_active_span_for_current_level(void)
 }
 
 /*
- * Drop the latest top span for the current nested level
+ * Drop the latest active span for the current nested level
  */
 Span *
 pop_active_span(void)
@@ -140,7 +140,7 @@ command_type_to_span_type(CmdType cmd_type)
 }
 
 /*
- * Start a new top span if we've entered a new nested level or if the previous
+ * Start a new active span if we've entered a new nested level or if the previous
  * span at the same level ended.
  */
 static void
@@ -161,7 +161,7 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 		per_level_buffers[nested_level].query_id = trace_context->query_id;
 
 	if (nested_level == 0)
-		/* Root top span, use the parent id from the trace context */
+		/* Root active span, use the parent id from the trace context */
 		parent_id = trace_context->traceparent.parent_id;
 	else
 	{
@@ -249,7 +249,7 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 }
 
 /*
- * End the latest top span for the current nested level.
+ * End the latest active span for the current nested level.
  * If pop_span is true, store the span in the current_trace_spans and remove it
  * from the per level buffers.
  */
@@ -264,10 +264,10 @@ end_latest_active_span(const TimestampTz *end_time)
 }
 
 /*
- * Initialise buffers if we are in a new nested level and start associated top span.
- * If the top span already exists for the current nested level, this has no effect.
+ * Initialise buffers if we are in a new nested level and start associated active span.
+ * If the active span already exists for the current nested level, this has no effect.
  *
- * This needs to be called every time a top span could be started: post parse,
+ * This needs to be called every time an active span could be started: post parse,
  * planner, executor start and process utility
  *
  * In case of extended protocol using transaction block, the parse of the next
