@@ -1061,7 +1061,7 @@ end_tracing(pgTracingTraceContext * trace_context)
  * error code to it.
  */
 static void
-handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
+handle_pg_error(pgTracingTraceContext * trace_context,
 				const QueryDesc *queryDesc,
 				TimestampTz span_end_time)
 {
@@ -1085,13 +1085,6 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 		end_span(span, &span_end_time);
 		store_span(span);
 		span = pop_active_span();
-	}
-
-	if (ongoing_span != NULL)
-	{
-		ongoing_span->sql_error_code = sql_error_code;
-		end_span(ongoing_span, &span_end_time);
-		store_span(ongoing_span);
 	}
 }
 
@@ -1306,8 +1299,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 
 		nested_level--;
 		span_planner->sql_error_code = geterrcode();
-		if (nested_level == 0)
-			handle_pg_error(trace_context, NULL, NULL, span_end_time);
+        handle_pg_error(trace_context, NULL, span_end_time);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1489,7 +1481,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		{
 			span_end_time = end_nested_level();
 			nested_level--;
-			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
+			handle_pg_error(trace_context, queryDesc, span_end_time);
 		}
 		else
 			nested_level--;
@@ -1575,7 +1567,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		{
 			span_end_time = end_nested_level();
 			nested_level--;
-			handle_pg_error(trace_context, NULL, queryDesc, span_end_time);
+			handle_pg_error(trace_context, queryDesc, span_end_time);
 		}
 		PG_RE_THROW();
 	}
@@ -1759,7 +1751,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		{
 			span_end_time = end_nested_level();
 			nested_level--;
-			handle_pg_error(trace_context, NULL, NULL, span_end_time);
+			handle_pg_error(trace_context, NULL, span_end_time);
 		}
 		PG_RE_THROW();
 	}
