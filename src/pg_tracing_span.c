@@ -121,6 +121,15 @@ end_span(Span * span, const TimestampTz *end_time_input)
 }
 
 /*
+ * Reset span
+ */
+void
+reset_span(Span * span)
+{
+	span->span_id = 0;
+}
+
+/*
  * Get the type of a span.
  * If it is a node span, the name may be pulled from the stat file.
  */

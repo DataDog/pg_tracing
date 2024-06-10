@@ -297,6 +297,7 @@ extern const char *qtext_load_file(Size *buffer_size);
 extern void begin_span(TraceId trace_id, Span * span,
 					   SpanType type, uint64 *span_id, uint64 parent_id, uint64 query_id, const TimestampTz *start_span);
 extern void end_span(Span * span, const TimestampTz *end_time);
+extern void reset_span(Span * span);
 extern const char *get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size);
 extern const char *get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size);
 extern void adjust_file_offset(Span * span, Size file_position);

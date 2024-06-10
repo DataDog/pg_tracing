@@ -1845,11 +1845,12 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 			store_span(&commit_span);
 
 			end_tracing(trace_context);
-			commit_span.span_id = 0;
+			reset_span(&commit_span);
 			break;
 		case XACT_EVENT_ABORT:
+			/* TODO: Create an abort span */
 			end_tracing(trace_context);
-			commit_span.span_id = 0;
+			reset_span(&commit_span);
 		default:
 			break;
 	}
