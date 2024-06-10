@@ -181,12 +181,6 @@ static StringInfo current_trace_text;
 /* Current nesting depth of Planner+ExecutorRun+ProcessUtility calls */
 int			nested_level = 0;
 
-/*
- * Maximum nested level for a query to know how many top spans we need to
- * copy in shared_spans.
- */
-int			max_nested_level = -1;
-
 /* Whether we're in a cursor declaration */
 static bool within_declare_cursor = false;
 
@@ -577,10 +571,6 @@ end_nested_level(void)
 {
 	TimestampTz span_end_time = GetCurrentTimestamp();
 	Span	   *span;
-
-	if (nested_level > max_nested_level)
-		/* No nested level were created */
-		return span_end_time;
 
 	span = peek_active_span();
 	if (span == NULL && parsed_trace_context.root_span.span_id > 0 && nested_level == 0)
@@ -1010,7 +1000,6 @@ cleanup_tracing(void)
 	MemoryContextReset(pg_tracing_mem_ctx);
 	reset_trace_context(&parsed_trace_context);
 	reset_trace_context(&executor_trace_context);
-	max_nested_level = -1;
 	within_declare_cursor = false;
 	current_trace_spans = NULL;
 	per_level_buffers = NULL;
@@ -1121,17 +1110,13 @@ handle_pg_error(pgTracingTraceContext * trace_context, Span * ongoing_span,
 static void
 initialize_trace_level(void)
 {
-	/* Number of allocated levels. */
+	/* Number of allocated nested levels. */
 	static int	allocated_nested_level = 0;
 
 	Assert(nested_level >= 0);
 
-	/* Check if we've already created a top span for this nested level */
-	if (nested_level <= max_nested_level)
-		return;
-
 	/* First time */
-	if (max_nested_level == -1)
+	if (pg_tracing_mem_ctx->isReset)
 	{
 		MemoryContext oldcxt;
 
@@ -1161,7 +1146,6 @@ initialize_trace_level(void)
 									  allocated_nested_level * sizeof(pgTracingPerLevelBuffer));
 		MemoryContextSwitchTo(oldcxt);
 	}
-	max_nested_level = nested_level;
 }
 
 /*
