@@ -69,7 +69,6 @@ add_parallel_context(const struct pgTracingTraceContext *trace_context,
 	{
 		ctx->trace_context = *trace_context;
 		/* We don't need to propagate root span index to parallel workers */
-		ctx->trace_context.root_span.span_id = 0;
 		ctx->trace_context.traceparent.parent_id = parent_id;
 	}
 }

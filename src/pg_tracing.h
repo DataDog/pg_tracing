@@ -46,6 +46,16 @@ typedef struct PlanCounters
 }			PlanCounters;
 
 /*
+ * Hook currently called
+ */
+typedef enum HookPhase
+{
+	HOOK_PARSE,
+	HOOK_PLANNER,
+	HOOK_EXECUTOR,
+}			HookPhase;
+
+/*
  * SpanType: Type of the span
  */
 typedef enum SpanType
@@ -188,7 +198,6 @@ typedef struct pgTracingTraceContext
 {
 	pgTracingTraceparent traceparent;
 	uint64		query_id;		/* Query id of the current statement */
-	Span		root_span;		/* Top span for nested_level 0 */
 }			pgTracingTraceContext;
 
 /*
@@ -315,7 +324,7 @@ Span	   *peek_active_span(void);
 uint64		initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
 								   Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 								   const char *query_text, TimestampTz start_time,
-								   bool in_parse_or_plan, bool export_parameters);
+								   HookPhase hook_phase, bool export_parameters);
 void
 			end_latest_active_span(const TimestampTz *end_time);
 void		cleanup_active_spans(void);

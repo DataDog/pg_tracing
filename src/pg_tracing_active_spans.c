@@ -14,6 +14,7 @@
 #include "access/parallel.h"
 
 static pgTracingSpans * active_spans = NULL;
+static Span next_active_span;
 
 /*
  * Add the worker name to the provided stringinfo
@@ -78,6 +79,23 @@ peek_active_span(void)
 	if (active_spans == NULL || active_spans->end == 0)
 		return NULL;
 	return &active_spans->spans[active_spans->end - 1];
+}
+
+/*
+ * Get the active span matching the current nested level.
+ * Returns NULL if there's no span or it doesn't match the level.
+ */
+static Span * peek_active_span_for_current_level(void)
+{
+	Span	   *span = peek_active_span();
+
+	if (span == NULL)
+		return NULL;
+
+	if (span->nested_level != nested_level)
+		return NULL;
+
+	return span;
 }
 
 /*
@@ -251,50 +269,48 @@ end_latest_active_span(const TimestampTz *end_time)
  *
  * This needs to be called every time a top span could be started: post parse,
  * planner, executor start and process utility
+ *
+ * In case of extended protocol using transaction block, the parse of the next
+ * statement happens while the previous span is still ongoing. To avoid conflict,
+ * we keep the active span for the next statement in next_active_span.
  */
 uint64
 initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
 					   Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 					   const char *query_text, TimestampTz start_time,
-					   bool in_parse_or_plan, bool export_parameters)
+					   HookPhase hook_phase, bool export_parameters)
 {
-	Span	   *span;
-	Span	   *parent_span;
+	Span	   *span = peek_active_span_for_current_level();
+	Span	   *parent_span = peek_active_span();
 
-	/* Get latest active span to be used as parent */
-	parent_span = peek_active_span();
-
-	if (in_parse_or_plan && nested_level == 0)
-
-		/*
-		 * The root post parse and plan, we want to use trace_context's
-		 * root_span as the top span in per_level_buffers might still be
-		 * active.
-		 */
-		span = &trace_context->root_span;
-	else
+	if (span == NULL)
 	{
-		if (active_spans == NULL || active_spans->end == 0)
+		/*
+		 * No active span or it belongs to the previous level, allocate a new
+		 * one
+		 */
+		span = allocate_new_active_span();
+		if (next_active_span.span_id > 0)
 		{
-			/* first creation of active spans */
-			span = allocate_new_active_span();
-			Assert(nested_level == 0);
-			/* we need to copy the root span content */
-			*span = trace_context->root_span;
+			/* next_active_span is valid, use it and reset it */
+			*span = next_active_span;
+			reset_span(&next_active_span);
 			return span->span_id;
 		}
-		span = peek_active_span();
-		if (span->nested_level < nested_level)
-			/* Span belongs to a previous level, create a new one */
-			span = allocate_new_active_span();
+	}
+	else
+	{
+		if (hook_phase != HOOK_PARSE || nested_level > 0)
+			return span->span_id;
+
+		/*
+		 * We're at level 0, in a parse hook while we still have an active
+		 * span. This is the parse command for the next statement, save it in
+		 * next_active_span.
+		 */
+		span = &next_active_span;
 	}
 
-	/* If the span is still active, use it as it is */
-	if (span->nested_level == nested_level
-		&& span->span_id > 0)
-		return span->span_id;
-
-	/* This is a new top span, start it */
 	begin_active_span(trace_context, span, commandType, query, jstate, pstmt,
 					  query_text, start_time, export_parameters, parent_span);
 	return span->span_id;
