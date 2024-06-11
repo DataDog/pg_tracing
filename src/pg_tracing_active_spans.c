@@ -284,13 +284,15 @@ end_latest_active_span(const TimestampTz *end_time)
  */
 uint64
 initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
-					   Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+					   const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 					   const char *query_text, TimestampTz start_time,
 					   HookPhase hook_phase, bool export_parameters)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
 
+	/* Either query or planned statement should be defined */
+	Assert(query || pstmt);
 	if (span == NULL)
 	{
 		/*

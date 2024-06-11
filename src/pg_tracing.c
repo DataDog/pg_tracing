@@ -1369,7 +1369,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		 * In case of a cached plan, we haven't gone through neither parsing
 		 * nor planner hook. Create the top case in this case.
 		 */
-		initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
+		initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, queryDesc->plannedstmt,
 							   queryDesc->sourceText, start_span_time, HOOK_EXECUTOR, pg_tracing_export_parameters);
 
 		/*
@@ -1431,7 +1431,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 * ExecutorRun is the first hook called. Create the top span if it
 		 * doesn't already exist.
 		 */
-		parent_id = initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
+		parent_id = initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, queryDesc->plannedstmt,
 										   queryDesc->sourceText, span_start_time,
 										   HOOK_EXECUTOR, pg_tracing_export_parameters);
 
@@ -1536,7 +1536,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
 		 * called. Create the top span in this case.
 		 */
-		parent_id = initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, NULL,
+		parent_id = initialize_active_span(trace_context, queryDesc->operation, NULL, NULL, queryDesc->plannedstmt,
 										   queryDesc->sourceText, span_start_time,
 										   HOOK_EXECUTOR, pg_tracing_export_parameters);
 
