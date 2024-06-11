@@ -44,7 +44,7 @@ pg_tracing_shmem_parallel_startup(void)
  * Push trace context to the shared parallel worker buffer
  */
 void
-add_parallel_context(const struct pgTracingTraceparent *traceparent,
+add_parallel_context(const pgTracingTraceparent * traceparent,
 					 uint64 parent_id, uint64 query_id)
 {
 	pgTracingParallelContext *ctx = NULL;
