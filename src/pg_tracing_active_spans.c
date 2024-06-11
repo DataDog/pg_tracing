@@ -161,12 +161,7 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 	const char *normalised_query;
 	uint64		parent_id;
 	int8		parent_planstate_index = -1;
-
-	/* in case of a cached plan, query might be unavailable */
-	if (query != NULL)
-		per_level_buffers[nested_level].query_id = query->queryId;
-	else if (trace_context->query_id > 0)
-		per_level_buffers[nested_level].query_id = trace_context->query_id;
+	uint64		query_id;
 
 	if (nested_level == 0)
 		/* Root active span, use the parent id from the trace context */
@@ -195,10 +190,15 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 			parent_id = parent_span->span_id;
 	}
 
+	if (pstmt)
+		query_id = pstmt->queryId;
+	else
+		query_id = query->queryId;
+
 	begin_span(trace_context->traceparent.trace_id, span,
 			   command_type_to_span_type(commandType),
 			   NULL, parent_id,
-			   per_level_buffers[nested_level].query_id, &start_time);
+			   query_id, &start_time);
 	/* Keep track of the parent planstate index */
 	span->parent_planstate_index = parent_planstate_index;
 
