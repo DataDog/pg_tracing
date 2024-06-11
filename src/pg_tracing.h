@@ -197,7 +197,6 @@ typedef struct pgTracingTraceparent
 typedef struct pgTracingTraceContext
 {
 	pgTracingTraceparent traceparent;
-	uint64		query_id;		/* Query id of the current statement */
 }			pgTracingTraceContext;
 
 /*
