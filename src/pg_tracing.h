@@ -322,7 +322,7 @@ Span	   *allocate_new_active_span(void);
 Span	   *pop_active_span(void);
 Span	   *peek_active_span(void);
 uint64		initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
-								   Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+								   const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 								   const char *query_text, TimestampTz start_time,
 								   HookPhase hook_phase, bool export_parameters);
 void
