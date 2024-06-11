@@ -135,8 +135,6 @@ static const struct config_enum_entry buffer_mode_options[] =
 #define pg_tracing_enabled(trace_context, level) \
 	(trace_context->traceparent.sampled && pg_tracking_level(level))
 
-#define US_IN_S INT64CONST(1000000)
-
 /*
  * Global variables
  */
