@@ -44,7 +44,7 @@ pg_tracing_shmem_parallel_startup(void)
  * Push trace context to the shared parallel worker buffer
  */
 void
-add_parallel_context(const struct pgTracingTraceContext *trace_context,
+add_parallel_context(const struct pgTracingTraceparent *traceparent,
 					 uint64 parent_id, uint64 query_id)
 {
 	pgTracingParallelContext *ctx = NULL;
@@ -67,9 +67,9 @@ add_parallel_context(const struct pgTracingTraceContext *trace_context,
 
 	if (parallel_context_index > -1 && ctx != NULL)
 	{
-		ctx->trace_context = *trace_context;
+		ctx->traceparent = *traceparent;
 		/* We don't need to propagate root span index to parallel workers */
-		ctx->trace_context.traceparent.parent_id = parent_id;
+		ctx->traceparent.parent_id = parent_id;
 	}
 }
 
@@ -94,7 +94,7 @@ remove_parallel_context(void)
  * If a trace context exists, it means that the query is sampled and worker tracing is enabled.
  */
 void
-fetch_parallel_context(pgTracingTraceContext * trace_context)
+fetch_parallel_context(pgTracingTraceparent * traceparent)
 {
 	SpinLockAcquire(&pg_tracing_parallel->mutex);
 	for (int i = 0; i < max_parallel_workers; i++)
@@ -102,7 +102,7 @@ fetch_parallel_context(pgTracingTraceContext * trace_context)
 		if (pg_tracing_parallel->trace_contexts[i].leader_backend_id != ParallelLeaderProcNumber)
 			continue;
 		/* Found a matching a trace context, fetch it */
-		*trace_context = pg_tracing_parallel->trace_contexts[i].trace_context;
+		*traceparent = pg_tracing_parallel->trace_contexts[i].traceparent;
 	}
 	SpinLockRelease(&pg_tracing_parallel->mutex);
 }

@@ -192,21 +192,13 @@ typedef struct pgTracingTraceparent
 }			pgTracingTraceparent;
 
 /*
- * Trace context for an ongoing trace
- */
-typedef struct pgTracingTraceContext
-{
-	pgTracingTraceparent traceparent;
-}			pgTracingTraceContext;
-
-/*
  * A trace context for a specific parallel context
  */
 typedef struct pgTracingParallelContext
 {
 	ProcNumber	leader_backend_id;	/* Backend id of the leader, set to
 									 * InvalidBackendId if unused */
-	pgTracingTraceContext trace_context;
+	pgTracingTraceparent traceparent;
 }			pgTracingParallelContext;
 
 /*
@@ -235,10 +227,10 @@ extern const char *plan_to_deparse_info(const planstateTraceContext * planstateT
 
 /* pg_tracing_parallel.c */
 extern void pg_tracing_shmem_parallel_startup(void);
-extern void add_parallel_context(const struct pgTracingTraceContext *trace_context,
+extern void add_parallel_context(const struct pgTracingTraceparent *traceparent,
 								 uint64 parent_id, uint64 query_id);
 extern void remove_parallel_context(void);
-extern void fetch_parallel_context(pgTracingTraceContext * trace_context);
+extern void fetch_parallel_context(pgTracingTraceparent * traceparent);
 
 /* pg_tracing_planstate.c */
 
@@ -279,8 +271,8 @@ extern TimestampTz
 extern const char *normalise_query_parameters(const JumbleState *jstate, const char *query,
 											  int query_loc, int *query_len_p, char **param_str,
 											  int *param_len);
-extern void extract_trace_context_from_query(pgTracingTraceContext * trace_context, const char *query);
-extern void parse_trace_context(pgTracingTraceContext * trace_context, const char *trace_context_str, int trace_context_len);
+extern void extract_trace_context_from_query(pgTracingTraceparent * traceparent, const char *query);
+extern void parse_trace_context(pgTracingTraceparent * traceparent, const char *trace_context_str, int trace_context_len);
 extern const char *normalise_query(const char *query, int query_loc, int *query_len_p);
 extern bool text_store_file(pgTracingSharedState * pg_tracing, const char *query,
 							int query_len, Size *query_offset);
@@ -306,7 +298,7 @@ Span	   *allocate_new_active_span(void);
 
 Span	   *pop_active_span(void);
 Span	   *peek_active_span(void);
-uint64		initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
+uint64		initialize_active_span(pgTracingTraceparent * traceparent, CmdType commandType,
 								   const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 								   const char *query_text, TimestampTz start_time,
 								   HookPhase hook_phase, bool export_parameters);

@@ -152,7 +152,7 @@ command_type_to_span_type(CmdType cmd_type)
  * span at the same level ended.
  */
 static void
-begin_active_span(pgTracingTraceContext * trace_context, Span * span,
+begin_active_span(pgTracingTraceparent * traceparent, Span * span,
 				  CmdType commandType, const Query *query, const JumbleState *jstate,
 				  const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
 				  bool export_parameters, Span * parent_span)
@@ -165,7 +165,7 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 
 	if (nested_level == 0)
 		/* Root active span, use the parent id from the trace context */
-		parent_id = trace_context->traceparent.parent_id;
+		parent_id = traceparent->parent_id;
 	else
 	{
 		TracedPlanstate *parent_traced_planstate = NULL;
@@ -195,7 +195,7 @@ begin_active_span(pgTracingTraceContext * trace_context, Span * span,
 	else
 		query_id = query->queryId;
 
-	begin_span(trace_context->traceparent.trace_id, span,
+	begin_span(traceparent->trace_id, span,
 			   command_type_to_span_type(commandType),
 			   NULL, parent_id,
 			   query_id, &start_time);
@@ -283,7 +283,7 @@ end_latest_active_span(const TimestampTz *end_time)
  * we keep the active span for the next statement in next_active_span.
  */
 uint64
-initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandType,
+initialize_active_span(pgTracingTraceparent * traceparent, CmdType commandType,
 					   const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 					   const char *query_text, TimestampTz start_time,
 					   HookPhase hook_phase, bool export_parameters)
@@ -321,7 +321,7 @@ initialize_active_span(pgTracingTraceContext * trace_context, CmdType commandTyp
 		span = &next_active_span;
 	}
 
-	begin_active_span(trace_context, span, commandType, query, jstate, pstmt,
+	begin_active_span(traceparent, span, commandType, query, jstate, pstmt,
 					  query_text, start_time, export_parameters, parent_span);
 	return span->span_id;
 }
