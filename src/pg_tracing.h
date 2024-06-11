@@ -247,7 +247,7 @@ typedef struct TracedPlanstate
 
 extern Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
-				 uint64 *span_id, uint64 parent_id, uint64 queryId, SpanType span_type,
+				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
 				 char *subplan_name, TimestampTz span_start, TimestampTz span_end);
 extern TimestampTz
 			generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
@@ -279,8 +279,9 @@ extern const char *qtext_load_file(Size *buffer_size);
 extern const char *qtext_load_file(Size *buffer_size);
 
 /* pg_tracing_span.c */
-extern void begin_span(TraceId trace_id, Span * span,
-					   SpanType type, uint64 *span_id, uint64 parent_id, uint64 query_id, const TimestampTz *start_span);
+extern void begin_span(TraceId trace_id, Span * span, SpanType type,
+					   uint64 *span_id, uint64 parent_id, uint64 query_id,
+					   const TimestampTz *start_span);
 extern void end_span(Span * span, const TimestampTz *end_time);
 extern void reset_span(Span * span);
 extern const char *get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size);

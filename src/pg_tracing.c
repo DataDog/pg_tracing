@@ -195,9 +195,6 @@ int			nested_level = 0;
 /* Whether we're in a cursor declaration */
 static bool within_declare_cursor = false;
 
-/* Number of spans initially allocated at the start of a trace. */
-static int	pg_tracing_initial_allocated_spans = 25;
-
 /* Commit span used in xact callbacks */
 static Span commit_span;
 
@@ -209,6 +206,9 @@ static uint64 current_query_id;
 
 static pgTracingQueryIdFilter * query_id_filter = NULL;
 static pgTracingPerLevelInfos * per_level_infos = NULL;
+
+/* Number of spans initially allocated at the start of a trace. */
+#define	INITIAL_ALLOCATED_SPANS 25
 
 static void pg_tracing_shmem_request(void);
 static void pg_tracing_shmem_startup(void);
@@ -226,7 +226,7 @@ static ProcessUtility_hook_type prev_ProcessUtility = NULL;
 
 static void pg_tracing_post_parse_analyze(ParseState *pstate, Query *query,
 										  JumbleState *jstate);
-static PlannedStmt *pg_tracing_planner_hook(Query *parse,
+static PlannedStmt *pg_tracing_planner_hook(Query *query,
 											const char *query_string,
 											int cursorOptions,
 											ParamListInfo params);
@@ -1133,8 +1133,8 @@ initialize_trace_level(void)
 		per_level_infos = palloc0(allocated_nested_level *
 								  sizeof(pgTracingPerLevelInfos));
 		current_trace_spans = palloc0(sizeof(pgTracingSpans) +
-									  pg_tracing_initial_allocated_spans * sizeof(Span));
-		current_trace_spans->max = pg_tracing_initial_allocated_spans;
+									  INITIAL_ALLOCATED_SPANS * sizeof(Span));
+		current_trace_spans->max = INITIAL_ALLOCATED_SPANS;
 		current_trace_text = makeStringInfo();
 
 		MemoryContextSwitchTo(oldcxt);

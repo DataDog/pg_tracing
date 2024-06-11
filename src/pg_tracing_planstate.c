@@ -15,6 +15,8 @@
 #include "utils/timestamp.h"
 
 #define US_IN_S INT64CONST(1000000)
+#define INITIAL_NUM_PLANSTATE 10
+#define INCREMENT_NUM_PLANSTATE 5
 
 /* List of planstate to start found for the current query */
 static TracedPlanstate * traced_planstates = NULL;
@@ -92,7 +94,7 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 		int			old_max_planstart = max_planstart;
 
 		Assert(traced_planstates != NULL);
-		max_planstart += 5;
+		max_planstart += INCREMENT_NUM_PLANSTATE;
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
 		traced_planstates = repalloc0(traced_planstates,
 									  old_max_planstart * sizeof(TracedPlanstate),
@@ -216,7 +218,7 @@ setup_ExecProcNode_override(QueryDesc *queryDesc)
 	{
 		MemoryContext oldcxt;
 
-		max_planstart = 10;
+		max_planstart = INITIAL_NUM_PLANSTATE;
 		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
 		traced_planstates = palloc0(max_planstart * sizeof(TracedPlanstate));
 		MemoryContextSwitchTo(oldcxt);
@@ -232,14 +234,14 @@ setup_ExecProcNode_override(QueryDesc *queryDesc)
  */
 static TimestampTz
 generate_member_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext, uint64 parent_id,
-					  uint64 query_id, TimestampTz fallback_start, TimestampTz root_end, TimestampTz *latest_end)
+					  uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	int			j;
-	TimestampTz child_end;
+	TimestampTz last_end = 0;
 
 	for (j = 0; j < nplans; j++)
-		child_end = generate_span_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, fallback_start, root_end, latest_end);
-	return child_end;
+		last_end = generate_span_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, parent_start, root_end, latest_end);
+	return last_end;
 }
 
 /*
@@ -247,12 +249,12 @@ generate_member_nodes(PlanState **planstates, int nplans, planstateTraceContext 
  */
 static TimestampTz
 generate_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext, uint64 parent_id,
-					  uint64 query_id, TimestampTz fallback_start, TimestampTz root_end, TimestampTz *latest_end)
+					  uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	int			j;
 
 	/* We keep track of the end of the last sibling end to use as start */
-	TimestampTz sibling_end = fallback_start;
+	TimestampTz sibling_end = parent_start;
 
 	for (j = 0; j < nplans; j++)
 		sibling_end = generate_span_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, sibling_end, root_end, latest_end);
@@ -264,13 +266,13 @@ generate_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext 
  */
 static TimestampTz
 generate_span_from_custom_scan(CustomScanState *css, planstateTraceContext * planstateTraceContext, uint64 parent_id,
-							   uint64 query_id, TimestampTz fallback_start, TimestampTz root_end, TimestampTz *latest_end)
+							   uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	ListCell   *cell;
-	TimestampTz last_end;
+	TimestampTz last_end = 0;
 
 	foreach(cell, css->custom_ps)
-		last_end = generate_span_from_planstate((PlanState *) lfirst(cell), planstateTraceContext, parent_id, query_id, fallback_start, root_end, latest_end);
+		last_end = generate_span_from_planstate((PlanState *) lfirst(cell), planstateTraceContext, parent_id, query_id, parent_start, root_end, latest_end);
 	return last_end;
 }
 
@@ -361,7 +363,7 @@ get_parent_traced_planstate_index(int nested_level)
 TimestampTz
 generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
 							 uint64 parent_id, uint64 query_id,
-							 TimestampTz fallback_start, TimestampTz root_end, TimestampTz *latest_end)
+							 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	ListCell   *l;
 	uint64		span_id;
@@ -374,7 +376,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 
 	/* The node was never executed, skip it */
 	if (planstate->instrument == NULL)
-		return fallback_start;
+		return parent_start;
 
 	if (!planstate->state->es_finished && !INSTR_TIME_IS_ZERO(planstate->instrument->starttime))
 	{
@@ -394,7 +396,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 
 	if (planstate->instrument->total == 0)
 		/* The node was never executed, ignore it */
-		return fallback_start;
+		return parent_start;
 
 	switch (nodeTag(planstate->plan))
 	{
@@ -406,7 +408,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 			 * Those nodes won't go through ExecProcNode so we won't have
 			 * their start. Fallback to the parent start.
 			 */
-			span_start = fallback_start;
+			span_start = parent_start;
 			break;
 		case T_Hash:
 			/* For hash node, use the child's start */
