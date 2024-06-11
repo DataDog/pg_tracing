@@ -152,7 +152,7 @@ command_type_to_span_type(CmdType cmd_type)
  * span at the same level ended.
  */
 static void
-begin_active_span(pgTracingTraceparent * traceparent, Span * span,
+begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
 				  CmdType commandType, const Query *query, const JumbleState *jstate,
 				  const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
 				  bool export_parameters, Span * parent_span)
@@ -283,7 +283,7 @@ end_latest_active_span(const TimestampTz *end_time)
  * we keep the active span for the next statement in next_active_span.
  */
 uint64
-initialize_active_span(pgTracingTraceparent * traceparent, CmdType commandType,
+initialize_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
 					   const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 					   const char *query_text, TimestampTz start_time,
 					   HookPhase hook_phase, bool export_parameters)

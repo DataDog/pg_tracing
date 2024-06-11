@@ -775,7 +775,7 @@ pg_tracing_shmem_startup(void)
  * span counters
  */
 static void
-process_query_desc(pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
+process_query_desc(const pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
 				   int sql_error_code, TimestampTz parent_end)
 {
 	NodeCounters *node_counters = &peek_active_span()->node_counters;
@@ -830,7 +830,7 @@ process_query_desc(pgTracingTraceparent * traceparent, const QueryDesc *queryDes
  * need to generate a random trace id.
  */
 static void
-set_trace_id(struct pgTracingTraceparent *traceparent)
+set_trace_id(pgTracingTraceparent * traceparent)
 {
 	bool		new_lxid = is_new_lxid();
 
@@ -890,7 +890,7 @@ is_query_id_filtered(uint64 query_id)
  * flag and the provided sample rate configurations
  */
 static bool
-is_query_sampled(const struct pgTracingTraceparent *traceparent)
+is_query_sampled(const pgTracingTraceparent * traceparent)
 {
 	double		rand;
 	bool		sampled;
@@ -926,7 +926,7 @@ is_query_sampled(const struct pgTracingTraceparent *traceparent)
  * Sampling rate will be applied to the traceparent.
  */
 static void
-extract_trace_context(struct pgTracingTraceparent *traceparent, ParseState *pstate,
+extract_trace_context(pgTracingTraceparent * traceparent, ParseState *pstate,
 					  uint64 query_id)
 {
 	/* Timestamp of the latest statement checked for sampling. */
@@ -1082,7 +1082,7 @@ end_tracing(void)
  * error code to it.
  */
 static void
-handle_pg_error(pgTracingTraceparent * traceparent,
+handle_pg_error(const pgTracingTraceparent * traceparent,
 				const QueryDesc *queryDesc,
 				TimestampTz span_end_time)
 {
