@@ -1474,7 +1474,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 * the child processes
 		 */
 		if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
-			add_parallel_context(traceparent, executor_run_span->span_id, query_id);
+			add_parallel_context(traceparent, executor_run_span->span_id);
 
 		/*
 		 * Setup ExecProcNode override to capture node start if planstate
