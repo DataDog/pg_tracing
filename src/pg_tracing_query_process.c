@@ -105,7 +105,7 @@ parse_traceparent_value(const char *traceparent_str)
  * Or "SELECT 1 /\*traceparent='00-00000000000000000000000000000009-0000000000000005-01'*\/;"
  */
 void
-extract_trace_context_from_query(pgTracingTraceContext * trace_context,
+extract_trace_context_from_query(pgTracingTraceparent * trace_context,
 								 const char *query)
 {
 	const char *start_sqlcomment = NULL;
@@ -146,7 +146,7 @@ extract_trace_context_from_query(pgTracingTraceContext * trace_context,
  * We're only interested in traceparent value to get the trace id, parent id and sampled flag.
  */
 void
-parse_trace_context(pgTracingTraceContext * trace_context, const char *trace_context_str,
+parse_trace_context(pgTracingTraceparent * traceparent, const char *trace_context_str,
 					int trace_context_len)
 {
 	const char *traceparent_str;
@@ -169,7 +169,7 @@ parse_trace_context(pgTracingTraceContext * trace_context, const char *trace_con
 	/* Move to the start of the traceparent values */
 	traceparent_str = traceparent_str + 13;
 	/* And parse it */
-	trace_context->traceparent = parse_traceparent_value(traceparent_str);
+	*traceparent = parse_traceparent_value(traceparent_str);
 }
 
 /*
