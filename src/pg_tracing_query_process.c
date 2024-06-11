@@ -105,7 +105,7 @@ parse_traceparent_value(const char *traceparent_str)
  * Or "SELECT 1 /\*traceparent='00-00000000000000000000000000000009-0000000000000005-01'*\/;"
  */
 void
-extract_trace_context_from_query(pgTracingTraceparent * trace_context,
+extract_trace_context_from_query(pgTracingTraceparent * traceparent,
 								 const char *query)
 {
 	const char *start_sqlcomment = NULL;
@@ -137,7 +137,7 @@ extract_trace_context_from_query(pgTracingTraceparent * trace_context,
 		return;
 	}
 
-	parse_trace_context(trace_context, start_sqlcomment,
+	parse_trace_context(traceparent, start_sqlcomment,
 						end_sqlcomment - start_sqlcomment);
 }
 
