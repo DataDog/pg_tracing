@@ -49,16 +49,16 @@
 
 #include "postgres.h"
 
+#include "access/parallel.h"
+#include "executor/executor.h"
 #include "access/xact.h"
 #include "common/pg_prng.h"
-#include "funcapi.h"
-#include "nodes/extensible.h"
 #include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "pg_tracing.h"
 #include "storage/ipc.h"
+#include "storage/proc.h"
 #include "tcop/utility.h"
-#include "utils/builtins.h"
 #include "utils/varlena.h"
 #include "utils/ruleutils.h"
 
@@ -1787,12 +1787,12 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	if (qc != NULL)
 		process_utility_span->node_counters.rows = qc->nprocessed;
 
-    if (nested_level == 0)
-        current_query_id = query_id;
+	if (nested_level == 0)
+		current_query_id = query_id;
 
-    /* End ProcessUtility span and store it */
-    end_latest_active_span(&span_end_time);
-    end_latest_active_span(&span_end_time);
+	/* End ProcessUtility span and store it */
+	end_latest_active_span(&span_end_time);
+	end_latest_active_span(&span_end_time);
 
 	/*
 	 * If we're in an aborted transaction, xact callback won't be called so we
@@ -1840,13 +1840,13 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_COMMIT:
 			end_nested_level();
 			end_tracing();
-            break;
+			break;
 		case XACT_EVENT_ABORT:
 			/* TODO: Create an abort span */
 			end_nested_level();
 			end_tracing();
 			reset_span(&commit_span);
-            break;
+			break;
 		default:
 			break;
 	}
