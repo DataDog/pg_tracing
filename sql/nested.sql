@@ -177,6 +177,8 @@ SELECT span_id AS span_e_id,
 		from pg_tracing_peek_spans where parent_id=:'span_d_id' and span_type='Insert query' \gset
 
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000058';
+-- Make sure we have 2 query_id associated with the trace
+SELECT count(distinct query_id)=2 from pg_tracing_consume_spans where trace_id='00000000000000000000000000000058';
 
 -- Cleanup
 CALL clean_spans();
