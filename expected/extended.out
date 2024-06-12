@@ -27,9 +27,10 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
 ----------------+----------------+------------+-----
  Utility query  | BEGIN;         |            |   1
  ProcessUtility | ProcessUtility |            |   2
+ Select query   | select $1      |            |   1
  Utility query  | ROLLBACK;      |            |   1
  ProcessUtility | ProcessUtility |            |   2
-(4 rows)
+(5 rows)
 
 CALL clean_spans();
 -- Execute queries with extended protocol within an explicit transaction

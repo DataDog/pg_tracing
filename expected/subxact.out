@@ -49,3 +49,4 @@ select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
 
 -- Cleaning
 CALL clean_spans();
+CALL reset_settings();
