@@ -1787,9 +1787,12 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	if (qc != NULL)
 		process_utility_span->node_counters.rows = qc->nprocessed;
 
-	/* End ProcessUtility span and store it */
-	end_latest_active_span(&span_end_time);
-	end_latest_active_span(&span_end_time);
+    if (nested_level == 0)
+        current_query_id = query_id;
+
+    /* End ProcessUtility span and store it */
+    end_latest_active_span(&span_end_time);
+    end_latest_active_span(&span_end_time);
 
 	/*
 	 * If we're in an aborted transaction, xact callback won't be called so we

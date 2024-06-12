@@ -260,5 +260,12 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  Commit                                          |   1
 (10 rows)
 
+-- Make sure we have 2 query_id associated with the trace
+SELECT count(distinct query_id)=2 from pg_tracing_consume_spans where trace_id='00000000000000000000000000000058';
+ ?column? 
+----------
+ t
+(1 row)
+
 -- Cleanup
 CALL clean_spans();

@@ -118,6 +118,17 @@ select span_operation, parameters, lvl from peek_ordered_spans;
 select span_operation, parameters, lvl from peek_ordered_spans where right(trace_id, 16) = parent_id;
 CALL clean_spans();
 
+-- Test prepare with table modification
+PREPARE test_insert (integer, text) AS INSERT INTO pg_tracing_test(a, b) VALUES ($1, $2);
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ EXECUTE test_insert(100, '2');
+-- Check spans of test_insert execution
+select trace_id, span_operation, parameters, lvl from peek_ordered_spans WHERE trace_id='00000000000000000000000000000001';
+-- We should have only two query_ids
+SELECT count(distinct query_id)=2 from pg_tracing_peek_spans where trace_id='00000000000000000000000000000001';
+SELECT query_id from pg_tracing_peek_spans where trace_id='00000000000000000000000000000001' AND span_operation = 'ProcessUtility' \gset
+SELECT query_id = :query_id from pg_tracing_peek_spans where trace_id='00000000000000000000000000000001' AND span_operation = 'Commit';
+CALL clean_spans();
+
 -- Test prepared statement with generic plan
 SET plan_cache_mode='force_generic_plan';
 EXECUTE test_prepared_one_param(200);
@@ -163,4 +174,5 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 
 -- Cleanup
 CALL clean_spans();
-SET pg_tracing.track_utility TO DEFAULT;
+CALL reset_settings();
+CALL reset_pg_tracing_test_table();
