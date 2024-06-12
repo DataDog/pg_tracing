@@ -146,3 +146,53 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
 (7 rows)
 
 CALL clean_spans();
+-- Trace only sampled statements
+SET pg_tracing.sample_rate = 0.0;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+SELECT $1, $2 \bind 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+SELECT $1, $2, $3 \bind 1 2 3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ 1        | 2        | 3
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+   span_type    |          span_operation           |          parameters          | lvl 
+----------------+-----------------------------------+------------------------------+-----
+ Utility query  | SET pg_tracing.sample_rate = 0.0; |                              |   1
+ ProcessUtility | ProcessUtility                    |                              |   2
+ Commit         | Commit                            |                              |   1
+ Utility query  | BEGIN;                            |                              |   1
+ ProcessUtility | ProcessUtility                    |                              |   2
+ Select query   | SELECT $1                         | $1 = '1'                     |   1
+ Planner        | Planner                           |                              |   2
+ Executor       | ExecutorRun                       |                              |   2
+ Result         | Result                            |                              |   3
+ Select query   | SELECT $1, $2                     | $1 = '1', $2 = '2'           |   1
+ Planner        | Planner                           |                              |   2
+ Executor       | ExecutorRun                       |                              |   2
+ Result         | Result                            |                              |   3
+ Select query   | SELECT $1, $2, $3                 | $1 = '1', $2 = '2', $3 = '3' |   1
+ Planner        | Planner                           |                              |   2
+ Executor       | ExecutorRun                       |                              |   2
+ Result         | Result                            |                              |   3
+ Utility query  | COMMIT;                           |                              |   1
+ ProcessUtility | ProcessUtility                    |                              |   2
+ Commit         | Commit                            |                              |   1
+(20 rows)
+
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();

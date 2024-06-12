@@ -39,3 +39,18 @@ CALL clean_spans();
 SELECT 1 \gdesc
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
 CALL clean_spans();
+
+-- Trace only sampled statements
+SET pg_tracing.sample_rate = 0.0;
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
+SELECT $1 \bind 1 \g
+SELECT $1, $2 \bind 1 2 \g
+SELECT $1, $2, $3 \bind 1 2 3 \g
+COMMIT;
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();
