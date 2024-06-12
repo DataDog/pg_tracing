@@ -85,28 +85,23 @@ SELECT processed_traces = :processed_traces + 1 from pg_tracing_info;
 (1 row)
 
 -- Trace a more complex query with multiple function calls
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT s.relation_size + s.index_size
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT s.relation_size + s.index_size as relation_size
 FROM (SELECT
       pg_relation_size(C.oid) as relation_size,
       pg_indexes_size(C.oid) as index_size
-    FROM pg_class C) as s limit 1;
- ?column? 
-----------
-   851968
-(1 row)
-
+    FROM pg_class C) as s limit 1 \gset
 -- Check the nested level of spans for a query with multiple function calls
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000004';
-  span_type   |                                                       span_operation                                                        | lvl 
---------------+-----------------------------------------------------------------------------------------------------------------------------+-----
- Select query | SELECT s.relation_size + s.index_size                                                                                      +|   1
-              | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1; | 
- Planner      | Planner                                                                                                                     |   2
- Executor     | ExecutorRun                                                                                                                 |   2
- Limit        | Limit                                                                                                                       |   3
- SubqueryScan | SubqueryScan on s                                                                                                           |   4
- SeqScan      | SeqScan on pg_class c                                                                                                       |   5
- Commit       | Commit                                                                                                                      |   1
+  span_type   |                                                       span_operation                                                       | lvl 
+--------------+----------------------------------------------------------------------------------------------------------------------------+-----
+ Select query | SELECT s.relation_size + s.index_size as relation_size                                                                    +|   1
+              | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1 | 
+ Planner      | Planner                                                                                                                    |   2
+ Executor     | ExecutorRun                                                                                                                |   2
+ Limit        | Limit                                                                                                                      |   3
+ SubqueryScan | SubqueryScan on s                                                                                                          |   4
+ SeqScan      | SeqScan on pg_class c                                                                                                      |   5
+ Commit       | Commit                                                                                                                     |   1
 (7 rows)
 
 -- Check that we're in a correct state after a timeout
