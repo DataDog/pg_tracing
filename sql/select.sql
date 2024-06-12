@@ -32,11 +32,11 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
 SELECT processed_traces = :processed_traces + 1 from pg_tracing_info;
 
 -- Trace a more complex query with multiple function calls
-/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT s.relation_size + s.index_size
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ SELECT s.relation_size + s.index_size as relation_size
 FROM (SELECT
       pg_relation_size(C.oid) as relation_size,
       pg_indexes_size(C.oid) as index_size
-    FROM pg_class C) as s limit 1;
+    FROM pg_class C) as s limit 1 \gset
 -- Check the nested level of spans for a query with multiple function calls
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000004';
 
