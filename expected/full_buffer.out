@@ -1,3 +1,4 @@
+SET pg_tracing.sample_rate = 0.0;
 -- A simple procedure creating nested calls
 CREATE OR REPLACE PROCEDURE loop_select(iterations int) AS
 $BODY$
@@ -8,7 +9,8 @@ BEGIN
 END;
 $BODY$
 LANGUAGE plpgsql;
--- Clear stats
+-- Clear stats and spans
+CALL clean_spans();
 select * from pg_tracing_reset();
  pg_tracing_reset 
 ------------------

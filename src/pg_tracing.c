@@ -1005,12 +1005,10 @@ cleanup:
 void
 cleanup_tracing(void)
 {
-	if (!parse_traceparent.sampled &&
-		!executor_traceparent.sampled)
+	if (current_trace_spans == NULL)
 		/* No need for cleaning */
 		return;
 	MemoryContextReset(pg_tracing_mem_ctx);
-	reset_traceparent(&parse_traceparent);
 	reset_traceparent(&executor_traceparent);
 	within_declare_cursor = false;
 	current_trace_spans = NULL;
@@ -1650,16 +1648,6 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		/* End top span */
 		end_span(span, &span_end_time);
 		store_span(span);
-
-		/*
-		 * Special case: we're inside a transaction block and a single
-		 * statement was traced, not the whole transaction. We can't rely on
-		 * the xact callback to end tracing so do it here
-		 */
-		if (IsInTransactionBlock(true) && tx_start_traceparent.sampled == false && nested_level == 0)
-		{
-			end_tracing();
-		}
 	}
 }
 
@@ -1821,8 +1809,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 {
 	pgTracingTraceparent *traceparent = &executor_traceparent;
 
-	if (!parse_traceparent.sampled &&
-		!executor_traceparent.sampled)
+	if (current_trace_spans == NULL)
 		return;
 
 	if (!executor_traceparent.sampled)
@@ -1831,23 +1818,32 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 	switch (event)
 	{
 		case XACT_EVENT_PRE_COMMIT:
-			begin_span(traceparent->trace_id, &commit_span,
-					   SPAN_COMMIT, NULL, traceparent->parent_id,
-					   current_query_id, NULL);
+			if (traceparent->sampled)
+				begin_span(traceparent->trace_id, &commit_span,
+						   SPAN_COMMIT, NULL, traceparent->parent_id,
+						   current_query_id, NULL);
 			break;
 		case XACT_EVENT_COMMIT:
-			Assert(commit_span.span_id > 0);
 			end_nested_level();
-			end_span(&commit_span, NULL);
-			store_span(&commit_span);
+			if (commit_span.span_id > 0)
+			{
+				end_span(&commit_span, NULL);
+				store_span(&commit_span);
+			}
 
 			end_tracing();
 			reset_span(&commit_span);
 			break;
+		case XACT_EVENT_PARALLEL_COMMIT:
+			end_nested_level();
+			end_tracing();
+            break;
 		case XACT_EVENT_ABORT:
 			/* TODO: Create an abort span */
+			end_nested_level();
 			end_tracing();
 			reset_span(&commit_span);
+            break;
 		default:
 			break;
 	}
