@@ -152,7 +152,13 @@ static const struct config_enum_entry buffer_mode_options[] =
  * Global variables
  */
 
-/* Memory context for pg_tracing. */
+/*
+ * Memory context for pg_tracing.
+ *
+ * We can't rely on memory context like TopTransactionContext since
+ * some queries like vacuum analyze will end and start their own
+ * transactions while we still have active span
+ */
 MemoryContext pg_tracing_mem_ctx;
 
 /* trace context at the root level of parse/planning hook */
