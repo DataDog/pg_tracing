@@ -282,10 +282,10 @@ end_latest_active_span(const TimestampTz *end_time)
  * we keep the active span for the next statement in next_active_span.
  */
 uint64
-initialize_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
-					   const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-					   const char *query_text, TimestampTz start_time,
-					   HookPhase hook_phase, bool export_parameters)
+push_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
+				 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+				 const char *query_text, TimestampTz start_time,
+				 HookPhase hook_phase, bool export_parameters)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
