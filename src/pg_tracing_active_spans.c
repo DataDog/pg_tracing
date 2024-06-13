@@ -281,7 +281,7 @@ end_latest_active_span(const TimestampTz *end_time)
  * statement happens while the previous span is still ongoing. To avoid conflict,
  * we keep the active span for the next statement in next_active_span.
  */
-uint64
+Span *
 push_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
 				 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 				 const char *query_text, TimestampTz start_time,
@@ -304,13 +304,13 @@ push_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
 			/* next_active_span is valid, use it and reset it */
 			*span = next_active_span;
 			reset_span(&next_active_span);
-			return span->span_id;
+			return span;
 		}
 	}
 	else
 	{
 		if (hook_phase != HOOK_PARSE || nested_level > 0)
-			return span->span_id;
+			return span;
 
 		/*
 		 * We're at level 0, in a parse hook while we still have an active
@@ -322,5 +322,5 @@ push_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
 
 	begin_active_span(traceparent, span, commandType, query, jstate, pstmt,
 					  query_text, start_time, export_parameters, parent_span);
-	return span->span_id;
+	return span;
 }
