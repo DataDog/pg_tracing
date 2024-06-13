@@ -58,8 +58,7 @@ allocate_new_active_span(void)
 		MemoryContextSwitchTo(oldcxt);
 		active_spans->max = 10;
 	}
-
-	if (active_spans->end >= active_spans->max)
+	else if (active_spans->end >= active_spans->max)
 	{
 		MemoryContext oldcxt;
 		int			old_spans_max = active_spans->max;
