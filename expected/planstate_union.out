@@ -22,8 +22,7 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  SeqScan on pg_tracing_test                              | Filter : ((a + 0) < 10)    |                                     |   5
  Aggregate                                               |                            |                                     |   4
  SeqScan on pg_tracing_test pg_tracing_test_1            | Filter : ((a + 0) < 10000) |                                     |   5
- Commit                                                  |                            |                                     |   1
-(9 rows)
+(8 rows)
 
 -- +------------------------------------------+
 -- | A: Append                                |

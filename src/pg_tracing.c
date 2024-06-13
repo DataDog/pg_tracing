@@ -1827,11 +1827,20 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 	switch (event)
 	{
 		case XACT_EVENT_PRE_COMMIT:
-			if (traceparent->sampled)
-				begin_span(traceparent->trace_id, &commit_span,
-						   SPAN_COMMIT, NULL, traceparent->parent_id,
-						   current_query_id, NULL);
-			break;
+			{
+				/*
+				 * Only create a commit span if there was a change (i.e. a xid
+				 * was assigned). Commit on a read only transaction is mostly
+				 * a no-op and would create more noise than anything
+				 */
+				bool		is_modifying_xact = MyProc->xid != InvalidTransactionId;
+
+				if (traceparent->sampled && is_modifying_xact)
+					begin_span(traceparent->trace_id, &commit_span,
+							   SPAN_COMMIT, NULL, traceparent->parent_id,
+							   current_query_id, NULL);
+				break;
+			}
 		case XACT_EVENT_COMMIT:
 			end_nested_level();
 			if (commit_span.span_id > 0)

@@ -172,6 +172,10 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000006-01'*/ DROP TABLE test_create_table;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000006';
 
+-- Check VACUUM ANALYZE call
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000007-0000000000000007-01'*/ VACUUM ANALYZE pg_tracing_test;
+select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000007';
+
 -- Cleanup
 CALL clean_spans();
 CALL reset_settings();
