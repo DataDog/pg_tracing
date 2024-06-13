@@ -12,8 +12,7 @@ SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where tra
               | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1 | 
  Planner      | Planner                                                                                                                    | 
  Executor     | ExecutorRun                                                                                                                | 
- Commit       | Commit                                                                                                                     | 
-(4 rows)
+(3 rows)
 
 -- Test with planstate_spans enabled
 SET pg_tracing.planstate_spans = true;
@@ -32,8 +31,7 @@ SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where tra
  Limit        | Limit                                                                                                                      | 
  SubqueryScan | SubqueryScan on s                                                                                                          | 
  SeqScan      | SeqScan on pg_class c                                                                                                      | 
- Commit       | Commit                                                                                                                     | 
-(7 rows)
+(6 rows)
 
 -- Check generated spans when deparse is disabled
 SET pg_tracing.deparse_plan=false;
@@ -50,8 +48,7 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  Planner                                             |              |            |   2
  ExecutorRun                                         |              |            |   2
  IndexScan using pg_tracing_index on pg_tracing_test |              |            |   3
- Commit                                              |              |            |   1
-(5 rows)
+(4 rows)
 
 -- Check generated spans when deparse is enabled
 SET pg_tracing.deparse_plan=true;
@@ -68,8 +65,7 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  Planner                                             |                     |            |   2
  ExecutorRun                                         |                     |            |   2
  IndexScan using pg_tracing_index on pg_tracing_test | Index Cond: (a = 1) |            |   3
- Commit                                              |                     |            |   1
-(5 rows)
+(4 rows)
 
 -- Clean created spans
 CALL clean_spans();

@@ -69,37 +69,29 @@ select span_operation, parameters, lvl from peek_ordered_spans;
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
  SELECT $1;     | $1 = 2     |   1
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
  SELECT $1;     | $1 = 3     |   1
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
  SELECT $1;     | $1 = 4     |   1
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
-(20 rows)
+(16 rows)
 
 -- Top spans should reuse generated ids and have trace_id = parent_id
 select span_operation, parameters from peek_ordered_spans where right(trace_id, 16) = parent_id;
  span_operation | parameters 
 ----------------+------------
  SELECT $1;     | $1 = 1
- Commit         | 
  SELECT $1;     | $1 = 2
- Commit         | 
  SELECT $1;     | $1 = 3
- Commit         | 
  SELECT $1;     | $1 = 4
- Commit         | 
-(8 rows)
+(4 rows)
 
 CALL clean_spans();
 -- Only trace query with sampled flag
@@ -155,18 +147,15 @@ select span_operation, parameters, lvl from peek_ordered_spans;
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
  SELECT $1;     | $1 = 3     |   1
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
  SELECT $1;     | $1 = 4     |   1
  Planner        |            |   2
  ExecutorRun    |            |   2
  Result         |            |   3
- Commit         |            |   1
-(15 rows)
+(12 rows)
 
 -- Cleaning
 CALL clean_spans();
