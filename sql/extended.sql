@@ -43,13 +43,33 @@ CALL clean_spans();
 -- Trace only sampled statements
 SET pg_tracing.sample_rate = 0.0;
 
+-- Test tracing the whole transaction with extended protocol
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
 SELECT $1 \bind 1 \g
 SELECT $1, $2 \bind 1 2 \g
 SELECT $1, $2, $3 \bind 1 2 3 \g
 COMMIT;
 
-SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000001';
+
+-- Test tracing only individual statements with extended protocol
+BEGIN;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000001-01'*/ SELECT $1 \bind 1 \g
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ SELECT $1, $2 \bind 1 2 \g
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000003-01'*/ SELECT $1, $2, $3 \bind 1 2 3 \g
+COMMIT;
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000002';
+
+-- Test tracing only subset of individual statements with extended protocol
+BEGIN;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000001-01'*/ SELECT $1 \bind 1 \g
+SELECT $1, $2 \bind 1 2 \g
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ SELECT $1, $2, $3 \bind 1 2 3 \g
+SELECT $1 \bind 1 \g
+COMMIT;
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000003';
 
 -- Cleanup
 CALL clean_spans();
