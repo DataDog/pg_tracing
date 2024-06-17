@@ -1284,19 +1284,16 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	TimestampTz span_start_time;
 	TimestampTz span_end_time;
 
-	if (nested_level > 0)
-	{
-		if (!executor_traceparent.sampled
-			&& parse_traceparent.sampled)
+	/*
+	 * For nested planning (parse sampled and executor not sampled), we need to keep
+	 * using parse_traceparent.
+	 */
+	bool		is_nested_planning = nested_level > 0 && !executor_traceparent.sampled && parse_traceparent.sampled;
 
-			/*
-			 * If we have nested planning, we need to use the
-			 * parse_traceparent
-			 */
-			traceparent = &parse_traceparent;
-		else
-			/* We're in a nested query, grab the ongoing traceparent */
-			traceparent = &executor_traceparent;
+	if (nested_level > 0 && !is_nested_planning)
+	{
+		/* We're in a nested query, grab the ongoing traceparent */
+		traceparent = &executor_traceparent;
 	}
 
 	/* Evaluate if query is sampled or not */
