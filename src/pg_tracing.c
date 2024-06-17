@@ -1114,10 +1114,6 @@ handle_pg_error(const pgTracingTraceparent * traceparent,
 	int			sql_error_code;
 	Span	   *span;
 
-	/* If we're not sampling the query, bail out */
-	if (!pg_tracing_enabled(traceparent, nested_level))
-		return;
-
 	sql_error_code = geterrcode();
 
 	if (queryDesc != NULL)
