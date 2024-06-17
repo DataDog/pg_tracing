@@ -1713,54 +1713,23 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 						  ParamListInfo params, QueryEnvironment *queryEnv,
 						  DestReceiver *dest, QueryCompletion *qc)
 {
-	Span	   *process_utility_span;
 	TimestampTz span_end_time;
 	TimestampTz span_start_time;
-	Node	   *parsetree;
-
-	/*
-	 * Save whether we're in an aborted transaction. A rollback will reset the
-	 * state after standard_ProcessUtility
-	 */
-	bool		in_aborted_transaction = IsAbortedTransactionBlockState();
-
-	/*
-	 * Save track utility value since this value could be modified by a SET
-	 * command
-	 */
-	bool		track_utility = pg_tracing_track_utility;
 	pgTracingTraceparent *traceparent = &executor_traceparent;
+	bool		track_utility;
+	bool		in_aborted_transaction;
 
 	if (nested_level == 0)
 	{
-		/* We're at root level, copy the root traceparent */
+		/* We're at root level, copy the parse traceparent */
 		*traceparent = parse_traceparent;
 		reset_traceparent(&parse_traceparent);
 	}
 
-	parsetree = pstmt->utilityStmt;
-
-	/*
-	 * Keep track if we're in a declare cursor as we want to disable query
-	 * instrumentation in this case.
-	 */
-	if (nodeTag(parsetree) == T_DeclareCursorStmt)
-		within_declare_cursor = true;
-	else
-		within_declare_cursor = false;
-
-	if (!track_utility || !pg_tracing_enabled(traceparent, nested_level))
+	if (!pg_tracing_enabled(traceparent, nested_level))
 	{
-		/*
-		 * When utility tracking is disabled, we want to avoid tracing nested
-		 * queries created by the utility statement. Incrementing the nested
-		 * level will avoid starting a new nested trace while the root utility
-		 * wasn't traced
-		 */
-		if (!track_utility)
-			nested_level++;
-
 		/* No sampling, just go through the standard process utility */
+		nested_level++;
 		if (prev_ProcessUtility)
 			prev_ProcessUtility(pstmt, queryString, readOnlyTree,
 								context, params, queryEnv,
@@ -1769,21 +1738,40 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 			standard_ProcessUtility(pstmt, queryString, readOnlyTree,
 									context, params, queryEnv,
 									dest, qc);
-		if (!track_utility)
-			nested_level--;
-
+		nested_level--;
 		return;
 	}
 
 	/* Statement is sampled */
 	span_start_time = GetCurrentTimestamp();
 
-	initialize_trace_level();
-	push_active_span(traceparent, command_type_to_span_type(pstmt->commandType), NULL,
-					 NULL, pstmt, queryString, span_start_time,
-					 HOOK_EXECUTOR, pg_tracing_export_parameters);
+	/*
+	 * Keep track if we're in a declare cursor as we want to disable query
+	 * instrumentation in this case.
+	 */
+	within_declare_cursor = nodeTag(pstmt->utilityStmt) == T_DeclareCursorStmt;
 
-	push_child_active_span(traceparent, SPAN_PROCESS_UTILITY, NULL, pstmt, span_start_time);
+	/*
+	 * Save track utility value since this value could be modified by a SET
+	 * command
+	 */
+	track_utility = pg_tracing_track_utility;
+
+	/*
+	 * Save whether we're in an aborted transaction. A rollback will reset the
+	 * state after standard_ProcessUtility
+	 */
+	in_aborted_transaction = IsAbortedTransactionBlockState();
+
+
+	initialize_trace_level();
+	if (track_utility)
+	{
+		push_active_span(traceparent, command_type_to_span_type(pstmt->commandType), NULL,
+						 NULL, pstmt, queryString, span_start_time,
+						 HOOK_EXECUTOR, pg_tracing_export_parameters);
+		push_child_active_span(traceparent, SPAN_PROCESS_UTILITY, NULL, pstmt, span_start_time);
+	}
 
 	nested_level++;
 	PG_TRY();
@@ -1807,6 +1795,8 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 			nested_level--;
 			handle_pg_error(traceparent, NULL, span_end_time);
 		}
+		else
+			nested_level--;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1817,19 +1807,24 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		nested_level--;
 		return;
 	}
+
 	span_end_time = end_nested_level();
 	nested_level--;
 
-	/* Get the process utility span */
-	process_utility_span = peek_active_span();
+	/* Update process utility span with number of processed rows */
 	if (qc != NULL)
+	{
+		Span	   *process_utility_span = peek_active_span();
+
 		process_utility_span->node_counters.rows = qc->nprocessed;
+	}
 
 	if (nested_level == 0)
 		current_query_id = pstmt->queryId;
 
 	/* End ProcessUtility span and store it */
 	pop_active_span(&span_end_time);
+	/* Also end and store parent active span */
 	pop_active_span(&span_end_time);
 
 	/*
