@@ -642,9 +642,7 @@ end_nested_level(const TimestampTz *input_span_end_time)
 			InstrEndLoop(traced_planstate->planstate->instrument);
 			span_end_time = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
 		}
-		end_span(span, &span_end_time);
-		store_span(span);
-		pop_active_span(NULL);
+		pop_active_span(&span_end_time);
 		span = peek_active_span();
 	}
 }
@@ -1122,16 +1120,14 @@ handle_pg_error(const pgTracingTraceparent * traceparent,
 
 	if (queryDesc != NULL)
 		process_query_desc(traceparent, queryDesc, sql_error_code, span_end_time);
-
-	span = pop_active_span(NULL);
+    span = peek_active_span();
 	while (span != NULL)
 	{
 		/* Assign the error code to the latest top span */
 		span->sql_error_code = sql_error_code;
-		end_span(span, &span_end_time);
-		store_span(span);
-		span = pop_active_span(NULL);
-	}
+		pop_active_span(&span_end_time);
+        span = peek_active_span();
+	};
 }
 
 /*
