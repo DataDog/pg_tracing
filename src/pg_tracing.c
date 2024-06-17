@@ -1461,45 +1461,60 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 					   bool execute_once)
 {
 	pgTracingTraceparent *traceparent = &executor_traceparent;
+	TimestampTz span_start_time;
 	TimestampTz span_end_time;
-	bool		executor_sampled = pg_tracing_enabled(traceparent, nested_level) && queryDesc->totaltime != NULL;
+	Span	   *executor_run_span;
 
-	if (executor_sampled)
+	if (!pg_tracing_enabled(traceparent, nested_level) || queryDesc->totaltime == NULL)
 	{
-		Span	   *executor_run_span;
-		TimestampTz span_start_time = GetCurrentTimestamp();
-
-		initialize_trace_level();
-
-		/*
-		 * When fetching an existing cursor, the portal already exists and
-		 * ExecutorRun is the first hook called. Create the top span if it
-		 * doesn't already exist.
-		 */
-		push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
-						 NULL, queryDesc->plannedstmt, queryDesc->sourceText, span_start_time,
-						 HOOK_EXECUTOR, pg_tracing_export_parameters);
-		/* Start ExecutorRun span as a new top span */
-		executor_run_span = push_child_active_span(traceparent, SPAN_EXECUTOR_RUN,
-												   NULL, queryDesc->plannedstmt, span_start_time);
-		per_level_infos[nested_level].executor_run_span_id = executor_run_span->span_id;
-		per_level_infos[nested_level].executor_start = executor_run_span->start;
-
-		/*
-		 * If this query starts parallel worker, push the trace context for
-		 * the child processes
-		 */
-		if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
-			add_parallel_context(traceparent, executor_run_span->span_id);
-
-		/*
-		 * Setup ExecProcNode override to capture node start if planstate
-		 * spans were requested. If there's no query instrumentation, we can
-		 * skip ExecProcNode override.
-		 */
-		if (pg_tracing_planstate_spans && queryDesc->planstate->instrument)
-			setup_ExecProcNode_override(queryDesc);
+		/* No sampling, go through normal execution */
+		nested_level++;
+		PG_TRY();
+		{
+			if (prev_ExecutorRun)
+				prev_ExecutorRun(queryDesc, direction, count, execute_once);
+			else
+				standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		}
+		PG_FINALLY();
+		{
+			nested_level--;
+		}
+		PG_END_TRY();
+		return;
 	}
+
+	/* ExecutorRun is sampled */
+	span_start_time = GetCurrentTimestamp();
+	initialize_trace_level();
+
+	/*
+	 * When fetching an existing cursor, the portal already exists and
+	 * ExecutorRun is the first hook called. Create the matching active span here.
+	 */
+	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
+					 NULL, queryDesc->plannedstmt, queryDesc->sourceText, span_start_time,
+					 HOOK_EXECUTOR, pg_tracing_export_parameters);
+	/* Start ExecutorRun span as a new active span */
+	executor_run_span = push_child_active_span(traceparent, SPAN_EXECUTOR_RUN,
+											   NULL, queryDesc->plannedstmt, span_start_time);
+	per_level_infos[nested_level].executor_run_span_id = executor_run_span->span_id;
+	per_level_infos[nested_level].executor_start = executor_run_span->start;
+
+	/*
+	 * If this query starts parallel worker, push the trace context for the
+	 * child processes
+	 */
+	if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
+		add_parallel_context(traceparent, executor_run_span->span_id);
+
+	/*
+	 * Setup ExecProcNode override to capture node start if planstate spans
+	 * were requested. If there's no query instrumentation, we can skip
+	 * ExecProcNode override.
+	 */
+	if (pg_tracing_planstate_spans && queryDesc->planstate->instrument)
+		setup_ExecProcNode_override(queryDesc);
 
 	nested_level++;
 	PG_TRY();
@@ -1516,7 +1531,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 * function, sampling will be disabled while we have an ongoing trace
 		 * and current_trace_spans will be NULL.
 		 */
-		if (current_trace_spans != NULL && executor_sampled)
+		if (current_trace_spans != NULL)
 		{
 			span_end_time = end_nested_level();
 			nested_level--;
@@ -1524,19 +1539,16 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		}
 		else
 			nested_level--;
+        remove_parallel_context();
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	/* We can remove our parallel context here */
-	if (queryDesc->plannedstmt->parallelModeNeeded && pg_tracing_trace_parallel_workers)
-		remove_parallel_context();
 
 	/*
 	 * Same as above, tracing could have been aborted, check for
 	 * current_trace_spans
 	 */
-	if (current_trace_spans != NULL && executor_sampled)
+	if (current_trace_spans != NULL)
 	{
 		span_end_time = end_nested_level();
 		nested_level--;
@@ -1546,6 +1558,9 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	}
 	else
 		nested_level--;
+
+	/* Remove parallel context if one was created */
+    remove_parallel_context();
 }
 
 /*
