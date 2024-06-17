@@ -106,16 +106,25 @@ static Span * peek_active_span_for_current_level(void)
 }
 
 /*
- * Drop the latest active span for the current nested level
+ * Pop the latest active span
+ *
+ * If end_time is provided, the span is ended and stored.
  */
 Span *
-pop_active_span(void)
+pop_active_span(const TimestampTz *end_time)
 {
+	Span	   *span;
+
 	if (active_spans == NULL || active_spans->end == 0)
 		return NULL;
 
-	Assert(active_spans->end > 0);
-	return &active_spans->spans[--active_spans->end];
+	span = &active_spans->spans[--active_spans->end];
+	if (end_time != NULL)
+	{
+		end_span(span, end_time);
+		store_span(span);
+	}
+	return span;
 }
 
 /*
@@ -223,21 +232,6 @@ begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
 	if (query_len > 0)
 		span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
 															  query_len);
-}
-
-/*
- * End the latest active span for the current nested level.
- * If pop_span is true, store the span in the current_trace_spans and remove it
- * from the per level buffers.
- */
-void
-end_latest_active_span(const TimestampTz *end_time)
-{
-	Span	   *span = pop_active_span();
-
-	Assert(span->nested_level == nested_level);
-	end_span(span, end_time);
-	store_span(span);
 }
 
 /*

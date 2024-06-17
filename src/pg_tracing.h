@@ -296,7 +296,7 @@ pgTracingStats get_empty_pg_tracing_stats(void);
 /* pg_tracing_active_spans.c */
 Span	   *allocate_new_active_span(void);
 
-Span	   *pop_active_span(void);
+Span	   *pop_active_span(const TimestampTz *end_time);
 Span	   *peek_active_span(void);
 Span	   *push_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
 							 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
@@ -306,8 +306,6 @@ Span	   *push_child_active_span(const pgTracingTraceparent * traceparent, SpanTy
 								   const Query *query, const PlannedStmt *pstmt,
 								   TimestampTz start_time);
 
-void
-			end_latest_active_span(const TimestampTz *end_time);
 void		cleanup_active_spans(void);
 
 /* pg_tracing.c */
