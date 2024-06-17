@@ -1029,6 +1029,13 @@ cleanup_tracing(void)
 		/* No need for cleaning */
 		return;
 	MemoryContextReset(pg_tracing_mem_ctx);
+
+	/*
+	 * Don't reset parse_traceparent here. With extended protocol +
+	 * transaction block, tracing of the previous statement may end while
+	 * parsing of the next statement was already done and stored in
+	 * parse_traceparent.
+	 */
 	reset_traceparent(&executor_traceparent);
 	within_declare_cursor = false;
 	current_trace_spans = NULL;
@@ -1087,7 +1094,7 @@ end_tracing(void)
 	pg_tracing_shared_state->stats.processed_traces++;
 	LWLockRelease(pg_tracing_shared_state->lock);
 
-	/* We can reset the memory context here */
+	/* We can cleanup the rest here */
 	cleanup_tracing();
 }
 
