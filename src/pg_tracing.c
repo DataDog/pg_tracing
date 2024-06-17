@@ -1333,7 +1333,6 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	PG_CATCH();
 	{
 		span_end_time = GetCurrentTimestamp();
-
 		nested_level--;
 		handle_pg_error(traceparent, NULL, span_end_time);
 		PG_RE_THROW();
@@ -1540,7 +1539,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		}
 		else
 			nested_level--;
-        remove_parallel_context();
+		remove_parallel_context();
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1561,7 +1560,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		nested_level--;
 
 	/* Remove parallel context if one was created */
-    remove_parallel_context();
+	remove_parallel_context();
 }
 
 /*
@@ -1573,34 +1572,55 @@ static void
 pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 {
 	pgTracingTraceparent *traceparent = &executor_traceparent;
-
+	TimestampTz span_start_time;
 	TimestampTz span_end_time;
-	bool		executor_sampled = pg_tracing_enabled(traceparent, nested_level) && queryDesc->totaltime != NULL;
 	int			num_stored_spans = 0;
 
-	if (current_trace_spans != NULL)
-		num_stored_spans = current_trace_spans->end;
-
-	if (executor_sampled)
+	if (!pg_tracing_enabled(traceparent, nested_level)
+		|| queryDesc->totaltime == NULL
+		|| current_trace_spans == NULL)
 	{
-		TimestampTz span_start_time = GetCurrentTimestamp();
-
-		initialize_trace_level();
-
-		/*
-		 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
-		 * called. Create the top span in this case.
-		 */
-		push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
-						 NULL, queryDesc->plannedstmt,
-						 queryDesc->sourceText, span_start_time,
-						 HOOK_EXECUTOR, pg_tracing_export_parameters);
-		if (nested_level == 0)
-			current_query_id = queryDesc->plannedstmt->queryId;
-		/* Create ExecutorFinish as a new potential top span */
-		push_child_active_span(traceparent, SPAN_EXECUTOR_FINISH, NULL, queryDesc->plannedstmt,
-							   span_start_time);
+		/* No sampling or sampling was aborted */
+		nested_level++;
+		PG_TRY();
+		{
+			if (prev_ExecutorFinish)
+				prev_ExecutorFinish(queryDesc);
+			else
+				standard_ExecutorFinish(queryDesc);
+		}
+		PG_FINALLY();
+		{
+			nested_level--;
+		}
+		PG_END_TRY();
+		return;
 	}
+
+	/* Statement is sampled */
+	span_start_time = GetCurrentTimestamp();
+	initialize_trace_level();
+
+	/*
+	 * Save the initial number of spans for the current session. We will only
+	 * store ExecutorFinish span if we have created nested spans.
+	 */
+	num_stored_spans = current_trace_spans->end;
+
+	/*
+	 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
+	 * called. Create the top span in this case.
+	 */
+	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
+					 NULL, queryDesc->plannedstmt,
+					 queryDesc->sourceText, span_start_time,
+					 HOOK_EXECUTOR, pg_tracing_export_parameters);
+	/* Create ExecutorFinish as a new potential top span */
+	push_child_active_span(traceparent, SPAN_EXECUTOR_FINISH, NULL, queryDesc->plannedstmt,
+						   span_start_time);
+	if (nested_level == 0)
+		/* Save the root query_id to be used by the xact hook */
+		current_query_id = queryDesc->plannedstmt->queryId;
 
 	nested_level++;
 	PG_TRY();
@@ -1612,7 +1632,8 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	}
 	PG_CATCH();
 	{
-		if (current_trace_spans == NULL || !executor_sampled)
+        /* current_trace_spans may be NULL if an after trigger calls pg_tracing_consume_spans */
+		if (current_trace_spans == NULL)
 			nested_level--;
 		else
 		{
@@ -1623,7 +1644,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-	if (current_trace_spans == NULL || !executor_sampled)
+	if (current_trace_spans == NULL)
 	{
 		nested_level--;
 		return;
