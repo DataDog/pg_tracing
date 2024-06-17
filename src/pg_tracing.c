@@ -1377,12 +1377,15 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 	if (nested_level == 0)
 	{
-		/* We're at the root level, copy trace context from parsing/planning */
+		/* We're at the root level, copy parse traceparent */
 		*traceparent = parse_traceparent;
 		reset_traceparent(&parse_traceparent);
 	}
 
-	/* Evaluate if query is sampled or not */
+	/*
+	 * A cached plan will start here without going through parse and plan so
+	 * we need to check trace_context here
+	 */
 	extract_trace_context(traceparent, NULL, queryDesc->plannedstmt->queryId);
 
 	/*
