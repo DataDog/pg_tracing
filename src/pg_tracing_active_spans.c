@@ -241,6 +241,28 @@ end_latest_active_span(const TimestampTz *end_time)
 }
 
 /*
+ * Push a new span that will be the child of the latest active span
+ */
+Span *
+push_child_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
+					   const Query *query, const PlannedStmt *pstmt,
+					   TimestampTz start_time)
+{
+	Span	   *parent_span = peek_active_span();
+	Span	   *span = allocate_new_active_span();
+	uint64		query_id;
+
+	if (pstmt)
+		query_id = pstmt->queryId;
+	else
+		query_id = query->queryId;
+
+	begin_span(traceparent->trace_id, span, span_type, NULL,
+			   parent_span->span_id, query_id, &start_time);
+	return span;
+}
+
+/*
  * Initialise buffers if we are in a new nested level and start associated active span.
  * If the active span already exists for the current nested level, this has no effect.
  *
