@@ -563,6 +563,33 @@ add_str_to_trace_buffer(const char *str, int str_len)
 	return position;
 }
 
+/*
+ * Convert a node CmdType to the matching SpanType
+ */
+static SpanType
+command_type_to_span_type(CmdType cmd_type)
+{
+	switch (cmd_type)
+	{
+		case CMD_SELECT:
+			return SPAN_TOP_SELECT;
+		case CMD_INSERT:
+			return SPAN_TOP_INSERT;
+		case CMD_UPDATE:
+			return SPAN_TOP_UPDATE;
+		case CMD_DELETE:
+			return SPAN_TOP_DELETE;
+		case CMD_MERGE:
+			return SPAN_TOP_MERGE;
+		case CMD_UTILITY:
+			return SPAN_TOP_UTILITY;
+		case CMD_NOTHING:
+			return SPAN_TOP_NOTHING;
+		case CMD_UNKNOWN:
+			return SPAN_TOP_UNKNOWN;
+	}
+	return SPAN_TOP_UNKNOWN;
+}
 
 /*
  * Store a span in the current_trace_spans buffer
@@ -1241,7 +1268,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	 * Either we're inside a nested sampled query or we've parsed a query with
 	 * the sampled flag, start a new level with a top span
 	 */
-	push_active_span(traceparent, query->commandType,
+	push_active_span(traceparent, command_type_to_span_type(query->commandType),
 					 query, jstate, NULL,
 					 pstate->p_sourcetext, start_top_span,
 					 HOOK_PARSE, pg_tracing_export_parameters);
@@ -1300,7 +1327,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	span_start_time = GetCurrentTimestamp();
 
 	initialize_trace_level();
-	parent_span = push_active_span(traceparent, query->commandType, query,
+	parent_span = push_active_span(traceparent, command_type_to_span_type(query->commandType), query,
 								   NULL, NULL, query_string, span_start_time,
 								   HOOK_PLANNER, pg_tracing_export_parameters);
 	query_id = get_query_id(query, NULL);
@@ -1396,7 +1423,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		 * In case of a cached plan, we haven't gone through neither parsing
 		 * nor planner hook. Create the top case in this case.
 		 */
-		push_active_span(traceparent, queryDesc->operation, NULL, NULL, queryDesc->plannedstmt,
+		push_active_span(traceparent, queryDesc->operation, NULL, NULL, command_type_to_span_type(queryDesc->operation),
 						 queryDesc->sourceText, start_span_time, HOOK_EXECUTOR, pg_tracing_export_parameters);
 
 		/*
@@ -1459,7 +1486,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		 * ExecutorRun is the first hook called. Create the top span if it
 		 * doesn't already exist.
 		 */
-		parent_span = push_active_span(traceparent, queryDesc->operation, NULL, NULL, queryDesc->plannedstmt,
+		parent_span = push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL, NULL, queryDesc->plannedstmt,
 									   queryDesc->sourceText, span_start_time,
 									   HOOK_EXECUTOR, pg_tracing_export_parameters);
 		query_id = get_query_id(NULL, queryDesc->plannedstmt);
@@ -1565,7 +1592,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
 		 * called. Create the top span in this case.
 		 */
-		parent_span = push_active_span(traceparent, queryDesc->operation, NULL, NULL, queryDesc->plannedstmt,
+		parent_span = push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL, NULL, queryDesc->plannedstmt,
 									   queryDesc->sourceText, span_start_time,
 									   HOOK_EXECUTOR, pg_tracing_export_parameters);
 		query_id = get_query_id(NULL, queryDesc->plannedstmt);
@@ -1740,7 +1767,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	span_start_time = GetCurrentTimestamp();
 
 	initialize_trace_level();
-	parent_span = push_active_span(traceparent, pstmt->commandType, NULL,
+	parent_span = push_active_span(traceparent, command_type_to_span_type(pstmt->commandType), NULL,
 								   NULL, pstmt, queryString, span_start_time,
 								   HOOK_EXECUTOR, pg_tracing_export_parameters);
 	query_id = get_query_id(NULL, pstmt);

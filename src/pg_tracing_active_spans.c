@@ -119,40 +119,12 @@ pop_active_span(void)
 }
 
 /*
- * Convert a node CmdType to the matching SpanType
- */
-static SpanType
-command_type_to_span_type(CmdType cmd_type)
-{
-	switch (cmd_type)
-	{
-		case CMD_SELECT:
-			return SPAN_TOP_SELECT;
-		case CMD_INSERT:
-			return SPAN_TOP_INSERT;
-		case CMD_UPDATE:
-			return SPAN_TOP_UPDATE;
-		case CMD_DELETE:
-			return SPAN_TOP_DELETE;
-		case CMD_MERGE:
-			return SPAN_TOP_MERGE;
-		case CMD_UTILITY:
-			return SPAN_TOP_UTILITY;
-		case CMD_NOTHING:
-			return SPAN_TOP_NOTHING;
-		case CMD_UNKNOWN:
-			return SPAN_TOP_UNKNOWN;
-	}
-	return SPAN_TOP_UNKNOWN;
-}
-
-/*
  * Start a new active span if we've entered a new nested level or if the previous
  * span at the same level ended.
  */
 static void
 begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
-				  CmdType commandType, const Query *query, const JumbleState *jstate,
+				  SpanType span_type, const Query *query, const JumbleState *jstate,
 				  const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
 				  bool export_parameters, Span * parent_span)
 {
@@ -194,10 +166,8 @@ begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
 	else
 		query_id = query->queryId;
 
-	begin_span(traceparent->trace_id, span,
-			   command_type_to_span_type(commandType),
-			   NULL, parent_id,
-			   query_id, &start_time);
+	begin_span(traceparent->trace_id, span, span_type,
+			   NULL, parent_id, query_id, &start_time);
 	/* Keep track of the parent planstate index */
 	span->parent_planstate_index = parent_planstate_index;
 
@@ -282,7 +252,7 @@ end_latest_active_span(const TimestampTz *end_time)
  * we keep the active span for the next statement in next_active_span.
  */
 Span *
-push_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
+push_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
 				 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 				 const char *query_text, TimestampTz start_time,
 				 HookPhase hook_phase, bool export_parameters)
@@ -320,7 +290,7 @@ push_active_span(const pgTracingTraceparent * traceparent, CmdType commandType,
 		span = &next_active_span;
 	}
 
-	begin_active_span(traceparent, span, commandType, query, jstate, pstmt,
+	begin_active_span(traceparent, span, span_type, query, jstate, pstmt,
 					  query_text, start_time, export_parameters, parent_span);
 	return span;
 }
