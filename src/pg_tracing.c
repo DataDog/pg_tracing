@@ -639,7 +639,7 @@ end_nested_level(void)
 		}
 		end_span(span, &top_span_end);
 		store_span(span);
-		pop_active_span();
+		pop_active_span(NULL);
 		span = peek_active_span();
 	}
 	return span_end_time;
@@ -1123,14 +1123,14 @@ handle_pg_error(const pgTracingTraceparent * traceparent,
 	if (queryDesc != NULL)
 		process_query_desc(traceparent, queryDesc, sql_error_code, span_end_time);
 
-	span = pop_active_span();
+	span = pop_active_span(NULL);
 	while (span != NULL)
 	{
 		/* Assign the error code to the latest top span */
 		span->sql_error_code = sql_error_code;
 		end_span(span, &span_end_time);
 		store_span(span);
-		span = pop_active_span();
+		span = pop_active_span(NULL);
 	}
 }
 
@@ -1279,14 +1279,13 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 						ParamListInfo params)
 {
 	PlannedStmt *result;
-	Span	   *span_planner;
 	pgTracingTraceparent *traceparent = &parse_traceparent;
 	TimestampTz span_start_time;
 	TimestampTz span_end_time;
 
 	/*
-	 * For nested planning (parse sampled and executor not sampled), we need to keep
-	 * using parse_traceparent.
+	 * For nested planning (parse sampled and executor not sampled), we need
+	 * to keep using parse_traceparent.
 	 */
 	bool		is_nested_planning = nested_level > 0 && !executor_traceparent.sampled && parse_traceparent.sampled;
 
@@ -1320,8 +1319,8 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 					 query, NULL, NULL, query_string, span_start_time,
 					 HOOK_PLANNER, pg_tracing_export_parameters);
 	/* Create and start the planner span */
-	span_planner = push_child_active_span(traceparent, SPAN_PLANNER, query,
-										  NULL, span_start_time);
+	push_child_active_span(traceparent, SPAN_PLANNER, query,
+						   NULL, span_start_time);
 
 	nested_level++;
 	PG_TRY();
@@ -1344,7 +1343,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	nested_level--;
 
 	/* End planner span */
-	end_latest_active_span(&span_end_time);
+	pop_active_span(&span_end_time);
 
 	/* If we have a prepared statement, add bound parameters to the top span */
 	if (params != NULL && pg_tracing_export_parameters)
@@ -1537,7 +1536,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		nested_level--;
 		/* End ExecutorRun span and store it */
 		per_level_infos[nested_level].executor_end = span_end_time;
-		end_latest_active_span(&span_end_time);
+		pop_active_span(&span_end_time);
 	}
 	else
 		nested_level--;
@@ -1615,9 +1614,9 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	 * have a possible child
 	 */
 	if (current_trace_spans->end > num_stored_spans)
-		end_latest_active_span(&span_end_time);
+		pop_active_span(&span_end_time);
 	else
-		pop_active_span();
+		pop_active_span(NULL);
 }
 
 /*
@@ -1649,11 +1648,8 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	if (executor_sampled)
 	{
 		TimestampTz span_end_time = GetCurrentTimestamp();
-		Span	   *span = pop_active_span();
 
-		/* End top span */
-		end_span(span, &span_end_time);
-		store_span(span);
+		pop_active_span(&span_end_time);
 	}
 }
 
@@ -1789,8 +1785,8 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		current_query_id = pstmt->queryId;
 
 	/* End ProcessUtility span and store it */
-	end_latest_active_span(&span_end_time);
-	end_latest_active_span(&span_end_time);
+	pop_active_span(&span_end_time);
+	pop_active_span(&span_end_time);
 
 	/*
 	 * If we're in an aborted transaction, xact callback won't be called so we
