@@ -1372,8 +1372,8 @@ static void
 pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	pgTracingTraceparent *traceparent = &executor_traceparent;
-	bool		executor_sampled;
 	bool		is_lazy_function;
+	TimestampTz start_span_time;
 
 	if (nested_level == 0)
 	{
@@ -1397,39 +1397,42 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	 */
 	is_lazy_function = nodeTag(queryDesc->plannedstmt->planTree) == T_FunctionScan
 		&& eflags == EXEC_FLAG_SKIP_TRIGGERS;
-	executor_sampled = pg_tracing_enabled(traceparent, nested_level)
-		&& !is_lazy_function;
 
-	if (executor_sampled)
+	if (!pg_tracing_enabled(traceparent, nested_level) || is_lazy_function)
 	{
-		TimestampTz start_span_time = GetCurrentTimestamp();
-
-		initialize_trace_level();
-
-		/*
-		 * In case of a cached plan, we haven't gone through neither parsing
-		 * nor planner hook. Create the top case in this case.
-		 */
-		push_active_span(traceparent, command_type_to_span_type(queryDesc->operation),
-						 NULL, NULL, queryDesc->plannedstmt,
-						 queryDesc->sourceText, start_span_time, HOOK_EXECUTOR,
-						 pg_tracing_export_parameters);
-
-		/*
-		 * We only need full instrumentation if we generate spans from
-		 * planstate.
-		 *
-		 * If we're within a cursor declaration, we won't be able to generate
-		 * spans from planstate due to cursor behaviour. Fetches will only
-		 * call ExecutorRun and Closing the cursor will call ExecutorFinish
-		 * and ExecutorEnd. We won't have the start of the planstate available
-		 * and representing a node that has a fragmented execution doesn't fit
-		 * our current model. So we disable full query instrumentation for
-		 * cursors.
-		 */
-		if (pg_tracing_planstate_spans && !within_declare_cursor)
-			queryDesc->instrument_options = INSTRUMENT_ALL;
+		/* No sampling, go through normal ExecutorStart */
+		if (prev_ExecutorStart)
+			prev_ExecutorStart(queryDesc, eflags);
+		else
+			standard_ExecutorStart(queryDesc, eflags);
+		return;
 	}
+
+	/* Executor is sampled */
+	start_span_time = GetCurrentTimestamp();
+	initialize_trace_level();
+
+	/*
+	 * In case of a cached plan, we haven't gone through neither parsing nor
+	 * planner hook. Create the top case in this case.
+	 */
+	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation),
+					 NULL, NULL, queryDesc->plannedstmt,
+					 queryDesc->sourceText, start_span_time, HOOK_EXECUTOR,
+					 pg_tracing_export_parameters);
+
+	/*
+	 * We only need full instrumentation if we generate spans from planstate.
+	 *
+	 * If we're within a cursor declaration, we won't be able to generate
+	 * spans from planstate due to cursor behaviour. Fetches will only call
+	 * ExecutorRun and Closing the cursor will call ExecutorFinish and
+	 * ExecutorEnd. We won't have the start of the planstate available and
+	 * representing a node that has a fragmented execution doesn't fit our
+	 * current model. So we disable full query instrumentation for cursors.
+	 */
+	if (pg_tracing_planstate_spans && !within_declare_cursor)
+		queryDesc->instrument_options = INSTRUMENT_ALL;
 
 	if (prev_ExecutorStart)
 		prev_ExecutorStart(queryDesc, eflags);
@@ -1437,7 +1440,7 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		standard_ExecutorStart(queryDesc, eflags);
 
 	/* Allocate totaltime instrumentation in the per-query context */
-	if (executor_sampled && queryDesc->totaltime == NULL)
+	if (queryDesc->totaltime == NULL)
 	{
 		MemoryContext oldcxt;
 
