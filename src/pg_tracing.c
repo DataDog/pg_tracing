@@ -1195,6 +1195,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	pgTracingTraceparent *traceparent = &parse_traceparent;
 	bool		new_lxid = is_new_lxid();
 	bool		is_root_level = nested_level == 0;
+	bool		new_local_transaction_statement;
 
 	if (new_lxid)
 		/* We have a new local transaction, reset the begin tx traceparent */
@@ -1230,23 +1231,22 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 
 	/* Evaluate if query is sampled or not */
 	extract_trace_context(traceparent, pstate, query->queryId);
+	new_local_transaction_statement = is_root_level && !new_lxid;
+
+	if (!traceparent->sampled && (new_local_transaction_statement && tx_start_traceparent.sampled))
+	{
+		/*
+		 * We're in the same traced local transaction, use the trace context
+		 * extracted at the start of this transaction
+		 */
+		Assert(!traceid_zero(tx_start_traceparent.trace_id));
+		*traceparent = tx_start_traceparent;
+	}
 
 	if (!traceparent->sampled)
 	{
-		if (is_root_level && !new_lxid && tx_start_traceparent.sampled)
-		{
-			/*
-			 * We're in the same local transaction, use the trace context
-			 * extracted at the begining of the transaction
-			 */
-			Assert(!traceid_zero(tx_start_traceparent.trace_id));
-			*traceparent = tx_start_traceparent;
-		}
-		else
-		{
-			/* Query is not sampled, nothing to do. */
-			return;
-		}
+		/* Query is not sampled, nothing to do. */
+		return;
 	}
 
 	/*
