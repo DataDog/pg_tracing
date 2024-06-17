@@ -1490,7 +1490,8 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 
 	/*
 	 * When fetching an existing cursor, the portal already exists and
-	 * ExecutorRun is the first hook called. Create the matching active span here.
+	 * ExecutorRun is the first hook called. Create the matching active span
+	 * here.
 	 */
 	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
 					 NULL, queryDesc->plannedstmt, queryDesc->sourceText, span_start_time,
