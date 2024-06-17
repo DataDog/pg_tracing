@@ -1632,7 +1632,10 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	}
 	PG_CATCH();
 	{
-        /* current_trace_spans may be NULL if an after trigger calls pg_tracing_consume_spans */
+		/*
+		 * current_trace_spans may be NULL if an after trigger calls
+		 * pg_tracing_consume_spans
+		 */
 		if (current_trace_spans == NULL)
 			nested_level--;
 		else
@@ -1672,15 +1675,21 @@ static void
 pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 {
 	pgTracingTraceparent *traceparent = &executor_traceparent;
-	bool		executor_sampled = pg_tracing_enabled(traceparent, nested_level) && queryDesc->totaltime != NULL;
+	TimestampTz parent_end;
+	TimestampTz span_end_time;
 
-	if (executor_sampled)
+	if (!pg_tracing_enabled(traceparent, nested_level) || queryDesc->totaltime == NULL)
 	{
-		TimestampTz parent_end = per_level_infos[nested_level].executor_end;
-
-		process_query_desc(traceparent, queryDesc, 0, parent_end);
-		drop_traced_planstate(nested_level);
+		if (prev_ExecutorEnd)
+			prev_ExecutorEnd(queryDesc);
+		else
+			standard_ExecutorEnd(queryDesc);
+		return;
 	}
+
+	parent_end = per_level_infos[nested_level].executor_end;
+	process_query_desc(traceparent, queryDesc, 0, parent_end);
+	drop_traced_planstate(nested_level);
 
 	/* No need to increment nested level here */
 	if (prev_ExecutorEnd)
@@ -1688,12 +1697,8 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	else
 		standard_ExecutorEnd(queryDesc);
 
-	if (executor_sampled)
-	{
-		TimestampTz span_end_time = GetCurrentTimestamp();
-
-		pop_active_span(&span_end_time);
-	}
+	span_end_time = GetCurrentTimestamp();
+	pop_active_span(&span_end_time);
 }
 
 /*
