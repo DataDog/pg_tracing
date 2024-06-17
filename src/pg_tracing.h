@@ -302,6 +302,10 @@ Span	   *push_active_span(const pgTracingTraceparent * traceparent, SpanType spa
 							 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 							 const char *query_text, TimestampTz start_time,
 							 HookPhase hook_phase, bool export_parameters);
+Span	   *push_child_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
+								   const Query *query, const PlannedStmt *pstmt,
+								   TimestampTz start_time);
+
 void
 			end_latest_active_span(const TimestampTz *end_time);
 void		cleanup_active_spans(void);
