@@ -47,11 +47,20 @@ SELECT $1, $2 \bind 2 3 \g
 (1 row)
 
 COMMIT;
+-- Send begin through extended protocol
+BEGIN \bind \g
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+COMMIT;
 -- Spans within the same transaction should have been generated with the same trace_id
 SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
  ?column? 
 ----------
- t
+ f
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
@@ -69,7 +78,15 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Result         | Result         |                    |   3
  Utility query  | COMMIT;        |                    |   1
  ProcessUtility | ProcessUtility |                    |   2
-(12 rows)
+ Utility query  | BEGIN          |                    |   1
+ ProcessUtility | ProcessUtility |                    |   2
+ Select query   | SELECT $1      | $1 = '1'           |   1
+ Planner        | Planner        |                    |   2
+ Executor       | ExecutorRun    |                    |   2
+ Result         | Result         |                    |   3
+ Utility query  | COMMIT;        |                    |   1
+ ProcessUtility | ProcessUtility |                    |   2
+(20 rows)
 
 CALL clean_spans();
 -- Mix extended protocol and simple protocol
@@ -261,6 +278,28 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
  Planner      | Planner           |                              |   2
  Executor     | ExecutorRun       |                              |   2
  Result       | Result            |                              |   3
+(8 rows)
+
+-- Test tracing the whole transaction with extended protocol with BEGIN sent through extended protocol
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ BEGIN \bind \g
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000004';
+   span_type    | span_operation | parameters | lvl 
+----------------+----------------+------------+-----
+ Utility query  | BEGIN          |            |   1
+ ProcessUtility | ProcessUtility |            |   2
+ Select query   | SELECT $1      | $1 = '1'   |   1
+ Planner        | Planner        |            |   2
+ Executor       | ExecutorRun    |            |   2
+ Result         | Result         |            |   3
+ Utility query  | COMMIT;        |            |   1
+ ProcessUtility | ProcessUtility |            |   2
 (8 rows)
 
 -- Cleanup
