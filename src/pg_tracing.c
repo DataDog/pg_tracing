@@ -60,7 +60,6 @@
 #include "storage/proc.h"
 #include "tcop/utility.h"
 #include "utils/varlena.h"
-#include "utils/ruleutils.h"
 
 PG_MODULE_MAGIC;
 
@@ -818,31 +817,13 @@ process_query_desc(const pgTracingTraceparent * traceparent, const QueryDesc *qu
 	node_counters->rows = queryDesc->estate->es_processed;
 #endif
 
-
-	/* Process planstate */
-	if (queryDesc->planstate && queryDesc->planstate->instrument != NULL && pg_tracing_planstate_spans)
+	if (pg_tracing_planstate_spans)
 	{
-		Bitmapset  *rels_used = NULL;
-		planstateTraceContext planstateTraceContext;
-		TimestampTz latest_end = 0;
 		uint64		parent_id = per_level_infos[nested_level].executor_run_span_id;
-		uint64		query_id = queryDesc->plannedstmt->queryId;
 		TimestampTz parent_start = per_level_infos[nested_level].executor_start;
 
-		planstateTraceContext.rtable_names = select_rtable_names_for_explain(queryDesc->plannedstmt->rtable, rels_used);
-		planstateTraceContext.trace_id = traceparent->trace_id;
-		planstateTraceContext.ancestors = NULL;
-		planstateTraceContext.sql_error_code = sql_error_code;
-		/* Prepare the planstate context for deparsing */
-		planstateTraceContext.deparse_ctx = NULL;
-		if (pg_tracing_deparse_plan)
-			planstateTraceContext.deparse_ctx =
-				deparse_context_for_plan_tree(queryDesc->plannedstmt,
-											  planstateTraceContext.rtable_names);
-
-		generate_span_from_planstate(queryDesc->planstate, &planstateTraceContext,
-									 parent_id, query_id, parent_start,
-									 parent_end, &latest_end);
+		process_planstate(traceparent, queryDesc, sql_error_code, pg_tracing_deparse_plan,
+						  parent_id, parent_start, parent_end);
 	}
 }
 
@@ -1674,7 +1655,6 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	 */
 	parent_end = per_level_infos[nested_level].executor_end;
 	process_query_desc(traceparent, queryDesc, 0, parent_end);
-	drop_traced_planstate(nested_level);
 
 	/* No need to increment nested level here */
 	if (prev_ExecutorEnd)

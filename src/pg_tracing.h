@@ -220,6 +220,18 @@ typedef struct pgTracingSpans
 	Span		spans[FLEXIBLE_ARRAY_MEMBER];
 }			pgTracingSpans;
 
+/*
+ * Match a planstate to the first start of a node.
+ * This is needed to set the start for spans generated from planstate.
+ */
+typedef struct TracedPlanstate
+{
+	PlanState  *planstate;
+	TimestampTz node_start;
+	uint64		span_id;
+	int			nested_level;
+}			TracedPlanstate;
+
 /* pg_tracing_explain.c */
 extern const char *plan_to_node_type(const Plan *plan);
 extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
@@ -233,26 +245,11 @@ extern void fetch_parallel_context(pgTracingTraceparent * traceparent);
 
 /* pg_tracing_planstate.c */
 
-/*
- * Match a planstate to the first start of a node.
- * This is needed to set the start for spans generated from planstate.
- */
-typedef struct TracedPlanstate
-{
-	PlanState  *planstate;
-	TimestampTz node_start;
-	uint64		span_id;
-	int			nested_level;
-}			TracedPlanstate;
+extern void
+			process_planstate(const pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
+							  int sql_error_code, bool deparse_plan, uint64 parent_id,
+							  TimestampTz parent_start, TimestampTz parent_end);
 
-extern Span
-create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
-				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
-				 char *subplan_name, TimestampTz span_start, TimestampTz span_end);
-extern TimestampTz
-			generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
-										 uint64 parent_id, uint64 query_id,
-										 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
 extern void
 			setup_ExecProcNode_override(QueryDesc *queryDesc);
 extern void
@@ -261,8 +258,6 @@ extern TracedPlanstate *
 get_traced_planstate_from_index(int index);
 extern int
 			get_parent_traced_planstate_index(int nested_level);
-extern void
-			drop_traced_planstate(int nested_level);
 extern TimestampTz
 			get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end);
 
@@ -275,7 +270,6 @@ extern void parse_trace_context(pgTracingTraceparent * traceparent, const char *
 extern const char *normalise_query(const char *query, int query_loc, int *query_len_p);
 extern bool text_store_file(pgTracingSharedState * pg_tracing, const char *query,
 							int query_len, Size *query_offset);
-extern const char *qtext_load_file(Size *buffer_size);
 extern const char *qtext_load_file(Size *buffer_size);
 
 /* pg_tracing_span.c */
