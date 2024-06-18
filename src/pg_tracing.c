@@ -1120,13 +1120,15 @@ handle_pg_error(const pgTracingTraceparent * traceparent,
 
 	if (queryDesc != NULL)
 		process_query_desc(traceparent, queryDesc, sql_error_code, span_end_time);
-    span = peek_active_span();
+	span = peek_active_span();
 	while (span != NULL)
 	{
 		/* Assign the error code to the latest top span */
 		span->sql_error_code = sql_error_code;
+		/* End and store the span */
 		pop_active_span(&span_end_time);
-        span = peek_active_span();
+		/* Get the next span in the stack */
+		span = peek_active_span();
 	};
 }
 
@@ -1193,8 +1195,11 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	bool		is_root_level = nested_level == 0;
 	bool		new_local_transaction_statement;
 
+	if (prev_post_parse_analyze_hook)
+		prev_post_parse_analyze_hook(pstate, query, jstate);
+
 	if (new_lxid)
-		/* We have a new local transaction, reset the begin tx traceparent */
+		/* We have a new local transaction, reset the tx_start traceparent */
 		reset_traceparent(&tx_start_traceparent);
 
 	if (!pg_tracing_mem_ctx->isReset && new_lxid && is_root_level)
@@ -1209,14 +1214,11 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 		cleanup_tracing();
 
 	if (!is_root_level)
-		/* We're in a nested query, grab the ongoing traceparent */
+		/* We're in a nested query, grab the ongoing executor traceparent */
 		traceparent = &executor_traceparent;
 	else
-		/* At root level, we will start a new root span */
+		/* We're at root level, reset the parse traceparent */
 		reset_traceparent(&parse_traceparent);
-
-	if (prev_post_parse_analyze_hook)
-		prev_post_parse_analyze_hook(pstate, query, jstate);
 
 	/* If disabled, don't trace utility statement */
 	if (query->utilityStmt && !pg_tracing_track_utility)
@@ -1240,24 +1242,12 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	}
 
 	if (!traceparent->sampled)
-	{
 		/* Query is not sampled, nothing to do. */
 		return;
-	}
 
-	/*
-	 * We want to avoid calling GetCurrentTimestamp at the start of post parse
-	 * as it will impact all queries and we will only use it when the query is
-	 * sampled.
-	 */
-	start_top_span = GetCurrentTimestamp();
-
+	/* Statement is sampled, initialize memory and push a new active span */
 	initialize_trace_level();
-
-	/*
-	 * Either we're inside a nested sampled query or we've parsed a query with
-	 * the sampled flag, start a new level with a top span
-	 */
+	start_top_span = GetCurrentTimestamp();
 	push_active_span(traceparent, command_type_to_span_type(query->commandType),
 					 query, jstate, NULL,
 					 pstate->p_sourcetext, start_top_span,
@@ -1281,7 +1271,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 
 	/*
 	 * For nested planning (parse sampled and executor not sampled), we need
-	 * to keep using parse_traceparent.
+	 * to use parse_traceparent.
 	 */
 	bool		is_nested_planning = nested_level > 0 && !executor_traceparent.sampled && parse_traceparent.sampled;
 
@@ -1307,9 +1297,8 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	}
 
 	/* statement is sampled */
-	span_start_time = GetCurrentTimestamp();
-
 	initialize_trace_level();
+	span_start_time = GetCurrentTimestamp();
 	push_active_span(traceparent, command_type_to_span_type(query->commandType),
 					 query, NULL, NULL, query_string, span_start_time,
 					 HOOK_PLANNER, pg_tracing_export_parameters);
@@ -1403,14 +1392,9 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		return;
 	}
 
-	/* Executor is sampled */
-	start_span_time = GetCurrentTimestamp();
+	/* Statement is sampled */
 	initialize_trace_level();
-
-	/*
-	 * In case of a cached plan, we haven't gone through neither parsing nor
-	 * planner hook. Create the top case in this case.
-	 */
+	start_span_time = GetCurrentTimestamp();
 	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation),
 					 NULL, NULL, queryDesc->plannedstmt,
 					 queryDesc->sourceText, start_span_time, HOOK_EXECUTOR,
@@ -1480,20 +1464,15 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	}
 
 	/* ExecutorRun is sampled */
-	span_start_time = GetCurrentTimestamp();
 	initialize_trace_level();
-
-	/*
-	 * When fetching an existing cursor, the portal already exists and
-	 * ExecutorRun is the first hook called. Create the matching active span
-	 * here.
-	 */
+	span_start_time = GetCurrentTimestamp();
 	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
 					 NULL, queryDesc->plannedstmt, queryDesc->sourceText, span_start_time,
 					 HOOK_EXECUTOR, pg_tracing_export_parameters);
 	/* Start ExecutorRun span as a new active span */
 	executor_run_span = push_child_active_span(traceparent, SPAN_EXECUTOR_RUN,
 											   NULL, queryDesc->plannedstmt, span_start_time);
+
 	per_level_infos[nested_level].executor_run_span_id = executor_run_span->span_id;
 	per_level_infos[nested_level].executor_start = executor_run_span->start;
 
@@ -1554,12 +1533,13 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		return;
 	}
 
+	/* End nested level */
 	span_end_time = GetCurrentTimestamp();
 	end_nested_level(&span_end_time);
 	nested_level--;
 	/* End ExecutorRun span and store it */
-	per_level_infos[nested_level].executor_end = span_end_time;
 	pop_active_span(&span_end_time);
+	per_level_infos[nested_level].executor_end = span_end_time;
 }
 
 /*
@@ -1597,19 +1577,8 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	}
 
 	/* Statement is sampled */
-	span_start_time = GetCurrentTimestamp();
 	initialize_trace_level();
-
-	/*
-	 * Save the initial number of spans for the current session. We will only
-	 * store ExecutorFinish span if we have created nested spans.
-	 */
-	num_stored_spans = current_trace_spans->end;
-
-	/*
-	 * When closing a cursor, only ExecutorFinish and ExecutorEnd will be
-	 * called. Create the top span in this case.
-	 */
+	span_start_time = GetCurrentTimestamp();
 	push_active_span(traceparent, command_type_to_span_type(queryDesc->operation), NULL,
 					 NULL, queryDesc->plannedstmt,
 					 queryDesc->sourceText, span_start_time,
@@ -1617,8 +1586,15 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	/* Create ExecutorFinish as a new potential top span */
 	push_child_active_span(traceparent, SPAN_EXECUTOR_FINISH, NULL, queryDesc->plannedstmt,
 						   span_start_time);
+
+	/*
+	 * Save the initial number of spans for the current session. We will only
+	 * store ExecutorFinish span if we have created nested spans.
+	 */
+	num_stored_spans = current_trace_spans->end;
+
 	if (nested_level == 0)
-		/* Save the root query_id to be used by the xact hook */
+		/* Save the root query_id to be used by the xact commit hook */
 		current_query_id = queryDesc->plannedstmt->queryId;
 
 	nested_level++;
@@ -1647,6 +1623,8 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	/* Tracing may have been aborted, check and bail out if it's the case */
 	if (current_trace_spans == NULL)
 	{
 		nested_level--;
@@ -1690,6 +1668,10 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		return;
 	}
 
+	/*
+	 * We're at the end of the Executor for this level, generate spans from
+	 * the planstate if needed
+	 */
 	parent_end = per_level_infos[nested_level].executor_end;
 	process_query_desc(traceparent, queryDesc, 0, parent_end);
 	drop_traced_planstate(nested_level);
