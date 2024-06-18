@@ -12,6 +12,7 @@
 
 #include "common/pg_prng.h"
 #include "pg_tracing.h"
+#include "utils/ruleutils.h"
 #include "utils/timestamp.h"
 
 #define US_IN_S INT64CONST(1000000)
@@ -30,6 +31,14 @@ static int	index_planstart = 0;
 static int	max_planstart = 0;
 
 static void override_ExecProcNode(PlanState *planstate);
+static Span
+create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
+				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
+				 char *subplan_name, TimestampTz span_start, TimestampTz span_end);
+static TimestampTz
+generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
+							 uint64 parent_id, uint64 query_id,
+							 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
 
 /*
  * Reset the traced_planstates array
@@ -43,17 +52,65 @@ cleanup_planstarts(void)
 }
 
 /*
+ * Fetch the node start of a planstate
+ */
+static TracedPlanstate *
+get_traced_planstate(PlanState *planstate)
+{
+	for (int i = 0; i < index_planstart; i++)
+	{
+		if (planstate == traced_planstates[i].planstate)
+			return &traced_planstates[i];
+	}
+	return NULL;
+}
+
+/*
+ * Get traced_planstate from index
+ */
+TracedPlanstate *
+get_traced_planstate_from_index(int index)
+{
+	Assert(index > -1);
+	Assert(index < max_planstart);
+	return &traced_planstates[index];
+}
+
+/*
+ * Get index in traced_planstates array of a possible parent traced_planstate
+ */
+int
+get_parent_traced_planstate_index(int nested_level)
+{
+	TracedPlanstate *traced_planstate;
+
+	if (index_planstart >= 2)
+	{
+		traced_planstate = &traced_planstates[index_planstart - 2];
+		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_ProjectSet)
+			return index_planstart - 2;
+	}
+	if (index_planstart >= 1)
+	{
+		traced_planstate = &traced_planstates[index_planstart - 1];
+		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_Result)
+			return index_planstart - 1;
+	}
+	return -1;
+}
+
+/*
  * Drop all traced_planstates after the provided nested level
  */
-void
-drop_traced_planstate(int level)
+static void
+drop_traced_planstates(void)
 {
 	int			i;
 	int			new_index_start = 0;
 
 	for (i = index_planstart; i > 0; i--)
 	{
-		if (traced_planstates[i - 1].nested_level <= level)
+		if (traced_planstates[i - 1].nested_level <= nested_level)
 		{
 			/*
 			 * Found a new planstate from a previous nested level, we can stop
@@ -310,57 +367,9 @@ get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, Timest
 }
 
 /*
- * Fetch the node start of a planstate
- */
-static TracedPlanstate *
-get_traced_planstate(PlanState *planstate)
-{
-	for (int i = 0; i < index_planstart; i++)
-	{
-		if (planstate == traced_planstates[i].planstate)
-			return &traced_planstates[i];
-	}
-	return NULL;
-}
-
-/*
- * Get traced_planstate from index
- */
-TracedPlanstate *
-get_traced_planstate_from_index(int index)
-{
-	Assert(index > -1);
-	Assert(index < max_planstart);
-	return &traced_planstates[index];
-}
-
-/*
- * Get index in traced_planstates array of a possible parent traced_planstate
- */
-int
-get_parent_traced_planstate_index(int nested_level)
-{
-	TracedPlanstate *traced_planstate;
-
-	if (index_planstart >= 2)
-	{
-		traced_planstate = &traced_planstates[index_planstart - 2];
-		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_ProjectSet)
-			return index_planstart - 2;
-	}
-	if (index_planstart >= 1)
-	{
-		traced_planstate = &traced_planstates[index_planstart - 1];
-		if (traced_planstate->nested_level == nested_level && nodeTag(traced_planstate->planstate->plan) == T_Result)
-			return index_planstart - 1;
-	}
-	return -1;
-}
-
-/*
  * Walk through the planstate tree generating a node span for each node.
  */
-TimestampTz
+static TimestampTz
 generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
 							 uint64 parent_id, uint64 query_id,
 							 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
@@ -582,7 +591,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 /*
  * Create span node for the provided planstate
  */
-Span
+static Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
 				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
 				 char *subplan_name, TimestampTz span_start, TimestampTz span_end)
@@ -646,4 +655,36 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 	end_span(&span, &span_end);
 
 	return span;
+}
+
+void
+process_planstate(const pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
+				  int sql_error_code, bool deparse_plan, uint64 parent_id,
+				  TimestampTz parent_start, TimestampTz parent_end)
+{
+	Bitmapset  *rels_used = NULL;
+	planstateTraceContext planstateTraceContext;
+	TimestampTz latest_end = 0;
+	uint64		query_id = queryDesc->plannedstmt->queryId;
+
+	if (queryDesc->planstate == NULL || queryDesc->planstate->instrument == NULL)
+		return;
+
+	planstateTraceContext.rtable_names = select_rtable_names_for_explain(queryDesc->plannedstmt->rtable, rels_used);
+	planstateTraceContext.trace_id = traceparent->trace_id;
+	planstateTraceContext.ancestors = NULL;
+	planstateTraceContext.sql_error_code = sql_error_code;
+	/* Prepare the planstate context for deparsing */
+	planstateTraceContext.deparse_ctx = NULL;
+	if (deparse_plan)
+		planstateTraceContext.deparse_ctx =
+			deparse_context_for_plan_tree(queryDesc->plannedstmt,
+										  planstateTraceContext.rtable_names);
+
+	generate_span_from_planstate(queryDesc->planstate, &planstateTraceContext,
+								 parent_id, query_id, parent_start,
+								 parent_end, &latest_end);
+
+	/* We can get rid of all the traced planstate for this level */
+	drop_traced_planstates();
 }
