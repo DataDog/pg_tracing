@@ -36,9 +36,9 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
 				 char *subplan_name, TimestampTz span_start, TimestampTz span_end);
 static TimestampTz
-generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
-							 uint64 parent_id, uint64 query_id,
-							 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
+			create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
+										uint64 parent_id, uint64 query_id,
+										TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end);
 
 /*
  * Reset the traced_planstates array
@@ -97,6 +97,39 @@ get_parent_traced_planstate_index(int nested_level)
 			return index_planstart - 1;
 	}
 	return -1;
+}
+
+/*
+ * Get end time for a span node from the provided planstate.
+ */
+TimestampTz
+get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end)
+{
+	TimestampTz span_end_time;
+
+	if (!INSTR_TIME_IS_ZERO(planstate->instrument->starttime) && root_end > 0)
+
+		/*
+		 * Node was ongoing but aborted due to an error, use root end as the
+		 * end
+		 */
+		span_end_time = root_end;
+	else if (planstate->instrument->total == 0)
+		span_end_time = GetCurrentTimestamp();
+	else
+	{
+		span_end_time = plan_start + planstate->instrument->total * US_IN_S;
+
+		/*
+		 * Since we convert from double seconds to microseconds again, we can
+		 * have a span_end_time greater to the root due to the loss of
+		 * precision for long durations. Fallback to the root end in this
+		 * case.
+		 */
+		if (span_end_time > root_end)
+			span_end_time = root_end;
+	}
+	return span_end_time;
 }
 
 /*
@@ -290,14 +323,14 @@ setup_ExecProcNode_override(QueryDesc *queryDesc)
  * Iterate over a list of planstate to generate span node
  */
 static TimestampTz
-generate_member_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext, uint64 parent_id,
-					  uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
+create_spans_from_plan_list(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext, uint64 parent_id,
+							uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	int			j;
 	TimestampTz last_end = 0;
 
 	for (j = 0; j < nplans; j++)
-		last_end = generate_span_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, parent_start, root_end, latest_end);
+		last_end = create_spans_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, parent_start, root_end, latest_end);
 	return last_end;
 }
 
@@ -305,8 +338,8 @@ generate_member_nodes(PlanState **planstates, int nplans, planstateTraceContext 
  * Iterate over children of BitmapOr and BitmapAnd
  */
 static TimestampTz
-generate_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext, uint64 parent_id,
-					  uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
+create_spans_from_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext * planstateTraceContext, uint64 parent_id,
+							   uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	int			j;
 
@@ -314,7 +347,7 @@ generate_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext 
 	TimestampTz sibling_end = parent_start;
 
 	for (j = 0; j < nplans; j++)
-		sibling_end = generate_span_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, sibling_end, root_end, latest_end);
+		sibling_end = create_spans_from_planstate(planstates[j], planstateTraceContext, parent_id, query_id, sibling_end, root_end, latest_end);
 	return sibling_end;
 }
 
@@ -322,57 +355,24 @@ generate_bitmap_nodes(PlanState **planstates, int nplans, planstateTraceContext 
  * Iterate over custom scan planstates to generate span node
  */
 static TimestampTz
-generate_span_from_custom_scan(CustomScanState *css, planstateTraceContext * planstateTraceContext, uint64 parent_id,
-							   uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
+create_spans_from_custom_scan(CustomScanState *css, planstateTraceContext * planstateTraceContext, uint64 parent_id,
+							  uint64 query_id, TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	ListCell   *cell;
 	TimestampTz last_end = 0;
 
 	foreach(cell, css->custom_ps)
-		last_end = generate_span_from_planstate((PlanState *) lfirst(cell), planstateTraceContext, parent_id, query_id, parent_start, root_end, latest_end);
+		last_end = create_spans_from_planstate((PlanState *) lfirst(cell), planstateTraceContext, parent_id, query_id, parent_start, root_end, latest_end);
 	return last_end;
-}
-
-/*
- * Get end time for a span node from the provided planstate.
- */
-TimestampTz
-get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end)
-{
-	TimestampTz span_end_time;
-
-	if (!INSTR_TIME_IS_ZERO(planstate->instrument->starttime) && root_end > 0)
-
-		/*
-		 * Node was ongoing but aborted due to an error, use root end as the
-		 * end
-		 */
-		span_end_time = root_end;
-	else if (planstate->instrument->total == 0)
-		span_end_time = GetCurrentTimestamp();
-	else
-	{
-		span_end_time = plan_start + planstate->instrument->total * US_IN_S;
-
-		/*
-		 * Since we convert from double seconds to microseconds again, we can
-		 * have a span_end_time greater to the root due to the loss of
-		 * precision for long durations. Fallback to the root end in this
-		 * case.
-		 */
-		if (span_end_time > root_end)
-			span_end_time = root_end;
-	}
-	return span_end_time;
 }
 
 /*
  * Walk through the planstate tree generating a node span for each node.
  */
 static TimestampTz
-generate_span_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
-							 uint64 parent_id, uint64 query_id,
-							 TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
+create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
+							uint64 parent_id, uint64 query_id,
+							TimestampTz parent_start, TimestampTz root_end, TimestampTz *latest_end)
 {
 	ListCell   *l;
 	uint64		span_id;
@@ -470,10 +470,10 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 
 	/* Walk the outerplan */
 	if (outerPlanState(planstate))
-		generate_span_from_planstate(outerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+		create_spans_from_planstate(outerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 	/* Walk the innerplan */
 	if (innerPlanState(planstate))
-		generate_span_from_planstate(innerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+		create_spans_from_planstate(innerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 
 	/* Handle init plans */
 	foreach(l, planstate->initPlan)
@@ -503,7 +503,7 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 										 SPAN_NODE_INIT_PLAN, sstate->subplan->plan_name, initplan_traced_planstate->node_start, initplan_span_end);
 		store_span(&initplan_span);
 		/* Use the initplan span as a parent */
-		generate_span_from_planstate(splan, planstateTraceContext, initplan_span.span_id, query_id, initplan_traced_planstate->node_start, root_end, latest_end);
+		create_spans_from_planstate(splan, planstateTraceContext, initplan_span.span_id, query_id, initplan_traced_planstate->node_start, root_end, latest_end);
 	}
 
 	/* Handle sub plans */
@@ -539,8 +539,8 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 										&subplan_span_id, span_id, query_id,
 										SPAN_NODE_SUBPLAN, sstate->subplan->plan_name, subplan_traced_planstate->node_start, subplan_span_end);
 		store_span(&subplan_span);
-		child_end = generate_span_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, subplan_traced_planstate->node_start,
-												 root_end, latest_end);
+		child_end = create_spans_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, subplan_traced_planstate->node_start,
+												root_end, latest_end);
 
 		planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
 	}
@@ -549,26 +549,26 @@ generate_span_from_planstate(PlanState *planstate, planstateTraceContext * plans
 	switch (nodeTag(planstate->plan))
 	{
 		case T_Append:
-			child_end = generate_member_nodes(((AppendState *) planstate)->appendplans,
-											  ((AppendState *) planstate)->as_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = create_spans_from_plan_list(((AppendState *) planstate)->appendplans,
+													((AppendState *) planstate)->as_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_MergeAppend:
-			child_end = generate_member_nodes(((MergeAppendState *) planstate)->mergeplans,
-											  ((MergeAppendState *) planstate)->ms_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = create_spans_from_plan_list(((MergeAppendState *) planstate)->mergeplans,
+													((MergeAppendState *) planstate)->ms_nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_BitmapAnd:
-			child_end = generate_bitmap_nodes(((BitmapAndState *) planstate)->bitmapplans,
-											  ((BitmapAndState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = create_spans_from_bitmap_nodes(((BitmapAndState *) planstate)->bitmapplans,
+													   ((BitmapAndState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_BitmapOr:
-			child_end = generate_bitmap_nodes(((BitmapOrState *) planstate)->bitmapplans,
-											  ((BitmapOrState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = create_spans_from_bitmap_nodes(((BitmapOrState *) planstate)->bitmapplans,
+													   ((BitmapOrState *) planstate)->nplans, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_SubqueryScan:
-			child_end = generate_span_from_planstate(((SubqueryScanState *) planstate)->subplan, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = create_spans_from_planstate(((SubqueryScanState *) planstate)->subplan, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		case T_CustomScan:
-			child_end = generate_span_from_custom_scan((CustomScanState *) planstate, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
+			child_end = create_spans_from_custom_scan((CustomScanState *) planstate, planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 			break;
 		default:
 			break;
@@ -657,6 +657,9 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 	return span;
 }
 
+/*
+ * Process planstate to generate spans of the executed plan
+ */
 void
 process_planstate(const pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
 				  int sql_error_code, bool deparse_plan, uint64 parent_id,
@@ -681,9 +684,9 @@ process_planstate(const pgTracingTraceparent * traceparent, const QueryDesc *que
 			deparse_context_for_plan_tree(queryDesc->plannedstmt,
 										  planstateTraceContext.rtable_names);
 
-	generate_span_from_planstate(queryDesc->planstate, &planstateTraceContext,
-								 parent_id, query_id, parent_start,
-								 parent_end, &latest_end);
+	create_spans_from_planstate(queryDesc->planstate, &planstateTraceContext,
+								parent_id, query_id, parent_start,
+								parent_end, &latest_end);
 
 	/* We can get rid of all the traced planstate for this level */
 	drop_traced_planstates();
