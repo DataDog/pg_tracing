@@ -1719,6 +1719,19 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	within_declare_cursor = nodeTag(pstmt->utilityStmt) == T_DeclareCursorStmt;
 
 	/*
+	 * ProcessUtility may start a new transaction with a BEGIN. We want to
+	 * prevent tracing to be cleared if next parse doesn't have the same lxid
+	 * so we udpate the latest_lxid observed.
+	 */
+	if (nodeTag(pstmt->utilityStmt) == T_TransactionStmt)
+	{
+		TransactionStmt *stmt = (TransactionStmt *) pstmt->utilityStmt;
+
+		if (stmt->kind == TRANS_STMT_BEGIN)
+			update_latest_lxid();
+	}
+
+	/*
 	 * Save track utility value since this value could be modified by a SET
 	 * command
 	 */
