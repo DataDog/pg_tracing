@@ -1,4 +1,11 @@
 -- Create test function to sample
+CREATE OR REPLACE FUNCTION test_function_result(a int, b text) RETURNS void AS
+$BODY$
+BEGIN
+    INSERT INTO pg_tracing_test(a, b) VALUES (a, b);
+END;
+$BODY$
+LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION test_function_project_set(a int) RETURNS SETOF oid AS
 $BODY$
 BEGIN
@@ -6,10 +13,10 @@ BEGIN
 END;
 $BODY$
 LANGUAGE plpgsql;
-CREATE OR REPLACE FUNCTION test_function_result(a int, b text) RETURNS void AS
+CREATE OR REPLACE FUNCTION test_2_nested_levels(a int)  RETURNS SETOF oid AS
 $BODY$
 BEGIN
-    INSERT INTO pg_tracing_test(a, b) VALUES (a, b);
+    RETURN QUERY SELECT * FROM test_function_project_set(1);
 END;
 $BODY$
 LANGUAGE plpgsql;
@@ -263,6 +270,29 @@ SELECT count(distinct query_id)=2 from pg_tracing_consume_spans where trace_id='
 ----------
  t
 (1 row)
+
+-- Trace a statement with multiple nested levels
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000059-0000000000000059-01'*/ select * FROM test_2_nested_levels(1);
+ test_2_nested_levels 
+----------------------
+(0 rows)
+
+select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000059';
+                   span_operation                   | lvl 
+----------------------------------------------------+-----
+ select * FROM test_2_nested_levels($1);            |   1
+ Planner                                            |   2
+ ExecutorRun                                        |   2
+ FunctionScan on test_2_nested_levels               |   3
+ SELECT * FROM test_function_project_set($1)        |   3
+ Planner                                            |   4
+ ExecutorRun                                        |   4
+ FunctionScan on test_function_project_set          |   5
+ SELECT oid from pg_class where oid = a             |   5
+ Planner                                            |   6
+ ExecutorRun                                        |   6
+ IndexOnlyScan using pg_class_oid_index on pg_class |   7
+(12 rows)
 
 -- Cleanup
 CALL clean_spans();

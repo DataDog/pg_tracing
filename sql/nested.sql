@@ -1,4 +1,12 @@
 -- Create test function to sample
+CREATE OR REPLACE FUNCTION test_function_result(a int, b text) RETURNS void AS
+$BODY$
+BEGIN
+    INSERT INTO pg_tracing_test(a, b) VALUES (a, b);
+END;
+$BODY$
+LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION test_function_project_set(a int) RETURNS SETOF oid AS
 $BODY$
 BEGIN
@@ -7,10 +15,10 @@ END;
 $BODY$
 LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION test_function_result(a int, b text) RETURNS void AS
+CREATE OR REPLACE FUNCTION test_2_nested_levels(a int)  RETURNS SETOF oid AS
 $BODY$
 BEGIN
-    INSERT INTO pg_tracing_test(a, b) VALUES (a, b);
+    RETURN QUERY SELECT * FROM test_function_project_set(1);
 END;
 $BODY$
 LANGUAGE plpgsql;
@@ -179,6 +187,10 @@ SELECT span_id AS span_e_id,
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000058';
 -- Make sure we have 2 query_id associated with the trace
 SELECT count(distinct query_id)=2 from pg_tracing_consume_spans where trace_id='00000000000000000000000000000058';
+
+-- Trace a statement with multiple nested levels
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000059-0000000000000059-01'*/ select * FROM test_2_nested_levels(1);
+select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000059';
 
 -- Cleanup
 CALL clean_spans();
