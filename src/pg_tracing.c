@@ -215,9 +215,6 @@ static pgTracingPerLevelInfos * per_level_infos = NULL;
 /* Number of spans initially allocated at the start of a trace. */
 #define	INITIAL_ALLOCATED_SPANS 25
 
-static void pg_tracing_shmem_request(void);
-static void pg_tracing_shmem_startup(void);
-
 /* Saved hook values in case of unload */
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -248,11 +245,12 @@ static void pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryStrin
 									  QueryEnvironment *queryEnv,
 									  DestReceiver *dest, QueryCompletion *qc);
 
+static void pg_tracing_shmem_request(void);
+static void pg_tracing_shmem_startup(void);
+static void reset_traceparent(pgTracingTraceparent * traceparent);
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
-
 static void initialize_trace_level(void);
-
 static void pg_tracing_xact_callback(XactEvent event, void *arg);
 
 /*
@@ -460,6 +458,70 @@ pg_tracing_memsize(void)
 }
 
 /*
+ * shmem_startup hook: allocate or attach to shared memory, Also create and
+ * load the query-texts file, which is expected to exist (even if empty)
+ * while the module is enabled.
+ */
+static void
+pg_tracing_shmem_startup(void)
+{
+	bool		found_pg_tracing;
+	bool		found_shared_spans;
+
+	if (prev_shmem_startup_hook)
+		prev_shmem_startup_hook();
+
+	/* reset in case this is a restart within the postmaster */
+	pg_tracing_shared_state = NULL;
+
+	/* Create or attach to the shared memory state */
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	reset_traceparent(&parse_traceparent);
+	reset_traceparent(&executor_traceparent);
+	pg_tracing_shared_state = ShmemInitStruct("PgTracing Shared", sizeof(pgTracingSharedState),
+											  &found_pg_tracing);
+	shared_spans = ShmemInitStruct("PgTracing Spans",
+								   sizeof(pgTracingSpans) +
+								   pg_tracing_max_span * sizeof(Span),
+								   &found_shared_spans);
+
+	/* Initialize pg_tracing memory context */
+	pg_tracing_mem_ctx = AllocSetContextCreate(TopMemoryContext,
+											   "pg_tracing memory context",
+											   ALLOCSET_DEFAULT_SIZES);
+
+	/* Initialize shmem for trace propagation to parallel workers */
+	pg_tracing_shmem_parallel_startup();
+
+	/* First time, let's init shared state */
+	if (!found_pg_tracing)
+	{
+		pg_tracing_shared_state->stats = get_empty_pg_tracing_stats();
+		pg_tracing_shared_state->lock = &(GetNamedLWLockTranche("pg_tracing"))->lock;
+	}
+	if (!found_shared_spans)
+	{
+		shared_spans->end = 0;
+		shared_spans->max = pg_tracing_max_span;
+	}
+	LWLockRelease(AddinShmemInitLock);
+}
+
+/*
+ * shmem_request hook: request additional shared resources.  We'll allocate
+ * or attach to the shared resources in pg_tracing_shmem_startup().
+ */
+static void
+pg_tracing_shmem_request(void)
+{
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+	RequestAddinShmemSpace(pg_tracing_memsize());
+	RequestNamedLWLockTranche("pg_tracing", 1);
+}
+
+/*
  * Parse query id for sampling filter
  */
 static bool
@@ -534,16 +596,18 @@ assign_filter_query_ids(const char *newval, void *extra)
 }
 
 /*
- * shmem_request hook: request additional shared resources.  We'll allocate
- * or attach to the shared resources in pg_tracing_shmem_startup().
+ * Check whether trace context is filtered based on query id
  */
-static void
-pg_tracing_shmem_request(void)
+static bool
+is_query_id_filtered(uint64 query_id)
 {
-	if (prev_shmem_request_hook)
-		prev_shmem_request_hook();
-	RequestAddinShmemSpace(pg_tracing_memsize());
-	RequestNamedLWLockTranche("pg_tracing", 1);
+	/* No query id filter defined */
+	if (query_id_filter == NULL)
+		return false;
+	for (int i = 0; i < query_id_filter->num_query_id; i++)
+		if (query_id_filter->query_ids[i] == query_id)
+			return false;
+	return true;
 }
 
 /*
@@ -590,6 +654,26 @@ command_type_to_span_type(CmdType cmd_type)
 	return SPAN_TOP_UNKNOWN;
 }
 
+static void
+update_latest_lxid()
+{
+#if PG_VERSION_NUM >= 170000
+	latest_lxid = MyProc->vxid.lxid;
+#else
+	latest_lxid = MyProc->lxid;
+#endif
+}
+
+static bool
+is_new_lxid()
+{
+#if PG_VERSION_NUM >= 170000
+	return MyProc->vxid.lxid != latest_lxid;
+#else
+	return MyProc->lxid != latest_lxid;
+#endif
+}
+
 /*
  * Store a span in the current_trace_spans buffer
  */
@@ -610,40 +694,6 @@ store_span(const Span * span)
 		MemoryContextSwitchTo(oldcxt);
 	}
 	current_trace_spans->spans[current_trace_spans->end++] = *span;
-}
-
-/*
- * End all spans for the current nested level
- */
-static void
-end_nested_level(const TimestampTz *input_span_end_time)
-{
-	Span	   *span;
-	TimestampTz span_end_time;
-
-	span = peek_active_span();
-	if (span == NULL || span->nested_level < nested_level)
-		return;
-
-	if (input_span_end_time != NULL)
-		span_end_time = *input_span_end_time;
-	else
-		span_end_time = GetCurrentTimestamp();
-
-	while (span != NULL && span->nested_level == nested_level)
-	{
-		if (span->parent_planstate_index > -1)
-		{
-			/* We have a parent planstate, use it for the span end */
-			TracedPlanstate *traced_planstate = get_traced_planstate_from_index(span->parent_planstate_index);
-
-			/* Make sure to end instrumentation */
-			InstrEndLoop(traced_planstate->planstate->instrument);
-			span_end_time = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
-		}
-		pop_active_span(&span_end_time);
-		span = peek_active_span();
-	}
 }
 
 /*
@@ -709,86 +759,19 @@ check_full_shared_spans(void)
 }
 
 /*
- * Reset traceparent fields
+ * Add span to the shared memory.
+ * Exclusive lock on pg_tracing_shared_state->lock must be acquired beforehand.
  */
 static void
-reset_traceparent(pgTracingTraceparent * traceparent)
+add_span_to_shared_buffer_locked(const Span * span)
 {
-	traceparent->sampled = 0;
-	traceparent->trace_id.traceid_right = 0;
-	traceparent->trace_id.traceid_left = 0;
-	traceparent->parent_id = 0;
-}
-
-static void
-update_latest_lxid()
-{
-#if PG_VERSION_NUM >= 170000
-	latest_lxid = MyProc->vxid.lxid;
-#else
-	latest_lxid = MyProc->lxid;
-#endif
-}
-
-static bool
-is_new_lxid()
-{
-#if PG_VERSION_NUM >= 170000
-	return MyProc->vxid.lxid != latest_lxid;
-#else
-	return MyProc->lxid != latest_lxid;
-#endif
-}
-
-/*
- * shmem_startup hook: allocate or attach to shared memory, Also create and
- * load the query-texts file, which is expected to exist (even if empty)
- * while the module is enabled.
- */
-static void
-pg_tracing_shmem_startup(void)
-{
-	bool		found_pg_tracing;
-	bool		found_shared_spans;
-
-	if (prev_shmem_startup_hook)
-		prev_shmem_startup_hook();
-
-	/* reset in case this is a restart within the postmaster */
-	pg_tracing_shared_state = NULL;
-
-	/* Create or attach to the shared memory state */
-	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
-
-	reset_traceparent(&parse_traceparent);
-	reset_traceparent(&executor_traceparent);
-	pg_tracing_shared_state = ShmemInitStruct("PgTracing Shared", sizeof(pgTracingSharedState),
-											  &found_pg_tracing);
-	shared_spans = ShmemInitStruct("PgTracing Spans",
-								   sizeof(pgTracingSpans) +
-								   pg_tracing_max_span * sizeof(Span),
-								   &found_shared_spans);
-
-	/* Initialize pg_tracing memory context */
-	pg_tracing_mem_ctx = AllocSetContextCreate(TopMemoryContext,
-											   "pg_tracing memory context",
-											   ALLOCSET_DEFAULT_SIZES);
-
-	/* Initialize shmem for trace propagation to parallel workers */
-	pg_tracing_shmem_parallel_startup();
-
-	/* First time, let's init shared state */
-	if (!found_pg_tracing)
+	if (shared_spans->end >= shared_spans->max)
+		pg_tracing_shared_state->stats.dropped_spans++;
+	else
 	{
-		pg_tracing_shared_state->stats = get_empty_pg_tracing_stats();
-		pg_tracing_shared_state->lock = &(GetNamedLWLockTranche("pg_tracing"))->lock;
+		pg_tracing_shared_state->stats.processed_spans++;
+		shared_spans->spans[shared_spans->end++] = *span;
 	}
-	if (!found_shared_spans)
-	{
-		shared_spans->end = 0;
-		shared_spans->max = pg_tracing_max_span;
-	}
-	LWLockRelease(AddinShmemInitLock);
 }
 
 /*
@@ -871,21 +854,6 @@ set_trace_id(pgTracingTraceparent * traceparent)
 	traceparent->trace_id.traceid_right = pg_prng_int64(&pg_global_prng_state);
 	/* We're at the begining of a new local transaction, save trace context */
 	tx_start_traceparent = *traceparent;
-}
-
-/*
- * Check whether trace context is filtered based on query id
- */
-static bool
-is_query_id_filtered(uint64 query_id)
-{
-	/* No query id filter defined */
-	if (query_id_filter == NULL)
-		return false;
-	for (int i = 0; i < query_id_filter->num_query_id; i++)
-		if (query_id_filter->query_ids[i] == query_id)
-			return false;
-	return true;
 }
 
 /*
@@ -1003,6 +971,18 @@ cleanup:
 }
 
 /*
+ * Reset traceparent fields
+ */
+static void
+reset_traceparent(pgTracingTraceparent * traceparent)
+{
+	traceparent->sampled = 0;
+	traceparent->trace_id.traceid_right = 0;
+	traceparent->trace_id.traceid_left = 0;
+	traceparent->parent_id = 0;
+}
+
+/*
  * Reset pg_tracing memory context and global state.
  */
 void
@@ -1025,22 +1005,6 @@ cleanup_tracing(void)
 	per_level_infos = NULL;
 	cleanup_planstarts();
 	cleanup_active_spans();
-}
-
-/*
- * Add span to the shared memory.
- * Exclusive lock on pg_tracing_shared_state->lock must be acquired beforehand.
- */
-static void
-add_span_to_shared_buffer_locked(const Span * span)
-{
-	if (shared_spans->end >= shared_spans->max)
-		pg_tracing_shared_state->stats.dropped_spans++;
-	else
-	{
-		pg_tracing_shared_state->stats.processed_spans++;
-		shared_spans->spans[shared_spans->end++] = *span;
-	}
 }
 
 /*
@@ -1154,6 +1118,40 @@ initialize_trace_level(void)
 		per_level_infos = repalloc0(per_level_infos, old_allocated_nested_level * sizeof(pgTracingPerLevelInfos),
 									allocated_nested_level * sizeof(pgTracingPerLevelInfos));
 		MemoryContextSwitchTo(oldcxt);
+	}
+}
+
+/*
+ * End all spans for the current nested level
+ */
+static void
+end_nested_level(const TimestampTz *input_span_end_time)
+{
+	Span	   *span;
+	TimestampTz span_end_time;
+
+	span = peek_active_span();
+	if (span == NULL || span->nested_level < nested_level)
+		return;
+
+	if (input_span_end_time != NULL)
+		span_end_time = *input_span_end_time;
+	else
+		span_end_time = GetCurrentTimestamp();
+
+	while (span != NULL && span->nested_level == nested_level)
+	{
+		if (span->parent_planstate_index > -1)
+		{
+			/* We have a parent planstate, use it for the span end */
+			TracedPlanstate *traced_planstate = get_traced_planstate_from_index(span->parent_planstate_index);
+
+			/* Make sure to end instrumentation */
+			InstrEndLoop(traced_planstate->planstate->instrument);
+			span_end_time = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
+		}
+		pop_active_span(&span_end_time);
+		span = peek_active_span();
 	}
 }
 
