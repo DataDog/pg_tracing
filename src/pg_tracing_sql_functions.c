@@ -251,6 +251,14 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 		return (Datum) 0;
 
 	LWLockAcquire(pg_tracing_shared_state->lock, lock_mode);
+	/* There was a new write, reload the text file */
+	if (pg_tracing_shared_state->extent != qbuffer_size)
+	{
+		free(qbuffer);
+		qbuffer = qtext_load_file(&qbuffer_size);
+	}
+	Assert(pg_tracing_shared_state->extent == qbuffer_size);
+
 	for (int i = 0; i < shared_spans->end; i++)
 	{
 		span = shared_spans->spans + i;
