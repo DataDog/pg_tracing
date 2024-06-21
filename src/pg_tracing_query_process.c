@@ -439,7 +439,7 @@ error:
  *
  * On success, the buffer size is also returned into *buffer_size.
  */
-const char *
+char *
 qtext_load_file(Size *buffer_size)
 {
 	char	   *buf;

@@ -270,7 +270,7 @@ extern void parse_trace_context(pgTracingTraceparent * traceparent, const char *
 extern const char *normalise_query(const char *query, int query_loc, int *query_len_p);
 extern bool text_store_file(pgTracingSharedState * pg_tracing, const char *query,
 							int query_len, Size *query_offset);
-extern const char *qtext_load_file(Size *buffer_size);
+extern char *qtext_load_file(Size *buffer_size);
 
 /* pg_tracing_span.c */
 extern void begin_span(TraceId trace_id, Span * span, SpanType type,

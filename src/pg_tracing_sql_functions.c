@@ -213,7 +213,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	bool		consume;
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	Span	   *span;
-	const char *qbuffer;
+	char	   *qbuffer;
 	Size		qbuffer_size = 0;
 	LWLockMode	lock_mode = LW_SHARED;
 
@@ -263,6 +263,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
 	LWLockRelease(pg_tracing_shared_state->lock);
 
+	free(qbuffer);
 	return (Datum) 0;
 }
 
