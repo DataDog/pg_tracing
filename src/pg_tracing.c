@@ -684,14 +684,11 @@ store_span(const Span * span)
 
 	if (current_trace_spans->end >= current_trace_spans->max)
 	{
-		MemoryContext oldcxt;
-
 		/* Need to extend. */
 		current_trace_spans->max *= 2;
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
+		/* repalloc uses the pointer's memory context, no need to switch */
 		current_trace_spans = repalloc(current_trace_spans, sizeof(pgTracingSpans) +
 									   current_trace_spans->max * sizeof(Span));
-		MemoryContextSwitchTo(oldcxt);
 	}
 	current_trace_spans->spans[current_trace_spans->end++] = *span;
 }
@@ -1110,14 +1107,12 @@ initialize_trace_level(void)
 	else if (nested_level >= allocated_nested_level)
 	{
 		/* New nested level, allocate more memory */
-		MemoryContext oldcxt;
 		int			old_allocated_nested_level = allocated_nested_level;
 
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
 		allocated_nested_level++;
+		/* repalloc uses the pointer's memory context, no need to switch */
 		per_level_infos = repalloc0(per_level_infos, old_allocated_nested_level * sizeof(pgTracingPerLevelInfos),
 									allocated_nested_level * sizeof(pgTracingPerLevelInfos));
-		MemoryContextSwitchTo(oldcxt);
 	}
 }
 
