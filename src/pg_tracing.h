@@ -233,6 +233,16 @@ typedef struct TracedPlanstate
 	int			nested_level;
 }			TracedPlanstate;
 
+/*
+ * Store context to marshal spans to json
+ */
+typedef struct pgTracingJsonContext
+{
+	StringInfo	str;
+	const char *qbuffer;
+	Size		qbuffer_size;
+}			pgTracingJsonContext;
+
 /* pg_tracing_explain.c */
 extern const char *plan_to_node_type(const Plan *plan);
 extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
@@ -319,5 +329,9 @@ extern void
 			drop_all_spans_locked(void);
 extern void
 			pg_tracing_shmem_startup(void);
+
+/* pg_tracing_json.c */
+extern void
+			marshal_spans_to_json(const pgTracingJsonContext * json_ctx, const pgTracingSpans * spans);
 
 #endif

@@ -18,6 +18,7 @@
 
 PG_FUNCTION_INFO_V1(pg_tracing_info);
 PG_FUNCTION_INFO_V1(pg_tracing_spans);
+PG_FUNCTION_INFO_V1(pg_tracing_json_spans);
 PG_FUNCTION_INFO_V1(pg_tracing_reset);
 
 /*
@@ -197,6 +198,37 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 		nulls[j] = 1;
 
 	tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
+}
+
+Datum
+pg_tracing_json_spans(PG_FUNCTION_ARGS)
+{
+	StringInfoData str;
+	const char *qbuffer;
+	Size		qbuffer_size = 0;
+	pgTracingJsonContext ctx;
+
+	/* Don't trace this */
+	cleanup_tracing();
+
+	LWLockAcquire(pg_tracing_shared_state->lock, LW_SHARED);
+	qbuffer = qtext_load_file(&qbuffer_size);
+	if (qbuffer == NULL)
+	{
+		LWLockRelease(pg_tracing_shared_state->lock);
+		return (Datum) 0;
+	}
+
+	initStringInfo(&str);
+	ctx.str = &str;
+	ctx.qbuffer = qbuffer;
+	ctx.qbuffer_size = qbuffer_size;
+
+	marshal_spans_to_json(&ctx, shared_spans);
+	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
+	LWLockRelease(pg_tracing_shared_state->lock);
+
+	PG_RETURN_TEXT_P(cstring_to_text(str.data));
 }
 
 /*

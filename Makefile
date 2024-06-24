@@ -12,16 +12,17 @@ PG_CONFIG  = pg_config
 OBJS = \
 	$(WIN32RES) \
 	src/pg_tracing.o \
-	src/pg_tracing_query_process.o \
+	src/pg_tracing_active_spans.o \
+	src/pg_tracing_explain.o \
+	src/pg_tracing_json.o \
 	src/pg_tracing_parallel.o \
 	src/pg_tracing_planstate.o \
-	src/pg_tracing_explain.o \
+	src/pg_tracing_query_process.o \
 	src/pg_tracing_span.o \
 	src/pg_tracing_sql_functions.o \
-	src/pg_tracing_active_spans.o \
 	src/version_compat.o
 
-REGRESSCHECKS = setup utility select insert trigger cursor transaction
+REGRESSCHECKS = setup utility select insert trigger cursor json transaction
 ifeq ($(PG_VERSION),15)
 REGRESSCHECKS += trigger_15
 else
