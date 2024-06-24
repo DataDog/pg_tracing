@@ -1,0 +1,33 @@
+-- Check generated json for simple select query
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- Check generated json for multi line query
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ SELECT
+    1,
+2;
+ ?column? | ?column? 
+----------+----------
+        1 |        2
+(1 row)
+
+-- Check json results
+SELECT "traceId", name, kind, lvl FROM peek_ordered_json_spans;
+             traceId              |    name     | kind | lvl 
+----------------------------------+-------------+------+-----
+ 00000000000000000000000000000001 | SELECT $1;  |    2 |   1
+ 00000000000000000000000000000001 | Planner     |    2 |   2
+ 00000000000000000000000000000001 | ExecutorRun |    2 |   2
+ 00000000000000000000000000000001 | Result      |    2 |   3
+ 00000000000000000000000000000002 | SELECT $1, +|    2 |   1
+                                  | $2;         |      | 
+ 00000000000000000000000000000002 | Planner     |    2 |   2
+ 00000000000000000000000000000002 | ExecutorRun |    2 |   2
+ 00000000000000000000000000000002 | Result      |    2 |   3
+(8 rows)
+
+-- Cleanup
+CALL clean_spans();

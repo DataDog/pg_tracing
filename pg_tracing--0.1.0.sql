@@ -21,6 +21,11 @@ RETURNS void
 AS 'MODULE_PATHNAME'
 LANGUAGE C;
 
+CREATE FUNCTION pg_tracing_json_spans()
+RETURNS text
+AS 'MODULE_PATHNAME'
+LANGUAGE C;
+
 CREATE FUNCTION pg_tracing_spans(
     IN consume bool,
     OUT trace_id char(32),
