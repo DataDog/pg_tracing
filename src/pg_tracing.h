@@ -316,5 +316,7 @@ extern void
 			cleanup_tracing(void);
 extern void
 			drop_all_spans_locked(void);
+extern void
+			pg_tracing_shmem_startup(void);
 
 #endif

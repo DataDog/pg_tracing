@@ -246,7 +246,7 @@ static void pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryStrin
 									  DestReceiver *dest, QueryCompletion *qc);
 
 static void pg_tracing_shmem_request(void);
-static void pg_tracing_shmem_startup(void);
+static void pg_tracing_shmem_startup_hook(void);
 static void reset_traceparent(pgTracingTraceparent * traceparent);
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
@@ -414,7 +414,7 @@ _PG_init(void)
 	shmem_request_hook = pg_tracing_shmem_request;
 
 	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = pg_tracing_shmem_startup;
+	shmem_startup_hook = pg_tracing_shmem_startup_hook;
 
 	prev_post_parse_analyze_hook = post_parse_analyze_hook;
 	post_parse_analyze_hook = pg_tracing_post_parse_analyze;
@@ -458,18 +458,24 @@ pg_tracing_memsize(void)
 }
 
 /*
- * shmem_startup hook: allocate or attach to shared memory, Also create and
- * load the query-texts file, which is expected to exist (even if empty)
- * while the module is enabled.
+ * shmem_startup hook: Call previous startup hook and initialise shmem
  */
 static void
+pg_tracing_shmem_startup_hook(void)
+{
+	if (prev_shmem_startup_hook)
+		prev_shmem_startup_hook();
+	pg_tracing_shmem_startup();
+}
+
+/*
+ * shmem_startup: allocate or attach to shared memory.
+ */
+void
 pg_tracing_shmem_startup(void)
 {
 	bool		found_pg_tracing;
 	bool		found_shared_spans;
-
-	if (prev_shmem_startup_hook)
-		prev_shmem_startup_hook();
 
 	/* reset in case this is a restart within the postmaster */
 	pg_tracing_shared_state = NULL;
