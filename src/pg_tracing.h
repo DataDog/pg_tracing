@@ -18,6 +18,7 @@
 
 /* Location of external text file */
 #define PG_TRACING_TEXT_FILE	PG_STAT_TMP_DIR "/pg_tracing.stat"
+#define INT64_HEX_FORMAT "%016" INT64_MODIFIER "x"
 
 /*
  * Counters extracted from query instrumentation
