@@ -16,8 +16,6 @@
 #include "utils/fmgrprotos.h"
 #include "utils/timestamp.h"
 
-#define INT64_HEX_FORMAT "%016" INT64_MODIFIER "x"
-
 PG_FUNCTION_INFO_V1(pg_tracing_info);
 PG_FUNCTION_INFO_V1(pg_tracing_spans);
 PG_FUNCTION_INFO_V1(pg_tracing_reset);
