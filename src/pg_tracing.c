@@ -124,6 +124,12 @@ static int	pg_tracing_buffer_mode = PG_TRACING_KEEP_ON_FULL;	/* behaviour on ful
 																 * buffer */
 static char *pg_tracing_filter_query_ids = NULL;	/* only sample query
 													 * matching query ids */
+static char *pg_tracing_otel_endpoint = NULL;	/* Otel collector to send
+												 * spans to */
+static int	pg_tracing_otel_naptime;	/* Delay between upload of spans to
+										 * otel collector */
+static int	pg_tracing_otel_connect_timeout_ms; /* Connect timeout to the otel
+												 * collector */
 
 static const struct config_enum_entry track_options[] =
 {
@@ -404,6 +410,43 @@ _PG_init(void)
 							 NULL,
 							 NULL);
 
+	DefineCustomIntVariable("pg_tracing.otel_naptime",
+							"Duration between each upload of spans to the otel collector (in milliseconds).",
+							NULL,
+							&pg_tracing_otel_naptime,
+							10000,
+							1000,
+							500000,
+							PGC_POSTMASTER,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("pg_tracing.otel_connect_timeout_ms",
+							"Maximum time in milliseconds to connect to the otel collector.",
+							NULL,
+							&pg_tracing_otel_connect_timeout_ms,
+							1000,
+							100,
+							600000,
+							PGC_POSTMASTER,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomStringVariable("pg_tracing.otel_endpoint",
+							   "Otel endpoint to send spans.",
+							   "If unset, no background worker to export to otel is created.",
+							   &pg_tracing_otel_endpoint,
+							   NULL,
+							   PGC_POSTMASTER,
+							   0,
+							   NULL,
+							   NULL,
+							   NULL);
+
 	MarkGUCPrefixReserved("pg_tracing");
 
 	/* For jumble state */
@@ -435,6 +478,13 @@ _PG_init(void)
 	ProcessUtility_hook = pg_tracing_ProcessUtility;
 
 	RegisterXactCallback(pg_tracing_xact_callback, NULL);
+	/* Start background worker */
+	if (pg_tracing_otel_endpoint != NULL)
+	{
+		elog(INFO, "Starting otel exporter worker on endpoint %s", pg_tracing_otel_endpoint);
+		pg_tracing_start_worker(pg_tracing_otel_endpoint, pg_tracing_otel_naptime,
+								pg_tracing_otel_connect_timeout_ms);
+	}
 }
 
 /*

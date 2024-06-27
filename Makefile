@@ -9,12 +9,15 @@ EXTENSION  = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
 PG_CONFIG  = pg_config
+# TODO: Make this optional
+SHLIB_LINK = -lcurl
 OBJS = \
 	$(WIN32RES) \
 	src/pg_tracing.o \
 	src/pg_tracing_active_spans.o \
 	src/pg_tracing_explain.o \
 	src/pg_tracing_json.o \
+	src/pg_tracing_otel.o \
 	src/pg_tracing_parallel.o \
 	src/pg_tracing_planstate.o \
 	src/pg_tracing_query_process.o \
@@ -36,6 +39,8 @@ REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
 REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
+
+TAP_TESTS = 1
 
 include $(PGXS)
 
