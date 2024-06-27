@@ -7,10 +7,7 @@ ARG PG_VERSION
 # Install packages
 RUN apt update
 RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-    build-essential ca-certificates curl gnupg git less flex bison \
-	libcurl4-gnutls-dev libicu-dev libncurses-dev libxml2-dev zlib1g-dev libedit-dev \
-    libkrb5-dev liblz4-dev libncurses6 libpam-dev libreadline-dev libselinux1-dev \
-    libssl-dev libxslt1-dev libzstd-dev uuid-dev make openssl sudo postgresql-common \
+    ca-certificates curl gnupg make sudo gcc \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
@@ -19,6 +16,7 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt focal-pgdg main ${PG_VERSI
 # Install PostgreSQL
 RUN apt update \
     && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+     libcurl4-gnutls-dev libhttp-server-simple-perl libipc-run-perl \
      postgresql-server-dev-${PG_VERSION} \
      postgresql-${PG_VERSION} \
     && rm -rf /var/lib/apt/lists/*
@@ -45,6 +43,7 @@ COPY --chown=postgres pg_tracing.conf ./pg_tracing.conf
 
 # Tests
 COPY --chown=postgres ./sql/ ./sql
+COPY --chown=postgres ./t/ ./t
 COPY --chown=postgres ./expected/ ./expected
 
 RUN make -s clean
