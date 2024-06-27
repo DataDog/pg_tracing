@@ -9,6 +9,8 @@ CREATE FUNCTION pg_tracing_info(
     OUT processed_spans bigint,
     OUT dropped_traces bigint,
     OUT dropped_spans bigint,
+    OUT otel_sent_spans bigint,
+    OUT otel_failures bigint,
     OUT last_consume timestamp with time zone,
     OUT stats_reset timestamp with time zone
 )

@@ -33,6 +33,8 @@ get_empty_pg_tracing_stats(void)
 	stats.processed_spans = 0;
 	stats.dropped_traces = 0;
 	stats.dropped_spans = 0;
+	stats.otel_sent_spans = 0;
+	stats.otel_failures = 0;
 	stats.last_consume = 0;
 	stats.stats_reset = GetCurrentTimestamp();
 	return stats;
@@ -311,7 +313,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 Datum
 pg_tracing_info(PG_FUNCTION_ARGS)
 {
-#define PG_TRACING_INFO_COLS	6
+#define PG_TRACING_INFO_COLS	8
 	pgTracingStats stats;
 	TupleDesc	tupdesc;
 	Datum		values[PG_TRACING_INFO_COLS] = {0};
@@ -336,6 +338,8 @@ pg_tracing_info(PG_FUNCTION_ARGS)
 	values[i++] = Int64GetDatum(stats.processed_spans);
 	values[i++] = Int64GetDatum(stats.dropped_traces);
 	values[i++] = Int64GetDatum(stats.dropped_spans);
+	values[i++] = Int64GetDatum(stats.otel_sent_spans);
+	values[i++] = Int64GetDatum(stats.otel_failures);
 	values[i++] = TimestampTzGetDatum(stats.last_consume);
 	values[i++] = TimestampTzGetDatum(stats.stats_reset);
 

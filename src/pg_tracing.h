@@ -156,6 +156,9 @@ typedef struct pgTracingStats
 	int64		processed_spans;	/* number of spans processed */
 	int64		dropped_traces; /* number of traces aborted due to full buffer */
 	int64		dropped_spans;	/* number of dropped spans due to full buffer */
+	int64		otel_sent_spans;	/* number of spans sent to otel collector */
+	int64		otel_failures;	/* number of failures to send spans to otel
+								 * collector */
 	TimestampTz last_consume;	/* Last time the shared spans buffer was
 								 * consumed */
 	TimestampTz stats_reset;	/* Last time stats were reset */
@@ -333,5 +336,9 @@ extern void
 /* pg_tracing_json.c */
 extern void
 			marshal_spans_to_json(const pgTracingJsonContext * json_ctx, const pgTracingSpans * spans);
+
+/* pg_tracing_otel.c */
+extern void
+			pg_tracing_start_worker(const char *endpoint, int naptime, int connect_timeout_ms);
 
 #endif
