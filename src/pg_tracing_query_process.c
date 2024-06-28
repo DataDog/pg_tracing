@@ -58,10 +58,10 @@ has_possible_sql_comment(const char *query)
  * The expected format for traceparent is: version-traceid-parentid-sampled
  * Example: 00-00000000000000000000000000000009-0000000000000005-01
  */
-static pgTracingTraceparent
+static Traceparent
 parse_traceparent_value(const char *traceparent_str)
 {
-	pgTracingTraceparent traceparent;
+	Traceparent traceparent;
 	char	   *traceid_left;
 	char	   *endptr;
 
@@ -105,7 +105,7 @@ parse_traceparent_value(const char *traceparent_str)
  * Or "SELECT 1 /\*traceparent='00-00000000000000000000000000000009-0000000000000005-01'*\/;"
  */
 void
-extract_trace_context_from_query(pgTracingTraceparent * traceparent,
+extract_trace_context_from_query(Traceparent * traceparent,
 								 const char *query)
 {
 	const char *start_sqlcomment = NULL;
@@ -146,7 +146,7 @@ extract_trace_context_from_query(pgTracingTraceparent * traceparent,
  * We're only interested in traceparent value to get the trace id, parent id and sampled flag.
  */
 void
-parse_trace_context(pgTracingTraceparent * traceparent, const char *trace_context_str,
+parse_trace_context(Traceparent * traceparent, const char *trace_context_str,
 					int trace_context_len)
 {
 	const char *traceparent_str;
