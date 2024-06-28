@@ -232,9 +232,8 @@ begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
  * Push a new span that will be the child of the latest active span
  */
 Span *
-push_child_active_span(MemoryContext context, const pgTracingTraceparent * traceparent,
-					   SpanType span_type, const Query *query, const PlannedStmt *pstmt,
-					   TimestampTz start_time)
+push_child_active_span(MemoryContext context, const SpanContext * span_context,
+					   SpanType span_type, const Query *query, const PlannedStmt *pstmt)
 {
 	Span	   *parent_span = peek_active_span();
 	Span	   *span = allocate_new_active_span(context);
@@ -245,8 +244,8 @@ push_child_active_span(MemoryContext context, const pgTracingTraceparent * trace
 	else
 		query_id = query->queryId;
 
-	begin_span(traceparent->trace_id, span, span_type, NULL,
-			   parent_span->span_id, query_id, &start_time);
+	begin_span(span_context->traceparent->trace_id, span, span_type, NULL,
+			   parent_span->span_id, query_id, &span_context->start_time);
 	return span;
 }
 
@@ -262,10 +261,9 @@ push_child_active_span(MemoryContext context, const pgTracingTraceparent * trace
  * we keep the active span for the next statement in next_active_span.
  */
 Span *
-push_active_span(MemoryContext context, const pgTracingTraceparent * traceparent, SpanType span_type,
+push_active_span(MemoryContext context, const SpanContext * span_context, SpanType span_type,
 				 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-				 const char *query_text, TimestampTz start_time,
-				 HookPhase hook_phase, bool export_parameters)
+				 const char *query_text, HookPhase hook_phase, bool export_parameters)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
@@ -300,7 +298,7 @@ push_active_span(MemoryContext context, const pgTracingTraceparent * traceparent
 		span = &next_active_span;
 	}
 
-	begin_active_span(traceparent, span, span_type, query, jstate, pstmt,
-					  query_text, start_time, export_parameters, parent_span);
+	begin_active_span(span_context->traceparent, span, span_type, query, jstate, pstmt,
+					  query_text, span_context->start_time, export_parameters, parent_span);
 	return span;
 }

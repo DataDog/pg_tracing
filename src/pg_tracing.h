@@ -245,6 +245,12 @@ typedef struct pgTracingJsonContext
 	Size		qbuffer_size;
 }			pgTracingJsonContext;
 
+typedef struct SpanContext
+{
+	pgTracingTraceparent *traceparent;
+	TimestampTz start_time;
+}			SpanContext;
+
 /* pg_tracing_explain.c */
 extern const char *plan_to_node_type(const Plan *plan);
 extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
@@ -303,13 +309,12 @@ pgTracingStats get_empty_pg_tracing_stats(void);
 /* pg_tracing_active_spans.c */
 Span	   *pop_active_span(const TimestampTz *end_time);
 Span	   *peek_active_span(void);
-Span	   *push_active_span(MemoryContext context, const pgTracingTraceparent * traceparent, SpanType span_type,
+Span	   *push_active_span(MemoryContext context, const SpanContext * span_context, SpanType span_type,
 							 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
-							 const char *query_text, TimestampTz start_time,
+							 const char *query_text,
 							 HookPhase hook_phase, bool export_parameters);
-Span	   *push_child_active_span(MemoryContext context, const pgTracingTraceparent * traceparent,
-								   SpanType span_type, const Query *query, const PlannedStmt *pstmt,
-								   TimestampTz start_time);
+Span	   *push_child_active_span(MemoryContext context, const SpanContext * span_context,
+								   SpanType span_type, const Query *query, const PlannedStmt *pstmt);
 
 void		cleanup_active_spans(void);
 
