@@ -1519,7 +1519,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	 * ExecProcNode override.
 	 */
 	if (pg_tracing_planstate_spans && queryDesc->planstate->instrument)
-		setup_ExecProcNode_override(queryDesc);
+		setup_ExecProcNode_override(pg_tracing_mem_ctx, queryDesc);
 
 	nested_level++;
 	PG_TRY();

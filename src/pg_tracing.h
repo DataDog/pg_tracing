@@ -265,7 +265,7 @@ extern void
 							  TimestampTz parent_start, TimestampTz parent_end);
 
 extern void
-			setup_ExecProcNode_override(QueryDesc *queryDesc);
+			setup_ExecProcNode_override(MemoryContext context, QueryDesc *queryDesc);
 extern void
 			cleanup_planstarts(void);
 extern TracedPlanstate *

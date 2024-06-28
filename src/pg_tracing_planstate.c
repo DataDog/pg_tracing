@@ -302,16 +302,13 @@ override_ExecProcNode(PlanState *planstate)
  * Override all ExecProcNode pointer of the planstate with ExecProcNodeFirstPgTracing to track first call of a node.
  */
 void
-setup_ExecProcNode_override(QueryDesc *queryDesc)
+setup_ExecProcNode_override(MemoryContext context, QueryDesc *queryDesc)
 {
 	if (max_planstart == 0)
 	{
-		MemoryContext oldcxt;
-
 		max_planstart = INITIAL_NUM_PLANSTATE;
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		traced_planstates = palloc0(max_planstart * sizeof(TracedPlanstate));
-		MemoryContextSwitchTo(oldcxt);
+		traced_planstates = MemoryContextAllocZero(context,
+												   max_planstart * sizeof(TracedPlanstate));
 	}
 	Assert(queryDesc->planstate->instrument);
 	/* Pointer should target ExecProcNodeFirst. Save it to restore it later. */
