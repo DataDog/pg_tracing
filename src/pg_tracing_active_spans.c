@@ -45,13 +45,13 @@ cleanup_active_spans(void)
  * Push a new active span to the active_spans stack
  */
 static Span *
-allocate_new_active_span(void)
+allocate_new_active_span(MemoryContext context)
 {
 	Span	   *span;
 
 	if (active_spans == NULL)
 	{
-		active_spans = MemoryContextAllocZero(pg_tracing_mem_ctx,
+		active_spans = MemoryContextAllocZero(context,
 											  sizeof(pgTracingSpans) + 10 * sizeof(Span));
 		active_spans->max = 10;
 	}
@@ -232,12 +232,12 @@ begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
  * Push a new span that will be the child of the latest active span
  */
 Span *
-push_child_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
-					   const Query *query, const PlannedStmt *pstmt,
+push_child_active_span(MemoryContext context, const pgTracingTraceparent * traceparent,
+					   SpanType span_type, const Query *query, const PlannedStmt *pstmt,
 					   TimestampTz start_time)
 {
 	Span	   *parent_span = peek_active_span();
-	Span	   *span = allocate_new_active_span();
+	Span	   *span = allocate_new_active_span(context);
 	uint64		query_id;
 
 	if (pstmt)
@@ -262,7 +262,7 @@ push_child_active_span(const pgTracingTraceparent * traceparent, SpanType span_t
  * we keep the active span for the next statement in next_active_span.
  */
 Span *
-push_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
+push_active_span(MemoryContext context, const pgTracingTraceparent * traceparent, SpanType span_type,
 				 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 				 const char *query_text, TimestampTz start_time,
 				 HookPhase hook_phase, bool export_parameters)
@@ -278,7 +278,7 @@ push_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
 		 * No active span or it belongs to the previous level, allocate a new
 		 * one
 		 */
-		span = allocate_new_active_span();
+		span = allocate_new_active_span(context);
 		if (next_active_span.span_id > 0)
 		{
 			/* next_active_span is valid, use it and reset it */

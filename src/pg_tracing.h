@@ -304,18 +304,17 @@ pgTracingStats get_empty_pg_tracing_stats(void);
 /* pg_tracing_active_spans.c */
 Span	   *pop_active_span(const TimestampTz *end_time);
 Span	   *peek_active_span(void);
-Span	   *push_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
+Span	   *push_active_span(MemoryContext context, const pgTracingTraceparent * traceparent, SpanType span_type,
 							 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
 							 const char *query_text, TimestampTz start_time,
 							 HookPhase hook_phase, bool export_parameters);
-Span	   *push_child_active_span(const pgTracingTraceparent * traceparent, SpanType span_type,
-								   const Query *query, const PlannedStmt *pstmt,
+Span	   *push_child_active_span(MemoryContext context, const pgTracingTraceparent * traceparent,
+								   SpanType span_type, const Query *query, const PlannedStmt *pstmt,
 								   TimestampTz start_time);
 
 void		cleanup_active_spans(void);
 
 /* pg_tracing.c */
-extern MemoryContext pg_tracing_mem_ctx;
 extern pgTracingSharedState * pg_tracing_shared_state;
 extern pgTracingSpans * shared_spans;
 
