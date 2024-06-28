@@ -1211,13 +1211,14 @@ initialise_span_context(SpanContext * span_context,
 						Traceparent * traceparent,
 						const PlannedStmt *pstmt,
 						const JumbleState *jstate,
-						Query *query)
+						Query *query, const char *query_text)
 {
 	span_context->start_time = GetCurrentTimestamp();
 	span_context->traceparent = traceparent;
 	span_context->pstmt = pstmt;
 	span_context->query = query;
 	span_context->jstate = jstate;
+	span_context->query_text = query_text;
 }
 
 /*
@@ -1291,9 +1292,9 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 
 	/* Statement is sampled, initialize memory and push a new active span */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, NULL, jstate, query);
+	initialise_span_context(&span_context, traceparent, NULL, jstate, query, pstate->p_sourcetext);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
-					 pstate->p_sourcetext, HOOK_PARSE, pg_tracing_export_parameters);
+					 HOOK_PARSE, pg_tracing_export_parameters);
 }
 
 /*
@@ -1342,9 +1343,9 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 
 	/* statement is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, NULL, NULL, query);
+	initialise_span_context(&span_context, traceparent, NULL, NULL, query, query_string);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
-					 query_string, HOOK_PLANNER, pg_tracing_export_parameters);
+					 HOOK_PLANNER, pg_tracing_export_parameters);
 	/* Create and start the planner span */
 	push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_PLANNER, query);
 
@@ -1438,10 +1439,9 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 	/* Statement is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL);
+	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
-					 queryDesc->sourceText, HOOK_EXECUTOR,
-					 pg_tracing_export_parameters);
+					 HOOK_EXECUTOR, pg_tracing_export_parameters);
 
 	/*
 	 * We only need full instrumentation if we generate spans from planstate.
@@ -1509,9 +1509,9 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 
 	/* ExecutorRun is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL);
+	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
-					 queryDesc->sourceText, HOOK_EXECUTOR, pg_tracing_export_parameters);
+					 HOOK_EXECUTOR, pg_tracing_export_parameters);
 	/* Start ExecutorRun span as a new active span */
 	executor_run_span = push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_RUN,
 											   NULL);
@@ -1622,9 +1622,9 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 
 	/* Statement is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL);
+	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
-					 queryDesc->sourceText, HOOK_EXECUTOR, pg_tracing_export_parameters);
+					 HOOK_EXECUTOR, pg_tracing_export_parameters);
 	/* Create ExecutorFinish as a new potential top span */
 	push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_FINISH, NULL);
 
@@ -1774,7 +1774,6 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	}
 
 	/* Statement is sampled */
-	initialise_span_context(&span_context, traceparent, pstmt, NULL, NULL);
 
 	/*
 	 * Keep track if we're in a declare cursor as we want to disable query
@@ -1807,12 +1806,12 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	 */
 	in_aborted_transaction = IsAbortedTransactionBlockState();
 
-
 	initialize_trace_level();
+	initialise_span_context(&span_context, traceparent, pstmt, NULL, NULL, queryString);
 	if (track_utility)
 	{
 		push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(pstmt->commandType),
-						 queryString, HOOK_EXECUTOR, pg_tracing_export_parameters);
+						 HOOK_EXECUTOR, pg_tracing_export_parameters);
 		push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_PROCESS_UTILITY, NULL);
 	}
 
