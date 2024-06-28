@@ -11,7 +11,7 @@
 #include "postgres.h"
 
 #include "common/pg_prng.h"
-#include "nodes/extensible.h"
+#include "storage/proc.h"
 #include "pg_tracing.h"
 
 /*
