@@ -208,7 +208,7 @@ pg_tracing_json_spans(PG_FUNCTION_ARGS)
 	StringInfoData str;
 	const char *qbuffer;
 	Size		qbuffer_size = 0;
-	pgTracingJsonContext ctx;
+	JsonContext ctx;
 
 	/* Don't trace this */
 	cleanup_tracing();

@@ -123,7 +123,7 @@ send_spans_to_otel_collector(OtelContext * octx)
 	int			num_spans = 0;
 	char	   *qbuffer;
 	Size		qbuffer_size = 0;
-	pgTracingJsonContext json_ctx;
+	JsonContext json_ctx;
 	StringInfoData str;
 
 	/*
