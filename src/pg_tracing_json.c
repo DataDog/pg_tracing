@@ -207,7 +207,7 @@ append_span_attributes(StringInfo str, const Span * span)
 }
 
 static void
-append_span(const pgTracingJsonContext * json_ctx, const Span * span)
+append_span(const JsonContext * json_ctx, const Span * span)
 {
 	char		trace_id[33];
 	char		parent_id[17];
@@ -236,7 +236,7 @@ append_span(const pgTracingJsonContext * json_ctx, const Span * span)
 }
 
 static void
-append_scope_spans(const pgTracingJsonContext * json_ctx, const pgTracingSpans * spans)
+append_scope_spans(const JsonContext * json_ctx, const pgTracingSpans * spans)
 {
 	appendStringInfo(json_ctx->str, "\"scopeSpans\":[");
 	appendStringInfo(json_ctx->str, "{\"spans\": [");
@@ -253,7 +253,7 @@ append_scope_spans(const pgTracingJsonContext * json_ctx, const pgTracingSpans *
  * Marshal spans json compatible for otel http endpoint
  */
 void
-marshal_spans_to_json(const pgTracingJsonContext * json_ctx, const pgTracingSpans * spans)
+marshal_spans_to_json(const JsonContext * json_ctx, const pgTracingSpans * spans)
 {
 	appendStringInfo(json_ctx->str, "{\"resourceSpans\": [{");
 	append_resource(json_ctx->str);

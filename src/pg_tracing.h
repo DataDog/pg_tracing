@@ -238,12 +238,12 @@ typedef struct TracedPlanstate
 /*
  * Store context to marshal spans to json
  */
-typedef struct pgTracingJsonContext
+typedef struct JsonContext
 {
 	StringInfo	str;
 	const char *qbuffer;
 	Size		qbuffer_size;
-}			pgTracingJsonContext;
+}			JsonContext;
 
 typedef struct SpanContext
 {
@@ -336,7 +336,7 @@ extern void
 
 /* pg_tracing_json.c */
 extern void
-			marshal_spans_to_json(const pgTracingJsonContext * json_ctx, const pgTracingSpans * spans);
+			marshal_spans_to_json(const JsonContext * json_ctx, const pgTracingSpans * spans);
 
 /* pg_tracing_otel.c */
 extern void
