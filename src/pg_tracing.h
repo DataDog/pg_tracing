@@ -247,8 +247,9 @@ typedef struct JsonContext
 
 typedef struct SpanContext
 {
-	Traceparent *traceparent;
 	TimestampTz start_time;
+	Traceparent *traceparent;
+	const PlannedStmt *pstmt;
 }			SpanContext;
 
 /* pg_tracing_explain.c */
