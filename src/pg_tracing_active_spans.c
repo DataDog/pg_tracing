@@ -51,24 +51,18 @@ allocate_new_active_span(void)
 
 	if (active_spans == NULL)
 	{
-		MemoryContext oldcxt;
-
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
-		active_spans = palloc0(sizeof(pgTracingSpans) + 10 * sizeof(Span));
-		MemoryContextSwitchTo(oldcxt);
+		active_spans = MemoryContextAllocZero(pg_tracing_mem_ctx,
+											  sizeof(pgTracingSpans) + 10 * sizeof(Span));
 		active_spans->max = 10;
 	}
 	else if (active_spans->end >= active_spans->max)
 	{
-		MemoryContext oldcxt;
 		int			old_spans_max = active_spans->max;
 
 		active_spans->max *= 2;
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
 		active_spans = repalloc0(active_spans,
 								 sizeof(pgTracingSpans) + old_spans_max * sizeof(Span),
 								 sizeof(pgTracingSpans) + old_spans_max * 2 * sizeof(Span));
-		MemoryContextSwitchTo(oldcxt);
 	}
 
 	span = &active_spans->spans[active_spans->end++];
