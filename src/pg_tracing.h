@@ -253,6 +253,7 @@ typedef struct SpanContext
 	const Query *query;
 	const JumbleState *jstate;
 	const char *query_text;
+	uint64		query_id;
 	bool		export_parameters;
 }			SpanContext;
 

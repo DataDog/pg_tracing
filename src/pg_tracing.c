@@ -1213,6 +1213,8 @@ initialise_span_context(SpanContext * span_context,
 						const JumbleState *jstate,
 						Query *query, const char *query_text)
 {
+	Assert(pstmt || query);
+
 	span_context->start_time = GetCurrentTimestamp();
 	span_context->traceparent = traceparent;
 	span_context->pstmt = pstmt;
@@ -1220,6 +1222,11 @@ initialise_span_context(SpanContext * span_context,
 	span_context->jstate = jstate;
 	span_context->query_text = query_text;
 	span_context->export_parameters = pg_tracing_export_parameters;
+
+	if (span_context->pstmt)
+		span_context->query_id = pstmt->queryId;
+	else
+		span_context->query_id = query->queryId;
 }
 
 /*
