@@ -17,9 +17,12 @@
 /*
  * Initialize span fields
  */
-static void
-initialize_span_fields(Span * span, SpanType type, TraceId trace_id, const uint64 *span_id, uint64 parent_id, uint64 query_id)
+void
+begin_span(TraceId trace_id, Span * span, SpanType type,
+		   const uint64 *span_id, uint64 parent_id, uint64 query_id,
+		   TimestampTz start_span)
 {
+	span->start = start_span;
 	span->trace_id = trace_id;
 	span->type = type;
 
@@ -57,22 +60,9 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, const uint6
 	 */
 	if (type == SPAN_PLANNER || span->type == SPAN_PROCESS_UTILITY)
 	{
-		/* TODO Do we need to track wal for planner? */
 		span->node_counters.buffer_usage = pgBufferUsage;
 		span->node_counters.wal_usage = pgWalUsage;
 	}
-}
-
-/*
- * Initialize span and set span starting time.
- */
-void
-begin_span(TraceId trace_id, Span * span, SpanType type,
-		   const uint64 *span_id, uint64 parent_id, uint64 query_id,
-		   TimestampTz start_span)
-{
-	initialize_span_fields(span, type, trace_id, span_id, parent_id, query_id);
-	span->start = start_span;
 }
 
 /*
