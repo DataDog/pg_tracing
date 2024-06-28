@@ -264,7 +264,7 @@ extern const char *plan_to_deparse_info(const planstateTraceContext * planstateT
 
 /* pg_tracing_parallel.c */
 extern void pg_tracing_shmem_parallel_startup(void);
-extern void add_parallel_context(const Traceparent *traceparent, uint64 parent_id);
+extern void add_parallel_context(const Traceparent * traceparent, uint64 parent_id);
 extern void remove_parallel_context(void);
 extern void fetch_parallel_context(Traceparent * traceparent);
 
