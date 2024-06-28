@@ -79,11 +79,11 @@ typedef enum
 /*
  * Structure to store Query id filtering array of query id used for filtering
  */
-typedef struct pgTracingQueryIdFilter
+typedef struct QueryIdFilter
 {
 	int			num_query_id;	/* number of query ids */
 	uint64		query_ids[FLEXIBLE_ARRAY_MEMBER];
-}			pgTracingQueryIdFilter;
+}			QueryIdFilter;
 
 /*
  * Structure to store per exec level informations
@@ -215,7 +215,7 @@ static Span commit_span;
  */
 static uint64 current_query_id;
 
-static pgTracingQueryIdFilter * query_id_filter = NULL;
+static QueryIdFilter * query_id_filter = NULL;
 static pgTracingPerLevelInfos * per_level_infos = NULL;
 
 /* Number of spans initially allocated at the start of a trace. */
@@ -586,8 +586,8 @@ check_filter_query_ids(char **newval, void **extra, GucSource source)
 	char	   *rawstring;
 	List	   *queryidlist;
 	ListCell   *l;
-	pgTracingQueryIdFilter *result;
-	pgTracingQueryIdFilter *query_ids;
+	QueryIdFilter *result;
+	QueryIdFilter *query_ids;
 	int			num_query_ids = 0;
 	size_t		size_query_id_filter;
 
@@ -609,9 +609,9 @@ check_filter_query_ids(char **newval, void **extra, GucSource source)
 		return false;
 	}
 
-	size_query_id_filter = sizeof(pgTracingQueryIdFilter) + list_length(queryidlist) * sizeof(uint64);
+	size_query_id_filter = sizeof(QueryIdFilter) + list_length(queryidlist) * sizeof(uint64);
 	/* Work on a palloced buffer */
-	query_ids = (pgTracingQueryIdFilter *) palloc(size_query_id_filter);
+	query_ids = (QueryIdFilter *) palloc(size_query_id_filter);
 
 	foreach(l, queryidlist)
 	{
@@ -633,7 +633,7 @@ check_filter_query_ids(char **newval, void **extra, GucSource source)
 	list_free(queryidlist);
 
 	/* Copy query id filter to a guc malloced result */
-	result = (pgTracingQueryIdFilter *) guc_malloc(LOG, size_query_id_filter);
+	result = (QueryIdFilter *) guc_malloc(LOG, size_query_id_filter);
 	if (result == NULL)
 		return false;
 	memcpy(result, query_ids, size_query_id_filter);
@@ -648,7 +648,7 @@ check_filter_query_ids(char **newval, void **extra, GucSource source)
 static void
 assign_filter_query_ids(const char *newval, void *extra)
 {
-	query_id_filter = (pgTracingQueryIdFilter *) extra;
+	query_id_filter = (QueryIdFilter *) extra;
 }
 
 /*
