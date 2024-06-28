@@ -255,8 +255,6 @@ push_active_span(MemoryContext context, const SpanContext * span_context, SpanTy
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
 
-	/* Either query or planned statement should be defined */
-	Assert(span_context->query || span_context->pstmt);
 	if (span == NULL)
 	{
 		/*
