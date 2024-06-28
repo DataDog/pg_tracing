@@ -127,7 +127,7 @@ pop_active_span(const TimestampTz *end_time)
  */
 static void
 begin_active_span(const SpanContext * span_context, Span * span,
-				  SpanType span_type, const Query *query, const JumbleState *jstate,
+				  SpanType span_type, const JumbleState *jstate,
 				  const PlannedStmt *pstmt, const char *query_text,
 				  bool export_parameters, Span * parent_span)
 {
@@ -136,6 +136,7 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	uint64		parent_id;
 	int8		parent_planstate_index = -1;
 	uint64		query_id;
+    const Query *query = span_context->query;
 
 	if (nested_level == 0)
 		/* Root active span, use the parent id from the trace context */
@@ -167,7 +168,7 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	if (pstmt)
 		query_id = pstmt->queryId;
 	else
-		query_id = query->queryId;
+		query_id = span_context->query->queryId;
 
 	begin_span(span_context->traceparent->trace_id, span, span_type,
 			   NULL, parent_id, query_id, &span_context->start_time);
@@ -297,7 +298,7 @@ push_active_span(MemoryContext context, const SpanContext * span_context, SpanTy
 		span = &next_active_span;
 	}
 
-	begin_active_span(span_context, span, span_type, span_context->query, jstate, span_context->pstmt,
+	begin_active_span(span_context, span, span_type, jstate, span_context->pstmt,
 					  query_text, export_parameters, parent_span);
 	return span;
 }
