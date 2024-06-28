@@ -12,7 +12,6 @@
 #include "executor/execdesc.h"
 #include "jit/jit.h"
 #include "pgstat.h"
-#include "storage/backendid.h"
 #include "storage/lwlock.h"
 #include "version_compat.h"
 

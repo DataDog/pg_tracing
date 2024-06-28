@@ -30,6 +30,7 @@ extern void *guc_malloc(int elevel, size_t size);
 
 #if (PG_VERSION_NUM < 170000)
 
+#include "storage/backendid.h"
 /*
  * Compatibility with changes introduced in
  * https://www.postgresql.org/message-id/8171f1aa-496f-46a6-afc3-c46fe7a9b407@iki.fi
