@@ -317,7 +317,7 @@ Span	   *peek_active_span(void);
 Span	   *push_active_span(MemoryContext context, const SpanContext * span_context,
 							 SpanType span_type, HookPhase hook_phase);
 Span	   *push_child_active_span(MemoryContext context, const SpanContext * span_context,
-								   SpanType span_type, const Query *query);
+								   SpanType span_type);
 
 void		cleanup_active_spans(void);
 
