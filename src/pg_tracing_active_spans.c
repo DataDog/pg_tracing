@@ -44,7 +44,7 @@ cleanup_active_spans(void)
 /*
  * Push a new active span to the active_spans stack
  */
-Span *
+static Span *
 allocate_new_active_span(void)
 {
 	Span	   *span;
