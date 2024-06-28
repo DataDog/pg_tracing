@@ -68,13 +68,13 @@ typedef enum
 	PG_TRACING_TRACK_NONE,		/* track no statements */
 	PG_TRACING_TRACK_TOP,		/* only top level statements */
 	PG_TRACING_TRACK_ALL		/* all statements, including nested ones */
-}			pgTracingTrackLevel;
+}			TrackingLevel;
 
 typedef enum
 {
 	PG_TRACING_KEEP_ON_FULL,	/* Keep existing buffers when full */
 	PG_TRACING_DROP_ON_FULL		/* Drop current buffers when full */
-}			pgTracingBufferMode;
+}			BufferMode;
 
 /*
  * Structure to store Query id filtering array of query id used for filtering
@@ -88,7 +88,7 @@ typedef struct QueryIdFilter
 /*
  * Structure to store per exec level informations
  */
-typedef struct pgTracingPerLevelInfos
+typedef struct PerLevelInfos
 {
 	uint64		executor_run_span_id;	/* executor run span id for this
 										 * level. Executor run is used as
@@ -96,7 +96,7 @@ typedef struct pgTracingPerLevelInfos
 										 * planstate */
 	TimestampTz executor_start;
 	TimestampTz executor_end;
-}			pgTracingPerLevelInfos;
+}			PerLevelInfos;
 
 /* GUC variables */
 static int	pg_tracing_max_span;	/* Maximum number of spans to store */
@@ -216,7 +216,7 @@ static Span commit_span;
 static uint64 current_query_id;
 
 static QueryIdFilter * query_id_filter = NULL;
-static pgTracingPerLevelInfos * per_level_infos = NULL;
+static PerLevelInfos * per_level_infos = NULL;
 
 /* Number of spans initially allocated at the start of a trace. */
 #define	INITIAL_ALLOCATED_SPANS 25
@@ -1152,7 +1152,7 @@ initialize_trace_level(void)
 		/* initial allocation */
 		allocated_nested_level = 1;
 		per_level_infos = palloc0(allocated_nested_level *
-								  sizeof(pgTracingPerLevelInfos));
+								  sizeof(PerLevelInfos));
 		current_trace_spans = palloc0(sizeof(pgTracingSpans) +
 									  INITIAL_ALLOCATED_SPANS * sizeof(Span));
 		current_trace_spans->max = INITIAL_ALLOCATED_SPANS;
@@ -1167,8 +1167,8 @@ initialize_trace_level(void)
 
 		allocated_nested_level++;
 		/* repalloc uses the pointer's memory context, no need to switch */
-		per_level_infos = repalloc0(per_level_infos, old_allocated_nested_level * sizeof(pgTracingPerLevelInfos),
-									allocated_nested_level * sizeof(pgTracingPerLevelInfos));
+		per_level_infos = repalloc0(per_level_infos, old_allocated_nested_level * sizeof(PerLevelInfos),
+									allocated_nested_level * sizeof(PerLevelInfos));
 	}
 }
 
