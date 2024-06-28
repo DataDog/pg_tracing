@@ -167,13 +167,13 @@ static const struct config_enum_entry buffer_mode_options[] =
 static MemoryContext pg_tracing_mem_ctx;
 
 /* trace context at the root level of parse/planning hook */
-static pgTracingTraceparent parse_traceparent;
+static Traceparent parse_traceparent;
 
 /* trace context used in nested levels or within executor hooks */
-static pgTracingTraceparent executor_traceparent;
+static Traceparent executor_traceparent;
 
 /* traceparent extracted at the start of a transaction */
-static pgTracingTraceparent tx_start_traceparent;
+static Traceparent tx_start_traceparent;
 
 /* Latest local transaction id traced */
 static LocalTransactionId latest_lxid = InvalidLocalTransactionId;
@@ -253,7 +253,7 @@ static void pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryStrin
 
 static void pg_tracing_shmem_request(void);
 static void pg_tracing_shmem_startup_hook(void);
-static void reset_traceparent(pgTracingTraceparent * traceparent);
+static void reset_traceparent(Traceparent * traceparent);
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
 static void initialize_trace_level(void);
@@ -832,7 +832,7 @@ add_span_to_shared_buffer_locked(const Span * span)
  * span counters
  */
 static void
-process_query_desc(const pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
+process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
 				   int sql_error_code, TimestampTz parent_end)
 {
 	NodeCounters *node_counters = &peek_active_span()->node_counters;
@@ -869,7 +869,7 @@ process_query_desc(const pgTracingTraceparent * traceparent, const QueryDesc *qu
  * need to generate a random trace id.
  */
 static void
-set_trace_id(pgTracingTraceparent * traceparent)
+set_trace_id(Traceparent * traceparent)
 {
 	bool		new_lxid = is_new_lxid();
 
@@ -914,7 +914,7 @@ set_trace_id(pgTracingTraceparent * traceparent)
  * flag and the provided sample rate configurations
  */
 static bool
-is_query_sampled(const pgTracingTraceparent * traceparent)
+is_query_sampled(const Traceparent * traceparent)
 {
 	double		rand;
 	bool		sampled;
@@ -950,7 +950,7 @@ is_query_sampled(const pgTracingTraceparent * traceparent)
  * Sampling rate will be applied to the traceparent.
  */
 static void
-extract_trace_context(pgTracingTraceparent * traceparent, ParseState *pstate,
+extract_trace_context(Traceparent * traceparent, ParseState *pstate,
 					  uint64 query_id)
 {
 	/* Timestamp of the latest statement checked for sampling. */
@@ -1027,7 +1027,7 @@ cleanup:
  * Reset traceparent fields
  */
 static void
-reset_traceparent(pgTracingTraceparent * traceparent)
+reset_traceparent(Traceparent * traceparent)
 {
 	traceparent->sampled = 0;
 	traceparent->trace_id.traceid_right = 0;
@@ -1107,7 +1107,7 @@ end_tracing(void)
  * error code to it.
  */
 static void
-handle_pg_error(const pgTracingTraceparent * traceparent,
+handle_pg_error(const Traceparent * traceparent,
 				const QueryDesc *queryDesc,
 				TimestampTz span_end_time)
 {
@@ -1681,7 +1681,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 static void
 pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 {
-	pgTracingTraceparent *traceparent = &executor_traceparent;
+	Traceparent *traceparent = &executor_traceparent;
 	TimestampTz parent_end;
 	TimestampTz span_end_time;
 
@@ -1872,7 +1872,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 static void
 pg_tracing_xact_callback(XactEvent event, void *arg)
 {
-	pgTracingTraceparent *traceparent = &executor_traceparent;
+	Traceparent *traceparent = &executor_traceparent;
 
 	if (current_trace_spans == NULL)
 		return;

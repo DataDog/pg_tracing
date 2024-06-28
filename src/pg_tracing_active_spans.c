@@ -126,7 +126,7 @@ pop_active_span(const TimestampTz *end_time)
  * span at the same level ended.
  */
 static void
-begin_active_span(const pgTracingTraceparent * traceparent, Span * span,
+begin_active_span(const Traceparent * traceparent, Span * span,
 				  SpanType span_type, const Query *query, const JumbleState *jstate,
 				  const PlannedStmt *pstmt, const char *query_text, TimestampTz start_time,
 				  bool export_parameters, Span * parent_span)

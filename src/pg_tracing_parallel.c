@@ -44,7 +44,7 @@ pg_tracing_shmem_parallel_startup(void)
  * Push trace context to the shared parallel worker buffer
  */
 void
-add_parallel_context(const pgTracingTraceparent * traceparent, uint64 parent_id)
+add_parallel_context(const Traceparent * traceparent, uint64 parent_id)
 {
 	pgTracingParallelContext *ctx = NULL;
 
@@ -93,7 +93,7 @@ remove_parallel_context(void)
  * If a trace context exists, it means that the query is sampled and worker tracing is enabled.
  */
 void
-fetch_parallel_context(pgTracingTraceparent * traceparent)
+fetch_parallel_context(Traceparent * traceparent)
 {
 	SpinLockAcquire(&pg_tracing_parallel->mutex);
 	for (int i = 0; i < max_parallel_workers; i++)

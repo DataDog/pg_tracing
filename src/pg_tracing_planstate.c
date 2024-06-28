@@ -655,7 +655,7 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
  * Process planstate to generate spans of the executed plan
  */
 void
-process_planstate(const pgTracingTraceparent * traceparent, const QueryDesc *queryDesc,
+process_planstate(const Traceparent * traceparent, const QueryDesc *queryDesc,
 				  int sql_error_code, bool deparse_plan, uint64 parent_id,
 				  TimestampTz parent_start, TimestampTz parent_end)
 {
