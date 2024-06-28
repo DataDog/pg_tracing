@@ -1913,9 +1913,13 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 				bool		is_modifying_xact = MyProc->xid != InvalidTransactionId;
 
 				if (traceparent->sampled && is_modifying_xact)
+				{
+					TimestampTz start_time = GetCurrentTimestamp();
+
 					begin_span(traceparent->trace_id, &commit_span,
 							   SPAN_COMMIT, NULL, traceparent->parent_id,
-							   current_query_id, NULL);
+							   current_query_id, start_time);
+				}
 				break;
 			}
 		case XACT_EVENT_COMMIT:
