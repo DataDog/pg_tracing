@@ -233,14 +233,14 @@ begin_active_span(const Traceparent * traceparent, Span * span,
  */
 Span *
 push_child_active_span(MemoryContext context, const SpanContext * span_context,
-					   SpanType span_type, const Query *query, const PlannedStmt *pstmt)
+					   SpanType span_type, const Query *query)
 {
 	Span	   *parent_span = peek_active_span();
 	Span	   *span = allocate_new_active_span(context);
 	uint64		query_id;
 
-	if (pstmt)
-		query_id = pstmt->queryId;
+	if (span_context->pstmt)
+		query_id = span_context->pstmt->queryId;
 	else
 		query_id = query->queryId;
 
@@ -262,14 +262,14 @@ push_child_active_span(MemoryContext context, const SpanContext * span_context,
  */
 Span *
 push_active_span(MemoryContext context, const SpanContext * span_context, SpanType span_type,
-				 const Query *query, JumbleState *jstate, const PlannedStmt *pstmt,
+				 const Query *query, JumbleState *jstate,
 				 const char *query_text, HookPhase hook_phase, bool export_parameters)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
 
 	/* Either query or planned statement should be defined */
-	Assert(query || pstmt);
+	Assert(query || span_context->pstmt);
 	if (span == NULL)
 	{
 		/*
@@ -298,7 +298,7 @@ push_active_span(MemoryContext context, const SpanContext * span_context, SpanTy
 		span = &next_active_span;
 	}
 
-	begin_active_span(span_context->traceparent, span, span_type, query, jstate, pstmt,
+	begin_active_span(span_context->traceparent, span, span_type, query, jstate, span_context->pstmt,
 					  query_text, span_context->start_time, export_parameters, parent_span);
 	return span;
 }
