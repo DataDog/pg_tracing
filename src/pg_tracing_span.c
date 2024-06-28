@@ -68,20 +68,11 @@ initialize_span_fields(Span * span, SpanType type, TraceId trace_id, const uint6
  */
 void
 begin_span(TraceId trace_id, Span * span, SpanType type,
-		   uint64 *span_id, uint64 parent_id, uint64 query_id,
-		   const TimestampTz *start_span)
+		   const uint64 *span_id, uint64 parent_id, uint64 query_id,
+		   TimestampTz start_span)
 {
-	TimestampTz start_span_time;
-
 	initialize_span_fields(span, type, trace_id, span_id, parent_id, query_id);
-
-	/* If no start span is provided, get the current one */
-	if (start_span == NULL)
-		start_span_time = GetCurrentTimestamp();
-	else
-		start_span_time = *start_span;
-
-	span->start = start_span_time;
+	span->start = start_span;
 }
 
 /*

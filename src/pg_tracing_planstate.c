@@ -603,7 +603,7 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 	Assert(planstate->instrument->total > 0);
 
 	begin_span(planstateTraceContext->trace_id, &span, span_type, span_id, parent_id,
-			   query_id, &span_start);
+			   query_id, span_start);
 
 	/* first tuple time */
 	span.startup = planstate->instrument->startup * NS_PER_S;

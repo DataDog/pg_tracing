@@ -164,7 +164,7 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	}
 
 	begin_span(span_context->traceparent->trace_id, span, span_type,
-			   NULL, parent_id, span_context->query_id, &span_context->start_time);
+			   NULL, parent_id, span_context->query_id, span_context->start_time);
 	/* Keep track of the parent planstate index */
 	span->parent_planstate_index = parent_planstate_index;
 
@@ -233,7 +233,7 @@ push_child_active_span(MemoryContext context, const SpanContext * span_context,
 	Span	   *span = allocate_new_active_span(context);
 
 	begin_span(span_context->traceparent->trace_id, span, span_type, NULL,
-			   parent_span->span_id, span_context->query_id, &span_context->start_time);
+			   parent_span->span_id, span_context->query_id, span_context->start_time);
 	return span;
 }
 
