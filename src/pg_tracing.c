@@ -1369,7 +1369,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	{
 		nested_level--;
 		span_end_time = GetCurrentTimestamp();
-		handle_pg_error(span_context.traceparent, NULL, span_end_time);
+		handle_pg_error(traceparent, NULL, span_end_time);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
