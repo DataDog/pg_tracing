@@ -180,16 +180,13 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 		 * We need to extend the traced_planstates array, switch to pg_tracing
 		 * memory context beforehand
 		 */
-		MemoryContext oldcxt;
 		int			old_max_planstart = max_planstart;
 
 		Assert(traced_planstates != NULL);
 		max_planstart += INCREMENT_NUM_PLANSTATE;
-		oldcxt = MemoryContextSwitchTo(pg_tracing_mem_ctx);
 		traced_planstates = repalloc0(traced_planstates,
 									  old_max_planstart * sizeof(TracedPlanstate),
 									  max_planstart * sizeof(TracedPlanstate));
-		MemoryContextSwitchTo(oldcxt);
 	}
 
 	/* Register planstate start */
