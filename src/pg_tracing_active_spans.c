@@ -127,8 +127,7 @@ pop_active_span(const TimestampTz *end_time)
  */
 static void
 begin_active_span(const SpanContext * span_context, Span * span,
-				  SpanType span_type, bool export_parameters,
-				  Span * parent_span)
+				  SpanType span_type, Span * parent_span)
 {
 	const Query *query = span_context->query;
 	const PlannedStmt *pstmt = span_context->pstmt;
@@ -196,7 +195,7 @@ begin_active_span(const SpanContext * span_context, Span * span,
 													  query->stmt_location, &query_len,
 													  &param_str, &param_len);
 		Assert(param_len > 0);
-		if (export_parameters)
+		if (span_context->export_parameters)
 			span->parameter_offset = add_str_to_trace_buffer(param_str, param_len);
 	}
 	else
@@ -263,7 +262,7 @@ push_child_active_span(MemoryContext context, const SpanContext * span_context,
  */
 Span *
 push_active_span(MemoryContext context, const SpanContext * span_context, SpanType span_type,
-				 HookPhase hook_phase, bool export_parameters)
+				 HookPhase hook_phase)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
@@ -298,6 +297,6 @@ push_active_span(MemoryContext context, const SpanContext * span_context, SpanTy
 		span = &next_active_span;
 	}
 
-	begin_active_span(span_context, span, span_type, export_parameters, parent_span);
+	begin_active_span(span_context, span, span_type, parent_span);
 	return span;
 }
