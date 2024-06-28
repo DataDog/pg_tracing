@@ -1315,18 +1315,16 @@ static PlannedStmt *
 pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOptions,
 						ParamListInfo params)
 {
-	Traceparent *traceparent;
 	SpanContext span_context;
 	PlannedStmt *result;
 	TimestampTz span_end_time;
+	Traceparent *traceparent = &parse_traceparent;
 
 	/*
 	 * For nested planning (parse sampled and executor not sampled), we need
 	 * to use parse_traceparent.
 	 */
 	bool		is_nested_planning = nested_level > 0 && !executor_traceparent.sampled && parse_traceparent.sampled;
-
-	traceparent = &parse_traceparent;
 
 	if (nested_level > 0 && !is_nested_planning)
 	{
@@ -1406,11 +1404,9 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 static void
 pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
-	Traceparent *traceparent;
 	SpanContext span_context;
 	bool		is_lazy_function;
-
-	traceparent = &executor_traceparent;
+	Traceparent *traceparent = &executor_traceparent;
 
 	if (nested_level == 0)
 	{
@@ -1490,12 +1486,11 @@ static void
 pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 					   bool execute_once)
 {
-	Traceparent *traceparent;
 	SpanContext span_context;
 	TimestampTz span_end_time;
 	Span	   *executor_run_span;
+	Traceparent *traceparent = &executor_traceparent;
 
-	traceparent = &executor_traceparent;
 	if (!pg_tracing_enabled(traceparent, nested_level) || queryDesc->totaltime == NULL)
 	{
 		/* No sampling, go through normal execution */
@@ -1600,12 +1595,11 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 static void
 pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 {
-	Traceparent *traceparent;
 	SpanContext span_context;
 	TimestampTz span_end_time;
 	int			num_stored_spans = 0;
+	Traceparent *traceparent = &executor_traceparent;
 
-	traceparent = &executor_traceparent;
 	if (!pg_tracing_enabled(traceparent, nested_level)
 		|| queryDesc->totaltime == NULL
 		|| current_trace_spans == NULL)
@@ -1703,9 +1697,9 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 static void
 pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 {
-	Traceparent *traceparent = &executor_traceparent;
 	TimestampTz parent_end;
 	TimestampTz span_end_time;
+	Traceparent *traceparent = &executor_traceparent;
 
 	if (!pg_tracing_enabled(traceparent, nested_level) || queryDesc->totaltime == NULL)
 	{
@@ -1749,13 +1743,11 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 						  ParamListInfo params, QueryEnvironment *queryEnv,
 						  DestReceiver *dest, QueryCompletion *qc)
 {
-	Traceparent *traceparent;
 	TimestampTz span_end_time;
 	SpanContext span_context;
 	bool		track_utility;
 	bool		in_aborted_transaction;
-
-	traceparent = &executor_traceparent;
+	Traceparent *traceparent = &executor_traceparent;
 
 	if (nested_level == 0)
 	{
