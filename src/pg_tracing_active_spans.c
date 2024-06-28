@@ -127,11 +127,11 @@ pop_active_span(const TimestampTz *end_time)
  */
 static void
 begin_active_span(const SpanContext * span_context, Span * span,
-				  SpanType span_type, const JumbleState *jstate,
-                  const char *query_text, bool export_parameters, Span * parent_span)
+				  SpanType span_type, const char *query_text, bool export_parameters,
+				  Span * parent_span)
 {
-    const Query *query = span_context->query;
-    const PlannedStmt *pstmt = span_context->pstmt;
+	const Query *query = span_context->query;
+	const PlannedStmt *pstmt = span_context->pstmt;
 	int			query_len;
 	const char *normalised_query;
 	uint64		parent_id;
@@ -185,14 +185,14 @@ begin_active_span(const SpanContext * span_context, Span * span,
 		return;
 	}
 
-	if (jstate && jstate->clocations_count > 0 && query != NULL)
+	if (span_context->jstate && span_context->jstate->clocations_count > 0 && query != NULL)
 	{
 		/* jstate is available, normalise query and extract parameters' values */
 		char	   *param_str;
 		int			param_len;
 
 		query_len = query->stmt_len;
-		normalised_query = normalise_query_parameters(jstate, query_text,
+		normalised_query = normalise_query_parameters(span_context->jstate, query_text,
 													  query->stmt_location, &query_len,
 													  &param_str, &param_len);
 		Assert(param_len > 0);
@@ -263,7 +263,7 @@ push_child_active_span(MemoryContext context, const SpanContext * span_context,
  */
 Span *
 push_active_span(MemoryContext context, const SpanContext * span_context, SpanType span_type,
-				 JumbleState *jstate, const char *query_text, HookPhase hook_phase, bool export_parameters)
+				 const char *query_text, HookPhase hook_phase, bool export_parameters)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
@@ -298,7 +298,7 @@ push_active_span(MemoryContext context, const SpanContext * span_context, SpanTy
 		span = &next_active_span;
 	}
 
-	begin_active_span(span_context, span, span_type, jstate,
+	begin_active_span(span_context, span, span_type,
 					  query_text, export_parameters, parent_span);
 	return span;
 }

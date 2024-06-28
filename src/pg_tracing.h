@@ -251,6 +251,7 @@ typedef struct SpanContext
 	Traceparent *traceparent;
 	const PlannedStmt *pstmt;
 	const Query *query;
+	const JumbleState *jstate;
 }			SpanContext;
 
 /* pg_tracing_explain.c */
@@ -313,7 +314,6 @@ Span	   *pop_active_span(const TimestampTz *end_time);
 Span	   *peek_active_span(void);
 Span	   *push_active_span(MemoryContext context, const SpanContext * span_context,
 							 SpanType span_type,
-							 JumbleState *jstate,
 							 const char *query_text,
 							 HookPhase hook_phase, bool export_parameters);
 Span	   *push_child_active_span(MemoryContext context, const SpanContext * span_context,
