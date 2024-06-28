@@ -233,7 +233,7 @@ begin_active_span(const SpanContext * span_context, Span * span,
  */
 Span *
 push_child_active_span(MemoryContext context, const SpanContext * span_context,
-					   SpanType span_type, const Query *query)
+					   SpanType span_type)
 {
 	Span	   *parent_span = peek_active_span();
 	Span	   *span = allocate_new_active_span(context);
@@ -242,7 +242,7 @@ push_child_active_span(MemoryContext context, const SpanContext * span_context,
 	if (span_context->pstmt)
 		query_id = span_context->pstmt->queryId;
 	else
-		query_id = query->queryId;
+		query_id = span_context->query->queryId;
 
 	begin_span(span_context->traceparent->trace_id, span, span_type, NULL,
 			   parent_span->span_id, query_id, &span_context->start_time);

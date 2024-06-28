@@ -1348,7 +1348,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
 					 HOOK_PLANNER);
 	/* Create and start the planner span */
-	push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_PLANNER, query);
+	push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_PLANNER);
 
 	nested_level++;
 	PG_TRY();
@@ -1514,8 +1514,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
 					 HOOK_EXECUTOR);
 	/* Start ExecutorRun span as a new active span */
-	executor_run_span = push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_RUN,
-											   NULL);
+	executor_run_span = push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_RUN);
 
 	per_level_infos[nested_level].executor_run_span_id = executor_run_span->span_id;
 	per_level_infos[nested_level].executor_start = executor_run_span->start;
@@ -1627,7 +1626,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
 					 HOOK_EXECUTOR);
 	/* Create ExecutorFinish as a new potential top span */
-	push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_FINISH, NULL);
+	push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_FINISH);
 
 	/*
 	 * Save the initial number of spans for the current session. We will only
@@ -1813,7 +1812,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	{
 		push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(pstmt->commandType),
 						 HOOK_EXECUTOR);
-		push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_PROCESS_UTILITY, NULL);
+		push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_PROCESS_UTILITY);
 	}
 
 	nested_level++;
