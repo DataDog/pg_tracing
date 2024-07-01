@@ -1026,7 +1026,7 @@ cleanup:
 /*
  * Reset traceparent fields
  */
-static void
+void
 reset_traceparent(Traceparent * traceparent)
 {
 	traceparent->sampled = 0;
