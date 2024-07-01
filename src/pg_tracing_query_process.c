@@ -13,9 +13,30 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "nodes/extensible.h"
+#include "utils/memutils.h"
 #include "parser/scanner.h"
 #include "pg_tracing.h"
+
+/*
+ * Convert parse traceparent error code to string
+ */
+char *
+parse_code_to_err(ParseTraceparentErr err)
+{
+	switch (err)
+	{
+		case PARSE_OK:
+			return "No error";
+		case PARSE_INCORRECT_SIZE:
+			return "incorrect size";
+		case PARSE_NO_TRACEPARENT_FIELD:
+			return "No traceparent field found";
+		case PARSE_INCORRECT_TRACEPARENT_SIZE:
+			return "Traceparent field doesn't have the correct size";
+		case PARSE_INCORRECT_FORMAT:
+			return "Incorrect traceparent format";
+	}
+}
 
 /*
  * Check if we have a comment that could store SQLComment information at the
@@ -58,42 +79,39 @@ has_possible_sql_comment(const char *query)
  * The expected format for traceparent is: version-traceid-parentid-sampled
  * Example: 00-00000000000000000000000000000009-0000000000000005-01
  */
-static Traceparent
-parse_traceparent_value(const char *traceparent_str)
+static ParseTraceparentErr
+parse_traceparent_value(Traceparent * traceparent, const char *traceparent_str)
 {
-	Traceparent traceparent;
 	char	   *traceid_left;
 	char	   *endptr;
 
-	traceparent.trace_id.traceid_left = 0;
-	traceparent.trace_id.traceid_right = 0;
-	traceparent.sampled = 0;
+	reset_traceparent(traceparent);
 
 	/* Check that '-' are at the expected places */
 	if (traceparent_str[2] != '-' ||
 		traceparent_str[35] != '-' ||
 		traceparent_str[52] != '-')
-		return traceparent;
+		return PARSE_INCORRECT_FORMAT;
 
 	/* Parse traceparent parameters */
 	errno = 0;
 
 	traceid_left = pnstrdup(&traceparent_str[3], 16);
-	traceparent.trace_id.traceid_left = strtou64(traceid_left, &endptr, 16);
+	traceparent->trace_id.traceid_left = strtou64(traceid_left, &endptr, 16);
 	pfree(traceid_left);
-	traceparent.trace_id.traceid_right = strtou64(&traceparent_str[3 + 16], &endptr, 16);
+	traceparent->trace_id.traceid_right = strtou64(&traceparent_str[3 + 16], &endptr, 16);
 
 	if (endptr != traceparent_str + 35 || errno)
-		return traceparent;
-	traceparent.parent_id = strtou64(&traceparent_str[36], &endptr, 16);
+		return PARSE_INCORRECT_FORMAT;
+	traceparent->parent_id = strtou64(&traceparent_str[36], &endptr, 16);
 	if (endptr != traceparent_str + 52 || errno)
-		return traceparent;
-	traceparent.sampled = strtol(&traceparent_str[53], &endptr, 16);
+		return PARSE_INCORRECT_FORMAT;
+	traceparent->sampled = strtol(&traceparent_str[53], &endptr, 16);
 	if (endptr != traceparent_str + 55 || errno)
 		/* Just to be sure, reset sampled on error */
-		traceparent.sampled = 0;
+		traceparent->sampled = 0;
 
-	return traceparent;
+	return PARSE_OK;
 }
 
 /*
@@ -145,7 +163,7 @@ extract_trace_context_from_query(Traceparent * traceparent,
  * Parse trace context value.
  * We're only interested in traceparent value to get the trace id, parent id and sampled flag.
  */
-void
+ParseTraceparentErr
 parse_trace_context(Traceparent * traceparent, const char *trace_context_str,
 					int trace_context_len)
 {
@@ -161,15 +179,17 @@ parse_trace_context(Traceparent * traceparent, const char *trace_context_str,
 	 * characters
 	 */
 	traceparent_str = strstr(trace_context_str, "traceparent='");
-	if (traceparent_str == NULL ||
-		traceparent_str > end_trace_context ||
+	if (traceparent_str == NULL)
+		return PARSE_NO_TRACEPARENT_FIELD;
+
+	if (traceparent_str > end_trace_context ||
 		end_trace_context - traceparent_str < 55 + 13)
-		return;
+		return PARSE_INCORRECT_TRACEPARENT_SIZE;
 
 	/* Move to the start of the traceparent values */
 	traceparent_str = traceparent_str + 13;
 	/* And parse it */
-	*traceparent = parse_traceparent_value(traceparent_str);
+	return parse_traceparent_value(traceparent, traceparent_str);
 }
 
 /*
