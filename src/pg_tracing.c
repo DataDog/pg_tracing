@@ -130,6 +130,8 @@ static int	pg_tracing_otel_naptime;	/* Delay between upload of spans to
 										 * otel collector */
 static int	pg_tracing_otel_connect_timeout_ms; /* Connect timeout to the otel
 												 * collector */
+static char *guc_tracecontext_str = NULL;	/* Trace context string propagated
+											 * through GUC variable */
 
 static const struct config_enum_entry track_options[] =
 {
@@ -168,6 +170,9 @@ static MemoryContext pg_tracing_mem_ctx;
 
 /* trace context at the root level of parse/planning hook */
 static Traceparent parse_traceparent;
+
+/* trace context set through GUC */
+static Traceparent * guc_tracecontext;
 
 /* trace context used in nested levels or within executor hooks */
 static Traceparent executor_traceparent;
@@ -250,14 +255,17 @@ static void pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryStrin
 									  ParamListInfo params,
 									  QueryEnvironment *queryEnv,
 									  DestReceiver *dest, QueryCompletion *qc);
+static void pg_tracing_xact_callback(XactEvent event, void *arg);
 
 static void pg_tracing_shmem_request(void);
 static void pg_tracing_shmem_startup_hook(void);
-static void reset_traceparent(Traceparent * traceparent);
+
+static void initialize_trace_level(void);
+
 static bool check_filter_query_ids(char **newval, void **extra, GucSource source);
 static void assign_filter_query_ids(const char *newval, void *extra);
-static void initialize_trace_level(void);
-static void pg_tracing_xact_callback(XactEvent event, void *arg);
+static bool check_guc_tracecontext(char **newval, void **extra, GucSource source);
+static void assign_guc_tracecontext_hook(const char *newval, void *extra);
 
 /*
  * Module load callback
@@ -446,6 +454,18 @@ _PG_init(void)
 							   NULL,
 							   NULL,
 							   NULL);
+
+	DefineCustomStringVariable("pg_tracing.trace_context",
+							   "Trace context propagated through GUC variable.",
+							   NULL,
+							   &guc_tracecontext_str,
+							   NULL,
+							   PGC_USERSET,
+							   0,
+							   check_guc_tracecontext,
+							   assign_guc_tracecontext_hook,
+							   NULL);
+
 
 	MarkGUCPrefixReserved("pg_tracing");
 
@@ -649,6 +669,60 @@ static void
 assign_filter_query_ids(const char *newval, void *extra)
 {
 	query_id_filter = (QueryIdFilter *) extra;
+}
+
+/*
+ * Check hook for trace context guc parameter
+ */
+static bool
+check_guc_tracecontext(char **newval, void **extra, GucSource source)
+{
+	char	   *input_trace_context = *newval;
+	ParseTraceparentErr err;
+	Traceparent *result;
+	Traceparent parsed_traceparent;
+
+	if (!input_trace_context || strcmp(input_trace_context, "") == 0)
+	{
+		/*
+		 * Empty tracecontext, extra should already have been set to NULL so
+		 * nothing to do
+		 */
+		return true;
+	}
+
+	/* Parse the parameter string */
+	err = parse_trace_context(&parsed_traceparent, input_trace_context, strlen(input_trace_context));
+	if (err != PARSE_OK)
+	{
+		GUC_check_errdetail("Error parsing tracecontext: %s", parse_code_to_err(err));
+		return false;
+	}
+
+	/* We have a valid traceaprent, store it in a guc_malloced variable */
+	result = (Traceparent *) guc_malloc(LOG, sizeof(Traceparent));
+	if (result == NULL)
+		return false;
+
+	*result = parsed_traceparent;
+	*extra = result;
+	return true;
+}
+
+/*
+ * Assign hook for trace context guc
+ */
+static void
+assign_guc_tracecontext_hook(const char *newval, void *extra)
+{
+	/*
+	 * We don't want to trace the SET query modifying the trace context so
+	 * cancel ongoing trace.
+	 */
+	cleanup_tracing();
+
+	/* Copy the parsed traceparent to our global guc_tracecontext */
+	guc_tracecontext = (Traceparent *) extra;
 }
 
 /*
@@ -968,6 +1042,13 @@ extract_trace_context(Traceparent * traceparent, ParseState *pstate,
 	/* Don't start tracing if we're not at the root level */
 	if (nested_level > 0)
 		goto cleanup;
+
+	/* We have a traceparent propagated through GUC, copy it */
+	if (guc_tracecontext && guc_tracecontext->sampled)
+	{
+		*traceparent = *guc_tracecontext;
+		goto cleanup;
+	}
 
 	/* Both sampling rate are set to 0, no tracing will happen */
 	if (pg_tracing_sample_rate == 0 && pg_tracing_caller_sample_rate == 0)

@@ -1,0 +1,117 @@
+-- Test trace context propagation through GUCs
+SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-00000000000000000000000000000004-0000000000000004-01';
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- Test multiple statements
+SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-fffffffffffffffffffffffffffffff5-0000000000000005-01';
+SELECT 2;
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT 3;
+ ?column? 
+----------
+        3
+(1 row)
+
+-- Check results for GUC propagation with simple and multiple statements
+select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
+             trace_id             | span_operation | parameters | lvl 
+----------------------------------+----------------+------------+-----
+ 00000000000000000000000000000004 | SELECT $1;     | $1 = 1     |   1
+ 00000000000000000000000000000004 | Planner        |            |   2
+ 00000000000000000000000000000004 | ExecutorRun    |            |   2
+ 00000000000000000000000000000004 | Result         |            |   3
+ fffffffffffffffffffffffffffffff5 | SELECT $1;     | $1 = 2     |   1
+ fffffffffffffffffffffffffffffff5 | Planner        |            |   2
+ fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
+ fffffffffffffffffffffffffffffff5 | Result         |            |   3
+ fffffffffffffffffffffffffffffff5 | SELECT $1;     | $1 = 3     |   1
+ fffffffffffffffffffffffffffffff5 | Planner        |            |   2
+ fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
+ fffffffffffffffffffffffffffffff5 | Result         |            |   3
+(12 rows)
+
+CALL clean_spans();
+-- Mix SQLCommenter and GUC propagation
+SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-fffffffffffffffffffffffffffffff6-0000000000000006-01';
+SELECT 2;
+ ?column? 
+----------
+        2
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1, 1;
+ ?column? | ?column? 
+----------+----------
+        1 |        1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000009-0000000000000009-00'*/ SELECT 1, 2, 3;
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+        1 |        2 |        3
+(1 row)
+
+SELECT 3;
+ ?column? 
+----------
+        3
+(1 row)
+
+-- Check mix SQLCommenter and GUC propagation
+select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
+             trace_id             |   span_operation   |       parameters       | lvl 
+----------------------------------+--------------------+------------------------+-----
+ fffffffffffffffffffffffffffffff6 | SELECT $1;         | $1 = 2                 |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
+ fffffffffffffffffffffffffffffff6 | Result             |                        |   3
+ fffffffffffffffffffffffffffffff6 | SELECT $1, $2;     | $1 = 1, $2 = 1         |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
+ fffffffffffffffffffffffffffffff6 | Result             |                        |   3
+ fffffffffffffffffffffffffffffff6 | SELECT $1, $2, $3; | $1 = 1, $2 = 2, $3 = 3 |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
+ fffffffffffffffffffffffffffffff6 | Result             |                        |   3
+ fffffffffffffffffffffffffffffff6 | SELECT $1;         | $1 = 3                 |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
+ fffffffffffffffffffffffffffffff6 | Result             |                        |   3
+(16 rows)
+
+CALL clean_spans();
+-- Test statement after reset
+SET pg_tracing.trace_context TO default;
+SELECT 4;
+ ?column? 
+----------
+        4
+(1 row)
+
+-- Test no traceparent field
+SET pg_tracing.trace_context='dddbs=''postgres.db'',taceparent=''00-fffffffffffffffffffffffffffffff5-0000000000000005-01';
+ERROR:  invalid value for parameter "pg_tracing.trace_context": "dddbs='postgres.db',taceparent='00-fffffffffffffffffffffffffffffff5-0000000000000005-01"
+DETAIL:  Error parsing tracecontext: No traceparent field found
+-- Test incorrect trace id
+SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-ffffffffffffffffffffffffffffff5-0000000000000005-01';
+ERROR:  invalid value for parameter "pg_tracing.trace_context": "dddbs='postgres.db',traceparent='00-ffffffffffffffffffffffffffffff5-0000000000000005-01"
+DETAIL:  Error parsing tracecontext: Traceparent field doesn't have the correct size
+-- Test wrong format
+SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00f-ffffffffffffffffffffffffffffff5-0000000000000005-01';
+ERROR:  invalid value for parameter "pg_tracing.trace_context": "dddbs='postgres.db',traceparent='00f-ffffffffffffffffffffffffffffff5-0000000000000005-01"
+DETAIL:  Error parsing tracecontext: Incorrect traceparent format
+-- GUC errors and no GUC tracecontext should not generate spans
+select count(*) = 0 from peek_ordered_spans;
+ ?column? 
+----------
+ t
+(1 row)
+
