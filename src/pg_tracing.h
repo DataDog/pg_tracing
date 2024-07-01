@@ -56,6 +56,18 @@ typedef enum HookPhase
 }			HookPhase;
 
 /*
+ * Error code when parsing traceparent field
+ */
+typedef enum ParseTraceparentErr
+{
+	PARSE_OK = 0,
+	PARSE_INCORRECT_SIZE,
+	PARSE_NO_TRACEPARENT_FIELD,
+	PARSE_INCORRECT_TRACEPARENT_SIZE,
+	PARSE_INCORRECT_FORMAT,
+}			ParseTraceparentErr;
+
+/*
  * SpanType: Type of the span
  */
 typedef enum SpanType
@@ -291,7 +303,8 @@ extern const char *normalise_query_parameters(const JumbleState *jstate, const c
 											  int query_loc, int *query_len_p, char **param_str,
 											  int *param_len);
 extern void extract_trace_context_from_query(Traceparent * traceparent, const char *query);
-extern void parse_trace_context(Traceparent * traceparent, const char *trace_context_str, int trace_context_len);
+extern ParseTraceparentErr parse_trace_context(Traceparent * traceparent, const char *trace_context_str, int trace_context_len);
+extern char *parse_code_to_err(ParseTraceparentErr err);
 extern const char *normalise_query(const char *query, int query_loc, int *query_len_p);
 extern bool text_store_file(pgTracingSharedState * pg_tracing, const char *query,
 							int query_len, Size *query_offset);
