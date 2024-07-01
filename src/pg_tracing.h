@@ -337,6 +337,7 @@ extern void
 			drop_all_spans_locked(void);
 extern void
 			pg_tracing_shmem_startup(void);
+extern void reset_traceparent(Traceparent * traceparent);
 
 /* pg_tracing_json.c */
 extern void
