@@ -1,11 +1,10 @@
--- Check generated json for simple select query
+-- Check generated json for simple and multi line select query
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1;
  ?column? 
 ----------
         1
 (1 row)
 
--- Check generated json for multi line query
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ SELECT
     1,
 2;
@@ -14,7 +13,7 @@
         1 |        2
 (1 row)
 
--- Check json results
+-- Check json generated spans for simple and multi line query
 SELECT trace_id, name, kind, lvl FROM peek_ordered_json_spans;
              trace_id             |    name     | kind | lvl 
 ----------------------------------+-------------+------+-----
@@ -28,6 +27,45 @@ SELECT trace_id, name, kind, lvl FROM peek_ordered_json_spans;
  00000000000000000000000000000002 | ExecutorRun |    2 |   2
  00000000000000000000000000000002 | Result      |    2 |   3
 (8 rows)
+
+CALL clean_spans();
+-- Test error code with json export
+set statement_timeout=200;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ select * from pg_sleep(1);
+ERROR:  canceling statement due to statement timeout
+-- Check json generated spans with sql error code
+SELECT trace_id, name, sql_error_code, lvl FROM peek_ordered_json_spans;
+             trace_id             |            name             | sql_error_code | lvl 
+----------------------------------+-----------------------------+----------------+-----
+ 00000000000000000000000000000001 | select * from pg_sleep($1); | 57014          |   1
+ 00000000000000000000000000000001 | Planner                     |                |   2
+ 00000000000000000000000000000001 | ExecutorRun                 | 57014          |   2
+ 00000000000000000000000000000001 | FunctionScan on pg_sleep    | 57014          |   3
+(4 rows)
+
+set statement_timeout TO DEFAULT;
+CALL clean_spans();
+-- Test subxact_count with json export
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
+SAVEPOINT s1;
+INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
+ROLLBACK;
+SELECT trace_id, name, subxact_count, lvl FROM peek_ordered_json_spans;
+             trace_id             |                               name                               | subxact_count | lvl 
+----------------------------------+------------------------------------------------------------------+---------------+-----
+ 00000000000000000000000000000001 | BEGIN;                                                           |               |   1
+ 00000000000000000000000000000001 | ProcessUtility                                                   |               |   2
+ 00000000000000000000000000000001 | SAVEPOINT s1;                                                    |               |   1
+ 00000000000000000000000000000001 | ProcessUtility                                                   |               |   2
+ 00000000000000000000000000000001 | INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); |               |   1
+ 00000000000000000000000000000001 | Planner                                                          |               |   2
+ 00000000000000000000000000000001 | ExecutorRun                                                      |               |   2
+ 00000000000000000000000000000001 | Insert on pg_tracing_test                                        | 1             |   3
+ 00000000000000000000000000000001 | ProjectSet                                                       | 1             |   4
+ 00000000000000000000000000000001 | Result                                                           | 1             |   5
+ 00000000000000000000000000000001 | ROLLBACK;                                                        | 1             |   1
+ 00000000000000000000000000000001 | ProcessUtility                                                   | 1             |   2
+(12 rows)
 
 -- Cleanup
 CALL clean_spans();
