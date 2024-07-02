@@ -28,6 +28,21 @@ SELECT trace_id, name, kind, lvl FROM peek_ordered_json_spans;
  00000000000000000000000000000002 | Result      |    2 |   3
 (8 rows)
 
+-- Test plan attributes with json export
+SELECT trace_id, name, plan_startup_cost, plan_total_cost, plan_rows, plan_width, lvl FROM peek_ordered_json_spans;
+             trace_id             |    name     | plan_startup_cost | plan_total_cost | plan_rows | plan_width | lvl 
+----------------------------------+-------------+-------------------+-----------------+-----------+------------+-----
+ 00000000000000000000000000000001 | SELECT $1;  |                   |                 |           |            |   1
+ 00000000000000000000000000000001 | Planner     |                   |                 |           |            |   2
+ 00000000000000000000000000000001 | ExecutorRun |                   |                 |           |            |   2
+ 00000000000000000000000000000001 | Result      |                   | 0.010000        | 1.000000  | 4          |   3
+ 00000000000000000000000000000002 | SELECT $1, +|                   |                 |           |            |   1
+                                  | $2;         |                   |                 |           |            | 
+ 00000000000000000000000000000002 | Planner     |                   |                 |           |            |   2
+ 00000000000000000000000000000002 | ExecutorRun |                   |                 |           |            |   2
+ 00000000000000000000000000000002 | Result      |                   | 0.010000        | 1.000000  | 8          |   3
+(8 rows)
+
 CALL clean_spans();
 -- Test error code with json export
 set statement_timeout=200;
@@ -67,5 +82,6 @@ SELECT trace_id, name, subxact_count, lvl FROM peek_ordered_json_spans;
  00000000000000000000000000000001 | ProcessUtility                                                   | 1             |   2
 (12 rows)
 
+CALL clean_spans();
 -- Cleanup
 CALL clean_spans();

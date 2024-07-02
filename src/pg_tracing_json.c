@@ -189,10 +189,12 @@ append_span_attributes(StringInfo str, const Span * span)
 {
 	appendStringInfo(str, "\"attributes\": [");
 
-	if (span->type >= SPAN_NODE && span->type <= SPAN_TOP_UNKNOWN)
+	if ((span->type >= SPAN_NODE && span->type <= SPAN_TOP_UNKNOWN)
+		|| span->type == SPAN_PLANNER)
+	{
 		append_node_counters(str, &span->node_counters);
-	if (span->type >= SPAN_TOP_SELECT && span->type <= SPAN_TOP_UNKNOWN)
 		append_plan_counters(str, &span->plan_counters);
+	}
 
 	if (span->sql_error_code > 0)
 		append_attribute_string(str, "query.sql_error_code", unpack_sql_state(span->sql_error_code), true);
