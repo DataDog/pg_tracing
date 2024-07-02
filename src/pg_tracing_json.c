@@ -185,8 +185,10 @@ append_node_counters(StringInfo str, const NodeCounters * node_counters)
 }
 
 static void
-append_span_attributes(StringInfo str, const Span * span)
+append_span_attributes(const JsonContext * json_ctx, const Span * span)
 {
+	StringInfo	str = json_ctx->str;
+
 	appendStringInfo(str, "\"attributes\": [");
 
 	if ((span->type >= SPAN_NODE && span->type <= SPAN_TOP_UNKNOWN)
@@ -194,6 +196,13 @@ append_span_attributes(StringInfo str, const Span * span)
 	{
 		append_node_counters(str, &span->node_counters);
 		append_plan_counters(str, &span->plan_counters);
+
+		append_attribute_int(str, "query.startup", span->startup, true, true);
+		if (span->parameter_offset != -1 && json_ctx->qbuffer_size > 0 && json_ctx->qbuffer_size > span->parameter_offset)
+			append_attribute_string(str, "query.parameters", json_ctx->qbuffer + span->parameter_offset, true);
+
+		if (span->deparse_info_offset != -1 && json_ctx->qbuffer_size > 0 && json_ctx->qbuffer_size > span->deparse_info_offset)
+			append_attribute_string(str, "query.deparse_info", json_ctx->qbuffer + span->deparse_info_offset, true);
 	}
 
 	if (span->sql_error_code > 0)
@@ -233,7 +242,7 @@ append_span(const JsonContext * json_ctx, const Span * span)
 	append_int_field(str, "kind", SPAN_KIND_SERVER, true);
 	append_nano_timestamp(str, "startTimeUnixNano", span->start, true);
 	append_nano_timestamp(str, "endTimeUnixNano", span->end, true);
-	append_span_attributes(str, span);
+	append_span_attributes(json_ctx, span);
 	appendStringInfoChar(str, '}');
 }
 

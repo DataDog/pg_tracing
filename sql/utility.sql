@@ -85,37 +85,110 @@ create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, na
 CREATE VIEW peek_json_spans AS
 SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_first(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[0].spans')));
 
+CREATE FUNCTION get_int_attribute(attributes jsonb, keyvalue text) returns jsonb
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURN (jsonb_path_query_first(jsonb_path_query_first(attributes, '$ ? (@.key == $key)', jsonb_build_object('key', keyvalue)),
+                                   '$.value.intValue'));
+
+CREATE FUNCTION get_string_attribute(attributes jsonb, keyvalue text) returns text
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURN (jsonb_path_query_first(jsonb_path_query_first(attributes, '$ ? (@.key == $key)', jsonb_build_object('key', keyvalue)),
+                                   '$.value.stringValue')) ->>0;
+
 -- View spans generated from json with their nested level
+-- TODO: There's probably a way to make this cleaner...
 CREATE VIEW peek_json_spans_with_level AS
 WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, span_end,
     kind, query_id, pid, userid, dbid, sql_error_code, subxact_count,
     plan_startup_cost, plan_total_cost, plan_rows, plan_width,
+    rows, nloops,
+    shared_blks_hit, shared_blks_read, shared_blks_dirtied, shared_blks_written,
+    local_blks_hit, local_blks_read, local_blks_dirtied, local_blks_written,
+    blk_read_time, blk_write_time,
+    temp_blks_read, temp_blks_written, temp_blk_read_time, temp_blk_write_time,
+    wal_records, wal_fpi, wal_bytes,
+    jit_functions, jit_generation_time, jit_inlining_time, jit_emission_time,
+    startup, parameters, deparse_info,
     lvl) AS (
         SELECT p."traceId", p."parentSpanId", p."spanId", p."name", p."startTimeUnixNano", p."endTimeUnixNano", p.kind,
-            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "backend.user_id")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
+            get_int_attribute(p.attributes, 'query.query_id'),
+            get_int_attribute(p.attributes, 'backend.pid'),
+            get_int_attribute(p.attributes, 'backend.user_id'),
+            get_int_attribute(p.attributes, 'backend.database_id'),
+            get_string_attribute(p.attributes, 'query.sql_error_code'),
             jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
             jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
             jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
             jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
             jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "node.rows")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "node.nloops")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.shared.hit")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.shared.read")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.shared.dirtied")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.shared.written")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.local.hit")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.local.read")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.local.dirtied")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.local.written")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.io.read_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "blocks.io.write_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "temp_blocks.io.read_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "temp_blocks.io.write_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "temp_blocks.read")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "temp_blocks.written")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "wal.records")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "wal.fpi")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "wal.bytes")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "jit.generation_counter")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "jit.inlining_counter")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "jit.optimization_counter")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "jit.emission_counter")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.startup")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.parameters")' ), '$.value.stringValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.deparse_info")' ), '$.value.stringValue'),
             1
         FROM peek_json_spans p where not "parentSpanId"=ANY(SELECT span_id from pg_tracing_peek_spans)
       UNION ALL
         SELECT s."traceId", s."parentSpanId", s."spanId", s."name", s."startTimeUnixNano", s."endTimeUnixNano", s.kind,
-            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "backend.user_id")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
-            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
+            get_int_attribute(s.attributes, 'query.query_id'),
+            get_int_attribute(s.attributes, 'backend.pid'),
+            get_int_attribute(s.attributes, 'backend.user_id'),
+            get_int_attribute(s.attributes, 'backend.database_id'),
+            get_string_attribute(s.attributes, 'query.sql_error_code'),
             jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
             jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
             jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
             jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
             jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "node.rows")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "node.nloops")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.shared.hit")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.shared.read")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.shared.dirtied")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.shared.written")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.local.hit")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.local.read")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.local.dirtied")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.local.written")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.io.read_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "blocks.io.write_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "temp_blocks.io.read_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "temp_blocks.io.write_time")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "temp_blocks.read")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "temp_blocks.written")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "wal.records")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "wal.fpi")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "wal.bytes")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "jit.generation_counter")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "jit.inlining_counter")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "jit.optimization_counter")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "jit.emission_counter")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.startup")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.parameters")' ), '$.value.stringValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.deparse_info")' ), '$.value.stringValue'),
             lvl + 1
         FROM peek_json_spans s, list_trace_spans st
         WHERE s."parentSpanId" = st.span_id
