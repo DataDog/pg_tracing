@@ -36,6 +36,7 @@ parse_code_to_err(ParseTraceparentErr err)
 		case PARSE_INCORRECT_FORMAT:
 			return "Incorrect traceparent format";
 	}
+	return "Unknown error";
 }
 
 /*
