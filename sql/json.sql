@@ -22,7 +22,7 @@ CALL clean_spans();
 SAVEPOINT s1;
 INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
 ROLLBACK;
-SELECT trace_id, name, subxact_count, shared_blks_hit > 0, shared_blks_dirtied > 0 lvl FROM peek_ordered_json_spans;
+SELECT trace_id, name, subxact_count, shared_blks_hit > 0 as has_shared_hit, lvl FROM peek_ordered_json_spans;
 CALL clean_spans();
 
 -- Cleanup
