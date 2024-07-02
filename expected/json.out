@@ -15,8 +15,8 @@
 (1 row)
 
 -- Check json results
-SELECT "traceId", name, kind, lvl FROM peek_ordered_json_spans;
-             traceId              |    name     | kind | lvl 
+SELECT trace_id, name, kind, lvl FROM peek_ordered_json_spans;
+             trace_id             |    name     | kind | lvl 
 ----------------------------------+-------------+------+-----
  00000000000000000000000000000001 | SELECT $1;  |    2 |   1
  00000000000000000000000000000001 | Planner     |    2 |   2
