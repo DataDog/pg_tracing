@@ -5,6 +5,9 @@
 2;
 -- Check json generated spans for simple and multi line query
 SELECT trace_id, name, kind, lvl FROM peek_ordered_json_spans;
+-- Test plan attributes with json export
+SELECT trace_id, name, plan_startup_cost, plan_total_cost, plan_rows, plan_width, lvl FROM peek_ordered_json_spans;
+
 CALL clean_spans();
 
 -- Test error code with json export
@@ -21,7 +24,7 @@ SAVEPOINT s1;
 INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
 ROLLBACK;
 SELECT trace_id, name, subxact_count, lvl FROM peek_ordered_json_spans;
-
+CALL clean_spans();
 
 -- Cleanup
 CALL clean_spans();

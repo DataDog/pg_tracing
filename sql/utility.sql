@@ -87,7 +87,10 @@ SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query
 
 -- View spans generated from json with their nested level
 CREATE VIEW peek_json_spans_with_level AS
-WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, span_end, kind, query_id, pid, userid, dbid, sql_error_code, subxact_count, lvl) AS (
+WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, span_end,
+    kind, query_id, pid, userid, dbid, sql_error_code, subxact_count,
+    plan_startup_cost, plan_total_cost, plan_rows, plan_width,
+    lvl) AS (
         SELECT p."traceId", p."parentSpanId", p."spanId", p."name", p."startTimeUnixNano", p."endTimeUnixNano", p.kind,
             jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
             jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
@@ -95,6 +98,10 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
             jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
             jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
             jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
+            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
+            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
+            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
+            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
             1
         FROM peek_json_spans p where not "parentSpanId"=ANY(SELECT span_id from pg_tracing_peek_spans)
       UNION ALL
@@ -105,6 +112,10 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
             jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
             jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
             jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
+            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
+            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
+            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
+            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
             lvl + 1
         FROM peek_json_spans s, list_trace_spans st
         WHERE s."parentSpanId" = st.span_id
