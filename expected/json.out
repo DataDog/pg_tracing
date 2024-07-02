@@ -35,12 +35,12 @@ SELECT trace_id, name, plan_startup_cost, plan_total_cost, plan_rows, plan_width
  00000000000000000000000000000001 | SELECT $1;  |                   |                 |           |            |   1
  00000000000000000000000000000001 | Planner     |                   |                 |           |            |   2
  00000000000000000000000000000001 | ExecutorRun |                   |                 |           |            |   2
- 00000000000000000000000000000001 | Result      |                   | 0.010000        | 1.000000  | 4          |   3
+ 00000000000000000000000000000001 | Result      |                   |            0.01 |         1 |          4 |   3
  00000000000000000000000000000002 | SELECT $1, +|                   |                 |           |            |   1
                                   | $2;         |                   |                 |           |            | 
  00000000000000000000000000000002 | Planner     |                   |                 |           |            |   2
  00000000000000000000000000000002 | ExecutorRun |                   |                 |           |            |   2
- 00000000000000000000000000000002 | Result      |                   | 0.010000        | 1.000000  | 8          |   3
+ 00000000000000000000000000000002 | Result      |                   |            0.01 |         1 |          8 |   3
 (8 rows)
 
 CALL clean_spans();
@@ -60,26 +60,26 @@ SELECT trace_id, name, sql_error_code, lvl FROM peek_ordered_json_spans;
 (4 rows)
 
 CALL clean_spans();
--- Test subxact_count with json export
+-- Test subxact_count and node counters with json export
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
 SAVEPOINT s1;
 INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
 ROLLBACK;
-SELECT trace_id, name, subxact_count, lvl FROM peek_ordered_json_spans;
-             trace_id             |                               name                               | subxact_count | lvl 
-----------------------------------+------------------------------------------------------------------+---------------+-----
- 00000000000000000000000000000001 | BEGIN;                                                           |               |   1
- 00000000000000000000000000000001 | ProcessUtility                                                   |               |   2
- 00000000000000000000000000000001 | SAVEPOINT s1;                                                    |               |   1
- 00000000000000000000000000000001 | ProcessUtility                                                   |               |   2
- 00000000000000000000000000000001 | INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); |               |   1
- 00000000000000000000000000000001 | Planner                                                          |               |   2
- 00000000000000000000000000000001 | ExecutorRun                                                      |               |   2
- 00000000000000000000000000000001 | Insert on pg_tracing_test                                        | 1             |   3
- 00000000000000000000000000000001 | ProjectSet                                                       | 1             |   4
- 00000000000000000000000000000001 | Result                                                           | 1             |   5
- 00000000000000000000000000000001 | ROLLBACK;                                                        | 1             |   1
- 00000000000000000000000000000001 | ProcessUtility                                                   | 1             |   2
+SELECT trace_id, name, subxact_count, shared_blks_hit > 0 as has_shared_hit, lvl FROM peek_ordered_json_spans;
+             trace_id             |                               name                               | subxact_count | has_shared_hit | lvl 
+----------------------------------+------------------------------------------------------------------+---------------+----------------+-----
+ 00000000000000000000000000000001 | BEGIN;                                                           |               |                |   1
+ 00000000000000000000000000000001 | ProcessUtility                                                   |               |                |   2
+ 00000000000000000000000000000001 | SAVEPOINT s1;                                                    |               |                |   1
+ 00000000000000000000000000000001 | ProcessUtility                                                   |               |                |   2
+ 00000000000000000000000000000001 | INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); |               | t              |   1
+ 00000000000000000000000000000001 | Planner                                                          |               |                |   2
+ 00000000000000000000000000000001 | ExecutorRun                                                      |               |                |   2
+ 00000000000000000000000000000001 | Insert on pg_tracing_test                                        |             1 | t              |   3
+ 00000000000000000000000000000001 | ProjectSet                                                       |             1 |                |   4
+ 00000000000000000000000000000001 | Result                                                           |             1 |                |   5
+ 00000000000000000000000000000001 | ROLLBACK;                                                        |             1 |                |   1
+ 00000000000000000000000000000001 | ProcessUtility                                                   |             1 |                |   2
 (12 rows)
 
 CALL clean_spans();
