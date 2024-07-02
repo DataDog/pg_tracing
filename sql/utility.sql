@@ -83,7 +83,7 @@ CREATE VIEW peek_ordered_spans AS
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int);
 CREATE VIEW peek_json_spans AS
-SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[0].spans')));
+SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_first(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[0].spans')));
 
 -- View spans generated from json with their nested level
 CREATE VIEW peek_json_spans_with_level AS
@@ -92,30 +92,30 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
     plan_startup_cost, plan_total_cost, plan_rows, plan_width,
     lvl) AS (
         SELECT p."traceId", p."parentSpanId", p."spanId", p."name", p."startTimeUnixNano", p."endTimeUnixNano", p.kind,
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "backend.user_id")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
-            jsonb_path_query(jsonb_path_query(p.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "backend.user_id")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(p.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
             1
         FROM peek_json_spans p where not "parentSpanId"=ANY(SELECT span_id from pg_tracing_peek_spans)
       UNION ALL
         SELECT s."traceId", s."parentSpanId", s."spanId", s."name", s."startTimeUnixNano", s."endTimeUnixNano", s.kind,
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "backend.user_id")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
-            jsonb_path_query(jsonb_path_query(s.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.query_id")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "backend.pid")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "backend.user_id")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "backend.database_id")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.sql_error_code")' ), '$.value.stringValue') ->> 0,
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "query.subxact_count")' ), '$.value.intValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.cost.startup")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.cost.total")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.rows")' ), '$.value.doubleValue'),
+            jsonb_path_query_first(jsonb_path_query_first(s.attributes, '$ ? (@.key == "plan.width")' ), '$.value.intValue'),
             lvl + 1
         FROM peek_json_spans s, list_trace_spans st
         WHERE s."parentSpanId" = st.span_id
