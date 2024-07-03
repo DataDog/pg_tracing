@@ -73,7 +73,7 @@ CREATE VIEW peek_ordered_spans AS
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int);
 CREATE VIEW peek_json_spans AS
-SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_first(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[0].spans')));
+SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_array(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[*].spans[*]')));
 CREATE FUNCTION get_int_attribute(attributes jsonb, keyvalue text) returns bigint
     LANGUAGE SQL
     IMMUTABLE

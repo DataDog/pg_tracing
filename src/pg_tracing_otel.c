@@ -124,7 +124,6 @@ send_spans_to_otel_collector(OtelContext * octx)
 	char	   *qbuffer;
 	Size		qbuffer_size = 0;
 	JsonContext json_ctx;
-	StringInfoData str;
 
 	/*
 	 * Do a quick check with a shared lock to see if there are any spans to
@@ -154,15 +153,11 @@ send_spans_to_otel_collector(OtelContext * octx)
 		return;
 	}
 
-	/* Build the json context */
-	initStringInfo(&str);
-	json_ctx.str = &str;
-	json_ctx.qbuffer = qbuffer;
-	json_ctx.qbuffer_size = qbuffer_size;
-
 	/* Do marshalling within marshal memory context */
 	MemoryContextSwitchTo(marshal_mem_ctx);
-	marshal_spans_to_json(&json_ctx, shared_spans);
+	/* Build the json context */
+	build_json_context(&json_ctx, qbuffer, qbuffer_size, shared_spans);
+	marshal_spans_to_json(&json_ctx);
 	MemoryContextSwitchTo(otel_exporter_mem_ctx);
 
 	/* TODO: Only drop if we manage to send spans */
@@ -171,12 +166,12 @@ send_spans_to_otel_collector(OtelContext * octx)
 	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
 	LWLockRelease(pg_tracing_shared_state->lock);
 
-	if (str.len > 0)
+	if (json_ctx.str->len > 0)
 	{
 		CURLcode	ret;
 
 		elog(INFO, "Sending %d spans to %s", num_spans, octx->endpoint);
-		ret = send_json_trace(octx, str.data);
+		ret = send_json_trace(octx, json_ctx.str->data);
 
 		/* TODO: Switch to atomic values for stats? */
 		LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);

@@ -320,6 +320,8 @@ typedef struct JsonContext
 	StringInfo	str;
 	const char *qbuffer;
 	Size		qbuffer_size;
+	int			span_type_count[NUM_SPAN_TYPE];
+	const		Span **span_type_to_spans[NUM_SPAN_TYPE];
 }			JsonContext;
 
 typedef struct SpanContext
@@ -420,7 +422,9 @@ extern void reset_traceparent(Traceparent * traceparent);
 
 /* pg_tracing_json.c */
 extern void
-			marshal_spans_to_json(const JsonContext * json_ctx, const pgTracingSpans * spans);
+			marshal_spans_to_json(JsonContext * json_ctx);
+extern void
+			build_json_context(JsonContext * json_ctx, const char *qbuffer, Size qbuffer_size, const pgTracingSpans * pgTracingSpans);
 
 /* pg_tracing_otel.c */
 extern void

@@ -3,9 +3,35 @@
  * pg_tracing_json.c
  * 		pg_tracing json export functions.
  *
+ * Generate a OTLP/JSON from spans. Spans are scoped by span type (Planner, ExecutorRun, SeqScan...).
+ * Example of generated json:
+ * {"resourceSpans" : [{
+ *     "resource" : {"attributes" : [{ "key" : "service.name", "value" : {"stringValue" : "PostgreSQL_Server"}}]},
+ *     "scopeSpans" : [
+ *       {"scope" : {"name" : "Planner"},
+ *        "spans" : [{ "attributes" :[{ "key" : "query.query_id", "value" : { "intValue" : 6865378226349601843 }}],
+ *                     "endTimeUnixNano" : "1720075532201401000",
+ *                     "kind" : 2,
+ *                     "name" : "Planner",
+ *                     "parentSpanId" : "6a3f7a0e50012fe0",
+ *                     "spanId" : "7ebb2b1481e2f246",
+ *                     "startTimeUnixNano" : "1720075532201271000",
+ *                     "traceId" : "daed1ea3e0526f4cdea3e41d007d5b91"}]},
+ *       {"scope" : {"name" : "Select query"},
+ *        "spans" : [{"attributes" : [{"key" : "node.rows","value" : {"intValue" : 1}},
+ *                                    {"key" : "query.parameters","value" : {"stringValue" : "$1 = 1"}}],
+ *                    "endTimeUnixNano" : "1720075532201772000",
+ *                    "kind" : 2,
+ *                    "name" : "select $1;",
+ *                    "parentSpanId" : "dea3e41d007d5b91",
+ *                    "spanId" : "6a3f7a0e50012fe0",
+ *                    "startTimeUnixNano" : "1720075532201227000",
+ *                    "traceId" : "daed1ea3e0526f4cdea3e41d007d5b91"
+ *             }]}
+ *          ]}]}
+ *
  * IDENTIFICATION
  *	  src/pg_tracing_json.c
- *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
@@ -247,29 +273,108 @@ append_span(const JsonContext * json_ctx, const Span * span)
 }
 
 static void
-append_scope_spans(const JsonContext * json_ctx, const pgTracingSpans * spans)
+append_scope(const JsonContext * json_ctx, SpanType span_type)
 {
-	appendStringInfo(json_ctx->str, "\"scopeSpans\":[");
-	appendStringInfo(json_ctx->str, "{\"spans\": [");
-	for (int i = 0; i < shared_spans->end; i++)
+	appendStringInfo(json_ctx->str, "\"scope\":{");
+	append_text_field(json_ctx->str, "name", span_type_to_str(span_type), false);
+	appendStringInfo(json_ctx->str, "},");
+}
+
+static void
+append_scope_spans(const JsonContext * json_ctx, SpanType span_type)
+{
+	appendStringInfoChar(json_ctx->str, '{');
+	append_scope(json_ctx, span_type);
+	appendStringInfo(json_ctx->str, "\"spans\": [");
+	for (int i = 0; i < json_ctx->span_type_count[span_type]; i++)
 	{
-		append_span(json_ctx, spans->spans + i);
-		if (i + 1 < shared_spans->end)
+		const		Span *span = json_ctx->span_type_to_spans[span_type][i];
+
+		append_span(json_ctx, span);
+		if (i + 1 < json_ctx->span_type_count[span_type])
 			appendStringInfoChar(json_ctx->str, ',');
 	}
-	appendStringInfo(json_ctx->str, "]}]");
+	appendStringInfo(json_ctx->str, "]}");
+}
+
+static void
+append_scope_spans_array(const JsonContext * json_ctx)
+{
+	bool		first = true;
+
+	appendStringInfo(json_ctx->str, "\"scopeSpans\":[");
+	for (int span_type = 0; span_type < NUM_SPAN_TYPE; span_type++)
+	{
+		if (json_ctx->span_type_count[span_type] == 0)
+			continue;
+		if (!first)
+			appendStringInfoChar(json_ctx->str, ',');
+		else
+			first = false;
+		append_scope_spans(json_ctx, span_type);
+	}
+	appendStringInfo(json_ctx->str, "]");
+}
+
+/*
+ * Build the span_type_to_spans array in JsonContext
+ *
+ * With OTLP/JSON, spans are grouped by scopes. We use span_type (Planner, Select Query...)
+ * as scope. We need to group the spans by span_type before generating the json.
+ */
+static void
+aggregate_span_by_type(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans)
+{
+	int			span_type_to_current_pos[NUM_SPAN_TYPE] = {0};
+
+	/* Count how many spans per type we have */
+	for (int i = 0; i < pgTracingSpans->end; i++)
+		json_ctx->span_type_count[pgTracingSpans->spans[i].type]++;
+
+	/* Allocate necessary space */
+	for (int span_type = 0; span_type < NUM_SPAN_TYPE; span_type++)
+	{
+		int			num_spans = json_ctx->span_type_count[span_type];
+
+		if (num_spans == 0)
+			continue;
+		json_ctx->span_type_to_spans[span_type] = palloc(sizeof(Span *) * num_spans);
+	}
+
+	/* Group spans by type */
+	for (int i = 0; i < pgTracingSpans->end; i++)
+	{
+		const		Span *span = &pgTracingSpans->spans[i];
+		int			index = span_type_to_current_pos[span->type]++;
+
+		json_ctx->span_type_to_spans[span->type][index] = span;
+	}
+}
+
+/*
+ * Prepare json context for json marshalling
+ */
+void
+build_json_context(JsonContext * json_ctx, const char *qbuffer, Size qbuffer_size, const pgTracingSpans * pgTracingSpans)
+{
+	json_ctx->str = makeStringInfo();
+	json_ctx->qbuffer = qbuffer;
+	json_ctx->qbuffer_size = qbuffer_size;
+	memset(json_ctx->span_type_count, 0, sizeof(json_ctx->span_type_count));
+	memset(json_ctx->span_type_to_spans, 0, sizeof(json_ctx->span_type_to_spans));
+
+	aggregate_span_by_type(json_ctx, pgTracingSpans);
 }
 
 /*
  * Marshal spans json compatible for otel http endpoint
  */
 void
-marshal_spans_to_json(const JsonContext * json_ctx, const pgTracingSpans * spans)
+marshal_spans_to_json(JsonContext * json_ctx)
 {
 	appendStringInfo(json_ctx->str, "{\"resourceSpans\": [{");
 	append_resource(json_ctx->str);
 	appendStringInfoChar(json_ctx->str, ',');
-	append_scope_spans(json_ctx, spans);
-
+	append_scope_spans_array(json_ctx);
 	appendStringInfo(json_ctx->str, "}]}");
 }
