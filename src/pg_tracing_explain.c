@@ -13,7 +13,6 @@
 #include "nodes/makefuncs.h"
 #include "utils/builtins.h"
 #include "parser/parsetree.h"
-#include "nodes/extensible.h"
 #include "pg_tracing.h"
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
@@ -393,7 +392,7 @@ plan_to_deparse_info(const planstateTraceContext * planstateTraceContext, const 
  * Generate an operation name from a planstate
  */
 char const *
-plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *span_type)
+plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, SpanType span_type)
 {
 	StringInfo	operation_name = makeStringInfo();
 	Plan const *plan = planstate->plan;
@@ -402,7 +401,7 @@ plan_to_operation(const planstateTraceContext * planstateTraceContext, const Pla
 		appendStringInfoString(operation_name, "Parallel ");
 	if (plan->async_capable)
 		appendStringInfoString(operation_name, "Async ");
-	appendStringInfoString(operation_name, span_type);
+	appendStringInfoString(operation_name, span_type_to_str(span_type));
 
 	plan_to_rel_name(planstate, planstateTraceContext, operation_name);
 
@@ -412,111 +411,107 @@ plan_to_operation(const planstateTraceContext * planstateTraceContext, const Pla
 /*
  * Get the node type name from a plan node
  */
-const char *
-plan_to_node_type(const Plan *plan)
+SpanType
+plan_to_span_type(const Plan *plan)
 {
 	const char *custom_name;
 
 	switch (nodeTag(plan))
 	{
 		case T_Result:
-			return "Result";
+			return SPAN_NODE_RESULT;
 		case T_ProjectSet:
-			return "ProjectSet";
+			return SPAN_NODE_PROJECT_SET;
 		case T_ModifyTable:
 			switch (((ModifyTable *) plan)->operation)
 			{
 				case CMD_INSERT:
-					return "Insert";
+					return SPAN_NODE_INSERT;
 				case CMD_UPDATE:
-					return "Update";
+					return SPAN_NODE_UPDATE;
 				case CMD_DELETE:
-					return "Delete";
+					return SPAN_NODE_DELETE;
 				case CMD_MERGE:
-					return "Merge";
+					return SPAN_NODE_MERGE;
 				default:
-					return "???";
+					return SPAN_NODE_UNKNOWN;
 			}
 		case T_Append:
-			return "Append";
+			return SPAN_NODE_APPEND;
 		case T_MergeAppend:
-			return "MergeAppend";
+			return SPAN_NODE_MERGE_APPEND;
 		case T_RecursiveUnion:
-			return "RecursiveUnion";
+			return SPAN_NODE_RECURSIVE_UNION;
 		case T_BitmapAnd:
-			return "BitmapAnd";
+			return SPAN_NODE_BITMAP_AND;
 		case T_BitmapOr:
-			return "BitmapOr";
+			return SPAN_NODE_BITMAP_OR;
 		case T_NestLoop:
-			return "NestedLoop";
+			return SPAN_NODE_NESTLOOP;
 		case T_MergeJoin:
-			return "Merge";		/* "Join" gets added by jointype switch */
+			return SPAN_NODE_MERGE_JOIN;
 		case T_HashJoin:
-			return "Hash";		/* "Join" gets added by jointype switch */
+			return SPAN_NODE_HASH_JOIN;
 		case T_SeqScan:
-			return "SeqScan";
+			return SPAN_NODE_SEQ_SCAN;
 		case T_SampleScan:
-			return "SampleScan";
+			return SPAN_NODE_SAMPLE_SCAN;
 		case T_Gather:
-			return "Gather";
+			return SPAN_NODE_GATHER;
 		case T_GatherMerge:
-			return "GatherMerge";
+			return SPAN_NODE_GATHER_MERGE;
 		case T_IndexScan:
-			return "IndexScan";
+			return SPAN_NODE_INDEX_SCAN;
 		case T_IndexOnlyScan:
-			return "IndexOnlyScan";
+			return SPAN_NODE_INDEX_ONLY_SCAN;
 		case T_BitmapIndexScan:
-			return "BitmapIndexScan";
+			return SPAN_NODE_BITMAP_INDEX_SCAN;
 		case T_BitmapHeapScan:
-			return "BitmapHeapScan";
+			return SPAN_NODE_BITMAP_HEAP_SCAN;
 		case T_TidScan:
-			return "TidScan";
+			return SPAN_NODE_TID_SCAN;
 		case T_TidRangeScan:
-			return "TidRangeScan";
+			return SPAN_NODE_TID_RANGE_SCAN;
 		case T_SubqueryScan:
-			return "SubqueryScan";
+			return SPAN_NODE_SUBQUERY_SCAN;
 		case T_FunctionScan:
-			return "FunctionScan";
+			return SPAN_NODE_FUNCTION_SCAN;
 		case T_TableFuncScan:
-			return "TableFunctionScan";
+			return SPAN_NODE_TABLEFUNC_SCAN;
 		case T_ValuesScan:
-			return "ValuesScan";
+			return SPAN_NODE_VALUES_SCAN;
 		case T_CteScan:
-			return "CTEScan";
+			return SPAN_NODE_CTE_SCAN;
 		case T_NamedTuplestoreScan:
-			return "NamedTuplestoreScan";
+			return SPAN_NODE_NAMED_TUPLE_STORE_SCAN;
 		case T_WorkTableScan:
-			return "WorkTableScan";
+			return SPAN_NODE_WORKTABLE_SCAN;
 		case T_ForeignScan:
 			switch (((ForeignScan *) plan)->operation)
 			{
 				case CMD_SELECT:
-					return "ForeignScan";
+					return SPAN_NODE_FOREIGN_SCAN;
 				case CMD_INSERT:
-					return "ForeignInsert";
+					return SPAN_NODE_FOREIGN_INSERT;
 				case CMD_UPDATE:
-					return "ForeignUpdate";
+					return SPAN_NODE_FOREIGN_UPDATE;
 				case CMD_DELETE:
-					return "ForeignDelete";
+					return SPAN_NODE_FOREIGN_DELETE;
 				default:
-					return "???";
+					return SPAN_NODE_UNKNOWN;
 			}
 		case T_CustomScan:
-			custom_name = ((CustomScan *) plan)->methods->CustomName;
-			if (custom_name)
-				return psprintf("CustomScan (%s)", custom_name);
-			else
-				return "CustomScan";
+			return SPAN_NODE_CUSTOM_SCAN;
 		case T_Material:
-			return "Materialize";
+			return SPAN_NODE_MATERIALIZE;
 		case T_Memoize:
-			return "Memoize";
+			return SPAN_NODE_MEMOIZE;
 		case T_Sort:
-			return "Sort";
+			return SPAN_NODE_SORT;
 		case T_IncrementalSort:
-			return "IncrementalSort";
+			return SPAN_NODE_INCREMENTAL_SORT;
 		case T_Group:
-			return "Group";
+			return SPAN_NODE_GROUP;
 		case T_Agg:
 			{
 				Agg		   *agg = (Agg *) plan;
@@ -524,38 +519,38 @@ plan_to_node_type(const Plan *plan)
 				switch (agg->aggstrategy)
 				{
 					case AGG_PLAIN:
-						return "Aggregate";
+						return SPAN_NODE_AGGREGATE;
 					case AGG_SORTED:
-						return "GroupAggregate";
+						return SPAN_NODE_GROUP_AGGREGATE;
 					case AGG_HASHED:
-						return "HashAggregate";
+						return SPAN_NODE_HASH_AGGREGATE;
 					case AGG_MIXED:
-						return "MixedAggregate";
+						return SPAN_NODE_MIXED_AGGREGATE;
 					default:
-						return "Aggregate ???";
+						return SPAN_NODE_UNKNOWN;
 				}
 			}
 		case T_WindowAgg:
-			return "WindowAgg";
+			return SPAN_NODE_WINDOW_AGG;
 		case T_Unique:
-			return "Unique";
+			return SPAN_NODE_UNIQUE;
 		case T_SetOp:
 			switch (((SetOp *) plan)->strategy)
 			{
 				case SETOP_SORTED:
-					return "SetOp";
+					return SPAN_NODE_SETOP;
 				case SETOP_HASHED:
-					return "HashSetOp";
+					return SPAN_NODE_SETOP_HASHED;
 				default:
-					return "SetOp ???";
+					return SPAN_NODE_UNKNOWN;
 			}
 		case T_LockRows:
-			return "LockRows";
+			return SPAN_NODE_LOCK_ROWS;
 		case T_Limit:
-			return "Limit";
+			return SPAN_NODE_LIMIT;
 		case T_Hash:
-			return "Hash";
+			return SPAN_NODE_HASH;
 		default:
-			return "???";
+			return SPAN_NODE_UNKNOWN;
 	}
 }

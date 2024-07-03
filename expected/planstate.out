@@ -11,7 +11,7 @@ SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where tra
  Select query | SELECT s.relation_size + s.index_size as sum_size                                                                         +| 
               | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1 | 
  Planner      | Planner                                                                                                                    | 
- Executor     | ExecutorRun                                                                                                                | 
+ ExecutorRun  | ExecutorRun                                                                                                                | 
 (3 rows)
 
 -- Test with planstate_spans enabled
@@ -27,7 +27,7 @@ SELECT span_type, span_operation, deparse_info FROM peek_ordered_spans where tra
  Select query | SELECT s.relation_size + s.index_size as sum_size                                                                         +| 
               | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1 | 
  Planner      | Planner                                                                                                                    | 
- Executor     | ExecutorRun                                                                                                                | 
+ ExecutorRun  | ExecutorRun                                                                                                                | 
  Limit        | Limit                                                                                                                      | 
  SubqueryScan | SubqueryScan on s                                                                                                          | 
  SeqScan      | SeqScan on pg_class c                                                                                                      | 

@@ -82,8 +82,72 @@ typedef enum SpanType
 
 	/* Represents a node execution, generated from planstate */
 	SPAN_NODE,
+	SPAN_NODE_RESULT,
+	SPAN_NODE_PROJECT_SET,
+
+	/* Modify table */
+	SPAN_NODE_INSERT,
+	SPAN_NODE_UPDATE,
+	SPAN_NODE_DELETE,
+	SPAN_NODE_MERGE,
+
+	SPAN_NODE_APPEND,
+	SPAN_NODE_MERGE_APPEND,
+	SPAN_NODE_RECURSIVE_UNION,
+	SPAN_NODE_BITMAP_AND,
+	SPAN_NODE_BITMAP_OR,
+	SPAN_NODE_NESTLOOP,
+	SPAN_NODE_MERGE_JOIN,
+	SPAN_NODE_HASH_JOIN,
+	SPAN_NODE_SEQ_SCAN,
+	SPAN_NODE_SAMPLE_SCAN,
+	SPAN_NODE_GATHER,
+	SPAN_NODE_GATHER_MERGE,
+	SPAN_NODE_INDEX_SCAN,
+	SPAN_NODE_INDEX_ONLY_SCAN,
+	SPAN_NODE_BITMAP_INDEX_SCAN,
+	SPAN_NODE_BITMAP_HEAP_SCAN,
+	SPAN_NODE_TID_SCAN,
+	SPAN_NODE_TID_RANGE_SCAN,
+	SPAN_NODE_SUBQUERY_SCAN,
+	SPAN_NODE_FUNCTION_SCAN,
+	SPAN_NODE_TABLEFUNC_SCAN,
+	SPAN_NODE_VALUES_SCAN,
+	SPAN_NODE_CTE_SCAN,
+	SPAN_NODE_NAMED_TUPLE_STORE_SCAN,
+	SPAN_NODE_WORKTABLE_SCAN,
+
+	SPAN_NODE_FOREIGN_SCAN,
+	SPAN_NODE_FOREIGN_INSERT,
+	SPAN_NODE_FOREIGN_UPDATE,
+	SPAN_NODE_FOREIGN_DELETE,
+
+	SPAN_NODE_CUSTOM_SCAN,
+	SPAN_NODE_MATERIALIZE,
+	SPAN_NODE_MEMOIZE,
+	SPAN_NODE_SORT,
+	SPAN_NODE_INCREMENTAL_SORT,
+	SPAN_NODE_GROUP,
+
+	SPAN_NODE_AGGREGATE,
+	SPAN_NODE_GROUP_AGGREGATE,
+	SPAN_NODE_HASH_AGGREGATE,
+	SPAN_NODE_MIXED_AGGREGATE,
+
+	SPAN_NODE_WINDOW_AGG,
+	SPAN_NODE_UNIQUE,
+
+	SPAN_NODE_SETOP,
+	SPAN_NODE_SETOP_HASHED,
+
+	SPAN_NODE_LOCK_ROWS,
+	SPAN_NODE_LIMIT,
+	SPAN_NODE_HASH,
+
 	SPAN_NODE_INIT_PLAN,
 	SPAN_NODE_SUBPLAN,
+
+	SPAN_NODE_UNKNOWN,
 
 	/* Top Span types. They are created from the query cmdType */
 	SPAN_TOP_SELECT,
@@ -94,6 +158,8 @@ typedef enum SpanType
 	SPAN_TOP_UTILITY,
 	SPAN_TOP_NOTHING,
 	SPAN_TOP_UNKNOWN,
+
+	NUM_SPAN_TYPE,				/* Must be last! */
 }			SpanType;
 
 
@@ -144,7 +210,6 @@ typedef struct Span
 	 * the position of NULL terminated strings in the file. Set to -1 if
 	 * unused.
 	 */
-	Size		node_type_offset;	/* name of the node type */
 	Size		operation_name_offset;	/* operation represented by the span */
 	Size		parameter_offset;	/* query parameters values */
 	Size		deparse_info_offset;	/* info from deparsed plan */
@@ -270,8 +335,8 @@ typedef struct SpanContext
 }			SpanContext;
 
 /* pg_tracing_explain.c */
-extern const char *plan_to_node_type(const Plan *plan);
-extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, const char *spanName);
+extern SpanType plan_to_span_type(const Plan *plan);
+extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, SpanType span_type);
 extern const char *plan_to_deparse_info(const planstateTraceContext * planstateTraceContext, const PlanState *planstate);
 
 /* pg_tracing_parallel.c */
@@ -316,10 +381,11 @@ extern void begin_span(TraceId trace_id, Span * span, SpanType type,
 					   TimestampTz start_span);
 extern void end_span(Span * span, const TimestampTz *end_time);
 extern void reset_span(Span * span);
-extern const char *get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size);
+extern const char *get_span_type(const Span * span);
 extern const char *get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size);
 extern void adjust_file_offset(Span * span, Size file_position);
 extern bool traceid_zero(TraceId trace_id);
+extern const char *span_type_to_str(SpanType span_type);
 
 
 /* pg_tracing_sql_functions.c */

@@ -143,11 +143,11 @@ SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00
  Utility query  | FETCH FORWARD 20 from c                             |   1
  ProcessUtility | ProcessUtility                                      |   2
  Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
- Executor       | ExecutorRun                                         |   4
+ ExecutorRun    | ExecutorRun                                         |   4
  Utility query  | FETCH BACKWARD 10 from c                            |   1
  ProcessUtility | ProcessUtility                                      |   2
  Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
- Executor       | ExecutorRun                                         |   4
+ ExecutorRun    | ExecutorRun                                         |   4
  Utility query  | CLOSE c;                                            |   1
  ProcessUtility | ProcessUtility                                      |   2
  Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3

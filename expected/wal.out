@@ -11,20 +11,20 @@ FROM peek_ordered_spans;
 ----------------------------------+--------------+------------------------------------------------------------------+-------------+-----------
  00000000000000000000000000000001 | Insert query | INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); | t           | t
  00000000000000000000000000000001 | Planner      | Planner                                                          | f           | f
- 00000000000000000000000000000001 | Executor     | ExecutorRun                                                      |             | 
+ 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun                                                      |             | 
  00000000000000000000000000000001 | Insert       | Insert on pg_tracing_test                                        | t           | t
  00000000000000000000000000000001 | ProjectSet   | ProjectSet                                                       | f           | f
  00000000000000000000000000000001 | Result       | Result                                                           | f           | f
  00000000000000000000000000000001 | Commit       | Commit                                                           |             | 
  00000000000000000000000000000002 | Update query | UPDATE pg_tracing_test SET b = $1 WHERE a = $2;                  | t           | t
  00000000000000000000000000000002 | Planner      | Planner                                                          | f           | f
- 00000000000000000000000000000002 | Executor     | ExecutorRun                                                      |             | 
+ 00000000000000000000000000000002 | ExecutorRun  | ExecutorRun                                                      |             | 
  00000000000000000000000000000002 | Update       | Update on pg_tracing_test                                        | t           | t
  00000000000000000000000000000002 | IndexScan    | IndexScan using pg_tracing_index on pg_tracing_test              | f           | f
  00000000000000000000000000000002 | Commit       | Commit                                                           |             | 
  00000000000000000000000000000003 | Delete query | DELETE FROM pg_tracing_test WHERE a = $1;                        | t           | t
  00000000000000000000000000000003 | Planner      | Planner                                                          | f           | f
- 00000000000000000000000000000003 | Executor     | ExecutorRun                                                      |             | 
+ 00000000000000000000000000000003 | ExecutorRun  | ExecutorRun                                                      |             | 
  00000000000000000000000000000003 | Delete       | Delete on pg_tracing_test                                        | t           | t
  00000000000000000000000000000003 | IndexScan    | IndexScan using pg_tracing_index on pg_tracing_test              | t           | t
  00000000000000000000000000000003 | Commit       | Commit                                                           |             | 

@@ -389,7 +389,7 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 ----------------------------------+--------------+--------------------------------------------------------------+----------------+-----
  00000000000000000000000000000004 | Select query | select function_with_error($1::int[]);                       | 42P13          |   1
  00000000000000000000000000000004 | Planner      | Planner                                                      | 00000          |   2
- 00000000000000000000000000000004 | Executor     | ExecutorRun                                                  | 42P13          |   2
+ 00000000000000000000000000000004 | ExecutorRun  | ExecutorRun                                                  | 42P13          |   2
  00000000000000000000000000000004 | ProjectSet   | ProjectSet                                                   | 42P13          |   3
  00000000000000000000000000000004 | Result       | Result                                                       | 42P13          |   4
  00000000000000000000000000000004 | Select query | select s from pg_catalog.generate_series($1, $2, $3) as g(s) | 00000          |   4

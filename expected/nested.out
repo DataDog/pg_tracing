@@ -46,7 +46,7 @@ SELECT span_id AS span_a_id,
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
-		from pg_tracing_peek_spans where parent_id=:'span_a_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_a_id' and span_operation='ExecutorRun' \gset
 SELECT span_id AS span_e_id,
         get_epoch(span_start) as span_e_start,
         get_epoch(span_end) as span_e_end
@@ -240,7 +240,7 @@ SELECT span_id AS span_a_id,
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
-		from pg_tracing_peek_spans where parent_id=:'span_a_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_a_id' and span_operation='ExecutorRun' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end

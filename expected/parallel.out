@@ -54,7 +54,7 @@ SELECT trace_id from pg_tracing_peek_spans group by trace_id;
 (3 rows)
 
 -- Check number of executor spans
-SELECT count(*) from pg_tracing_consume_spans where span_type='Executor';
+SELECT count(*) from pg_tracing_consume_spans where span_operation='ExecutorRun';
  count 
 -------
      7

@@ -71,13 +71,13 @@ SELECT span_id AS span_c_id,
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
-		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_operation='ExecutorRun' \gset
 
 -- Executor Finish, first trigger
 SELECT span_id AS span_g_id,
         get_epoch(span_start) as span_g_start,
         get_epoch(span_end) as span_g_end
-		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_type='Executor' and span_operation='ExecutorFinish' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_operation='ExecutorFinish' \gset
 SELECT span_id AS span_i_id,
         get_epoch(span_start) as span_i_start,
         get_epoch(span_end) as span_i_end
@@ -89,7 +89,7 @@ SELECT span_id AS span_j_id,
 SELECT span_id AS span_k_id,
         get_epoch(span_start) as span_k_start,
         get_epoch(span_end) as span_k_end
-		from pg_tracing_peek_spans where parent_id=:'span_i_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_i_id' and span_operation='ExecutorRun' \gset
 
 -- Executor Finish, second trigger
 SELECT span_id AS span_n_id,
@@ -99,7 +99,7 @@ SELECT span_id AS span_n_id,
 SELECT span_id AS span_o_id,
         get_epoch(span_start) as span_o_start,
         get_epoch(span_end) as span_o_end
-        from pg_tracing_peek_spans where parent_id=:'span_n_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+        from pg_tracing_peek_spans where parent_id=:'span_n_id' and span_operation='ExecutorRun' \gset
 
 -- Check that spans' start and end are within expection
 -- Planner

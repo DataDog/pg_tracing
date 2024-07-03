@@ -150,7 +150,7 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 	char		parent_id[17];
 	char		span_id[17];
 
-	span_type = get_span_type(span, qbuffer, qbuffer_size);
+	span_type = span_type_to_str(span->type);
 	operation_name = get_operation_name(span, qbuffer, qbuffer_size);
 	sql_error_code = unpack_sql_state(span->sql_error_code);
 

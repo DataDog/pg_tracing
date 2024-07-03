@@ -62,12 +62,12 @@ SELECT span_id AS span_c_id,
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
-		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_operation='ExecutorRun' \gset
 -- Executor Finish, first trigger
 SELECT span_id AS span_g_id,
         get_epoch(span_start) as span_g_start,
         get_epoch(span_end) as span_g_end
-		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_type='Executor' and span_operation='ExecutorFinish' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_b_id' and span_operation='ExecutorFinish' \gset
 SELECT span_id AS span_i_id,
         get_epoch(span_start) as span_i_start,
         get_epoch(span_end) as span_i_end
@@ -79,7 +79,7 @@ SELECT span_id AS span_j_id,
 SELECT span_id AS span_k_id,
         get_epoch(span_start) as span_k_start,
         get_epoch(span_end) as span_k_end
-		from pg_tracing_peek_spans where parent_id=:'span_i_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+		from pg_tracing_peek_spans where parent_id=:'span_i_id' and span_operation='ExecutorRun' \gset
 -- Executor Finish, second trigger
 SELECT span_id AS span_n_id,
         get_epoch(span_start) as span_n_start,
@@ -88,7 +88,7 @@ SELECT span_id AS span_n_id,
 SELECT span_id AS span_o_id,
         get_epoch(span_start) as span_o_start,
         get_epoch(span_end) as span_o_end
-        from pg_tracing_peek_spans where parent_id=:'span_n_id' and span_type='Executor' and span_operation='ExecutorRun' \gset
+        from pg_tracing_peek_spans where parent_id=:'span_n_id' and span_operation='ExecutorRun' \gset
 -- Check that spans' start and end are within expection
 -- Planner
 SELECT :span_c_start >= :span_b_start as planner_starts_after_root_span;
@@ -132,25 +132,25 @@ SELECT :span_o_start >= :span_i_end  as second_trigger_starts_after_first,
 
 -- Check span_operation
 SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
-  span_type   |                                                   span_operation                                                    | lvl 
---------------+---------------------------------------------------------------------------------------------------------------------+-----
- Insert query | INSERT INTO Employee VALUES($1,$2);                                                                                 |   1
- Planner      | Planner                                                                                                             |   2
- Executor     | ExecutorRun                                                                                                         |   2
- Insert       | Insert on employee                                                                                                  |   3
- Result       | Result                                                                                                              |   4
- Executor     | ExecutorFinish                                                                                                      |   2
- Insert query | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
- Planner      | Planner                                                                                                             |   4
- Executor     | ExecutorRun                                                                                                         |   4
- Insert       | Insert on employee_audit                                                                                            |   5
- Result       | Result                                                                                                              |   6
- Insert query | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
- Planner      | Planner                                                                                                             |   4
- Executor     | ExecutorRun                                                                                                         |   4
- Insert       | Insert on employee_audit                                                                                            |   5
- Result       | Result                                                                                                              |   6
- Commit       | Commit                                                                                                              |   1
+   span_type    |                                                   span_operation                                                    | lvl 
+----------------+---------------------------------------------------------------------------------------------------------------------+-----
+ Insert query   | INSERT INTO Employee VALUES($1,$2);                                                                                 |   1
+ Planner        | Planner                                                                                                             |   2
+ ExecutorRun    | ExecutorRun                                                                                                         |   2
+ Insert         | Insert on employee                                                                                                  |   3
+ Result         | Result                                                                                                              |   4
+ ExecutorFinish | ExecutorFinish                                                                                                      |   2
+ Insert query   | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
+ Planner        | Planner                                                                                                             |   4
+ ExecutorRun    | ExecutorRun                                                                                                         |   4
+ Insert         | Insert on employee_audit                                                                                            |   5
+ Result         | Result                                                                                                              |   6
+ Insert query   | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
+ Planner        | Planner                                                                                                             |   4
+ ExecutorRun    | ExecutorRun                                                                                                         |   4
+ Insert         | Insert on employee_audit                                                                                            |   5
+ Result         | Result                                                                                                              |   6
+ Commit         | Commit                                                                                                              |   1
 (17 rows)
 
 -- Check count of query_id
@@ -185,16 +185,16 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 ----------------------------------+--------------+-----------------------------------------------------------------+-----
  00000000000000000000000000000001 | Insert query | INSERT INTO before_trigger_table SELECT generate_series($1,$2); |   1
  00000000000000000000000000000001 | Planner      | Planner                                                         |   2
- 00000000000000000000000000000001 | Executor     | ExecutorRun                                                     |   2
+ 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun                                                     |   2
  00000000000000000000000000000001 | Insert       | Insert on before_trigger_table                                  |   3
  00000000000000000000000000000001 | ProjectSet   | ProjectSet                                                      |   4
  00000000000000000000000000000001 | Result       | Result                                                          |   5
  00000000000000000000000000000001 | Select query | SELECT $1                                                       |   5
  00000000000000000000000000000001 | Planner      | Planner                                                         |   6
- 00000000000000000000000000000001 | Executor     | ExecutorRun                                                     |   6
+ 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun                                                     |   6
  00000000000000000000000000000001 | Result       | Result                                                          |   7
  00000000000000000000000000000001 | Select query | SELECT 'SELECT 1'                                               |   5
- 00000000000000000000000000000001 | Executor     | ExecutorRun                                                     |   6
+ 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun                                                     |   6
  00000000000000000000000000000001 | Result       | Result                                                          |   7
  00000000000000000000000000000001 | Commit       | Commit                                                          |   1
 (14 rows)
@@ -206,15 +206,15 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 ----------------------------------+--------------+---------------------------------------+-----
  00000000000000000000000000000002 | Update query | UPDATE before_trigger_table set a=$1; |   1
  00000000000000000000000000000002 | Planner      | Planner                               |   2
- 00000000000000000000000000000002 | Executor     | ExecutorRun                           |   2
+ 00000000000000000000000000000002 | ExecutorRun  | ExecutorRun                           |   2
  00000000000000000000000000000002 | Update       | Update on before_trigger_table        |   3
  00000000000000000000000000000002 | SeqScan      | SeqScan on before_trigger_table       |   4
  00000000000000000000000000000002 | Select query | SELECT $1                             |   3
  00000000000000000000000000000002 | Planner      | Planner                               |   4
- 00000000000000000000000000000002 | Executor     | ExecutorRun                           |   4
+ 00000000000000000000000000000002 | ExecutorRun  | ExecutorRun                           |   4
  00000000000000000000000000000002 | Result       | Result                                |   5
  00000000000000000000000000000002 | Select query | SELECT 'SELECT 1'                     |   3
- 00000000000000000000000000000002 | Executor     | ExecutorRun                           |   4
+ 00000000000000000000000000000002 | ExecutorRun  | ExecutorRun                           |   4
  00000000000000000000000000000002 | Result       | Result                                |   5
  00000000000000000000000000000002 | Commit       | Commit                                |   1
 (13 rows)
@@ -226,15 +226,15 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 ----------------------------------+--------------+----------------------------------------------+-----
  00000000000000000000000000000003 | Delete query | DELETE FROM before_trigger_table where a=$1; |   1
  00000000000000000000000000000003 | Planner      | Planner                                      |   2
- 00000000000000000000000000000003 | Executor     | ExecutorRun                                  |   2
+ 00000000000000000000000000000003 | ExecutorRun  | ExecutorRun                                  |   2
  00000000000000000000000000000003 | Delete       | Delete on before_trigger_table               |   3
  00000000000000000000000000000003 | SeqScan      | SeqScan on before_trigger_table              |   4
  00000000000000000000000000000003 | Select query | SELECT $1                                    |   3
  00000000000000000000000000000003 | Planner      | Planner                                      |   4
- 00000000000000000000000000000003 | Executor     | ExecutorRun                                  |   4
+ 00000000000000000000000000000003 | ExecutorRun  | ExecutorRun                                  |   4
  00000000000000000000000000000003 | Result       | Result                                       |   5
  00000000000000000000000000000003 | Select query | SELECT 'SELECT 1'                            |   3
- 00000000000000000000000000000003 | Executor     | ExecutorRun                                  |   4
+ 00000000000000000000000000000003 | ExecutorRun  | ExecutorRun                                  |   4
  00000000000000000000000000000003 | Result       | Result                                       |   5
  00000000000000000000000000000003 | Commit       | Commit                                       |   1
 (13 rows)
