@@ -41,7 +41,6 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	else
 		span->span_id = pg_prng_uint64(&pg_global_prng_state);
 
-	span->node_type_offset = -1;
 	span->operation_name_offset = -1;
 	span->parameter_offset = -1;
 	span->deparse_info_offset = -1;
@@ -111,25 +110,13 @@ reset_span(Span * span)
 }
 
 /*
- * Get the type of a span.
- * If it is a node span, the name may be pulled from the stat file.
+ * Convert span_type to string
  */
 const char *
-get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size)
+span_type_to_str(SpanType span_type)
 {
-	if (span->node_type_offset != -1 && qbuffer_size > 0 &&
-		span->node_type_offset <= qbuffer_size)
+	switch (span_type)
 	{
-		StringInfo	node_name = makeStringInfo();
-
-		appendStringInfoString(node_name, qbuffer + span->node_type_offset);
-		return node_name->data;
-	}
-
-	switch (span->type)
-	{
-		case SPAN_COMMIT:
-			return "Commit";
 		case SPAN_PLANNER:
 			return "Planner";
 		case SPAN_FUNCTION:
@@ -137,9 +124,124 @@ get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size)
 		case SPAN_PROCESS_UTILITY:
 			return "ProcessUtility";
 		case SPAN_EXECUTOR_RUN:
-			return "Executor";
+			return "ExecutorRun";
 		case SPAN_EXECUTOR_FINISH:
-			return "Executor";
+			return "ExecutorFinish";
+		case SPAN_COMMIT:
+			return "Commit";
+
+		case SPAN_NODE:
+			return "Node";
+		case SPAN_NODE_INIT_PLAN:
+			return "InitPlan";
+		case SPAN_NODE_SUBPLAN:
+			return "SubPlan";
+		case SPAN_NODE_RESULT:
+			return "Result";
+		case SPAN_NODE_PROJECT_SET:
+			return "ProjectSet";
+		case SPAN_NODE_INSERT:
+			return "Insert";
+		case SPAN_NODE_UPDATE:
+			return "Update";
+		case SPAN_NODE_DELETE:
+			return "Delete";
+		case SPAN_NODE_MERGE:
+			return "Merge";
+		case SPAN_NODE_APPEND:
+			return "Append";
+		case SPAN_NODE_MERGE_APPEND:
+			return "MergeAppend";
+		case SPAN_NODE_RECURSIVE_UNION:
+			return "RecursiveUnion";
+		case SPAN_NODE_BITMAP_AND:
+			return "BitmapAnd";
+		case SPAN_NODE_BITMAP_OR:
+			return "BitmapOr";
+		case SPAN_NODE_NESTLOOP:
+			return "NestedLoop";
+		case SPAN_NODE_MERGE_JOIN:
+			return "Merge"; /* Join is added later by the join type */
+		case SPAN_NODE_HASH_JOIN:
+			return "Hash"; /* Join is added later by the join type */
+		case SPAN_NODE_SEQ_SCAN:
+			return "SeqScan";
+		case SPAN_NODE_SAMPLE_SCAN:
+			return "SampleScan";
+		case SPAN_NODE_GATHER:
+			return "Gather";
+		case SPAN_NODE_GATHER_MERGE:
+			return "GatherMerge";
+		case SPAN_NODE_INDEX_SCAN:
+			return "IndexScan";
+		case SPAN_NODE_INDEX_ONLY_SCAN:
+			return "IndexOnlyScan";
+		case SPAN_NODE_BITMAP_INDEX_SCAN:
+			return "BitmapIndexScan";
+		case SPAN_NODE_BITMAP_HEAP_SCAN:
+			return "BitmapHeapScan";
+		case SPAN_NODE_TID_SCAN:
+			return "TidScan";
+		case SPAN_NODE_TID_RANGE_SCAN:
+			return "TidRangeScan";
+		case SPAN_NODE_SUBQUERY_SCAN:
+			return "SubqueryScan";
+		case SPAN_NODE_FUNCTION_SCAN:
+			return "FunctionScan";
+		case SPAN_NODE_TABLEFUNC_SCAN:
+			return "TablefuncScan";
+		case SPAN_NODE_VALUES_SCAN:
+			return "ValuesScan";
+		case SPAN_NODE_CTE_SCAN:
+			return "CTEScan";
+		case SPAN_NODE_NAMED_TUPLE_STORE_SCAN:
+			return "NamedTupleStoreScan";
+		case SPAN_NODE_WORKTABLE_SCAN:
+			return "WorktableScan";
+		case SPAN_NODE_FOREIGN_SCAN:
+			return "ForeignScan";
+		case SPAN_NODE_FOREIGN_INSERT:
+			return "ForeignInsert";
+		case SPAN_NODE_FOREIGN_UPDATE:
+			return "ForeignUpdate";
+		case SPAN_NODE_FOREIGN_DELETE:
+			return "ForeignDelete";
+		case SPAN_NODE_CUSTOM_SCAN:
+			return "CustomScan";
+		case SPAN_NODE_MATERIALIZE:
+			return "Materialize";
+		case SPAN_NODE_MEMOIZE:
+			return "Memoize";
+		case SPAN_NODE_SORT:
+			return "Sort";
+		case SPAN_NODE_INCREMENTAL_SORT:
+			return "IncrementalSort";
+		case SPAN_NODE_GROUP:
+			return "Group";
+		case SPAN_NODE_AGGREGATE:
+			return "Aggregate";
+		case SPAN_NODE_GROUP_AGGREGATE:
+			return "GroupAggregate";
+		case SPAN_NODE_HASH_AGGREGATE:
+			return "HashAggregate";
+		case SPAN_NODE_MIXED_AGGREGATE:
+			return "MixedAggregate";
+		case SPAN_NODE_WINDOW_AGG:
+			return "WindowAgg";
+		case SPAN_NODE_UNIQUE:
+			return "Unique";
+		case SPAN_NODE_SETOP:
+			return "Setop";
+		case SPAN_NODE_SETOP_HASHED:
+			return "SetopHashed";
+		case SPAN_NODE_LOCK_ROWS:
+			return "LockRows";
+		case SPAN_NODE_LIMIT:
+			return "Limit";
+		case SPAN_NODE_HASH:
+			return "Hash";
+		case SPAN_NODE_UNKNOWN:
+			return "UnknownNode";
 
 		case SPAN_TOP_SELECT:
 			return "Select query";
@@ -157,15 +259,10 @@ get_span_type(const Span * span, const char *qbuffer, Size qbuffer_size)
 			return "Nothing query";
 		case SPAN_TOP_UNKNOWN:
 			return "Unknown query";
-
-		case SPAN_NODE_INIT_PLAN:
-			return "InitPlan";
-		case SPAN_NODE_SUBPLAN:
-			return "SubPlan";
-		case SPAN_NODE:
-			return "Node";
+		case NUM_SPAN_TYPE:
+			return "Unknown type";
 	}
-	return "???";
+	return "Unknown";
 }
 
 /*
@@ -179,35 +276,7 @@ get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 		&& span->operation_name_offset <= qbuffer_size)
 		return qbuffer + span->operation_name_offset;
 
-	switch (span->type)
-	{
-		case SPAN_COMMIT:
-			return "Commit";
-		case SPAN_PLANNER:
-			return "Planner";
-		case SPAN_FUNCTION:
-			return "Function";
-		case SPAN_PROCESS_UTILITY:
-			return "ProcessUtility";
-		case SPAN_EXECUTOR_RUN:
-			return "ExecutorRun";
-		case SPAN_EXECUTOR_FINISH:
-			return "ExecutorFinish";
-		case SPAN_TOP_SELECT:
-		case SPAN_TOP_INSERT:
-		case SPAN_TOP_UPDATE:
-		case SPAN_TOP_DELETE:
-		case SPAN_TOP_MERGE:
-		case SPAN_TOP_UTILITY:
-		case SPAN_TOP_NOTHING:
-		case SPAN_TOP_UNKNOWN:
-			return "Top";
-		case SPAN_NODE_INIT_PLAN:
-		case SPAN_NODE_SUBPLAN:
-		case SPAN_NODE:
-			return "Node";
-	}
-	return "Unknown type";
+	return span_type_to_str(span->type);
 }
 
 /*
@@ -216,8 +285,6 @@ get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 void
 adjust_file_offset(Span * span, Size file_position)
 {
-	if (span->node_type_offset != -1)
-		span->node_type_offset += file_position;
 	if (span->operation_name_offset != -1)
 		span->operation_name_offset += file_position;
 	if (span->parameter_offset != -1)

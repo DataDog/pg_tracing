@@ -33,7 +33,7 @@ static int	max_planstart = 0;
 static void override_ExecProcNode(PlanState *planstate);
 static Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
-				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
+				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType node_type,
 				 char *subplan_name, TimestampTz span_start, TimestampTz span_end);
 static TimestampTz
 			create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planstateTraceContext,
@@ -587,10 +587,11 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
  */
 static Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
-				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType span_type,
+				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType node_type,
 				 char *subplan_name, TimestampTz span_start, TimestampTz span_end)
 {
 	Span		span;
+	SpanType	span_type = node_type;
 	Plan const *plan = planstate->plan;
 
 	/*
@@ -602,23 +603,23 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 	/* We only create span node on node that were executed */
 	Assert(planstate->instrument->total > 0);
 
+	if (node_type == SPAN_NODE)
+		span_type = plan_to_span_type(plan);
 	begin_span(planstateTraceContext->trace_id, &span, span_type, span_id, parent_id,
 			   query_id, span_start);
 
 	/* first tuple time */
 	span.startup = planstate->instrument->startup * NS_PER_S;
 
-	if (span_type == SPAN_NODE)
+	if (node_type == SPAN_NODE)
 	{
 		/* Generate node specific variable strings and store them */
-		const char *node_type;
+		SpanType	node_type;
 		const char *deparse_info;
 		char const *operation_name;
 		int			deparse_info_len;
 
-		node_type = plan_to_node_type(plan);
-		span.node_type_offset = add_str_to_trace_buffer(node_type, strlen(node_type));
-
+		node_type = plan_to_span_type(plan);
 		operation_name = plan_to_operation(planstateTraceContext, planstate, node_type);
 		span.operation_name_offset = add_str_to_trace_buffer(operation_name, strlen(operation_name));
 

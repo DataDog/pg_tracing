@@ -15,7 +15,7 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  ProcessUtility | ProcessUtility |   2
  Select query   | SELECT $1;     |   1
  Planner        | Planner        |   2
- Executor       | ExecutorRun    |   2
+ ExecutorRun    | ExecutorRun    |   2
  Result         | Result         |   3
  Utility query  | COMMIT;        |   1
  ProcessUtility | ProcessUtility |   2
@@ -43,7 +43,7 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
 --------------+----------------+-----
  Select query | SELECT $1;     |   1
  Planner      | Planner        |   2
- Executor     | ExecutorRun    |   2
+ ExecutorRun  | ExecutorRun    |   2
  Result       | Result         |   3
 (4 rows)
 

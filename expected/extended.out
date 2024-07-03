@@ -12,7 +12,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
 --------------+----------------+--------------------+-----
  Select query | SELECT $1, $2  | $1 = '1', $2 = '2' |   1
  Planner      | Planner        |                    |   2
- Executor     | ExecutorRun    |                    |   2
+ ExecutorRun  | ExecutorRun    |                    |   2
  Result       | Result         |                    |   3
 (4 rows)
 
@@ -70,11 +70,11 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  ProcessUtility | ProcessUtility |                    |   2
  Select query   | SELECT $1      | $1 = '1'           |   1
  Planner        | Planner        |                    |   2
- Executor       | ExecutorRun    |                    |   2
+ ExecutorRun    | ExecutorRun    |                    |   2
  Result         | Result         |                    |   3
  Select query   | SELECT $1, $2  | $1 = '2', $2 = '3' |   1
  Planner        | Planner        |                    |   2
- Executor       | ExecutorRun    |                    |   2
+ ExecutorRun    | ExecutorRun    |                    |   2
  Result         | Result         |                    |   3
  Utility query  | COMMIT;        |                    |   1
  ProcessUtility | ProcessUtility |                    |   2
@@ -82,7 +82,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  ProcessUtility | ProcessUtility |                    |   2
  Select query   | SELECT $1      | $1 = '1'           |   1
  Planner        | Planner        |                    |   2
- Executor       | ExecutorRun    |                    |   2
+ ExecutorRun    | ExecutorRun    |                    |   2
  Result         | Result         |                    |   3
  Utility query  | COMMIT;        |                    |   1
  ProcessUtility | ProcessUtility |                    |   2
@@ -124,15 +124,15 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  ProcessUtility | ProcessUtility     |                        |   2
  Select query   | SELECT $1          | $1 = '1'               |   1
  Planner        | Planner            |                        |   2
- Executor       | ExecutorRun        |                        |   2
+ ExecutorRun    | ExecutorRun        |                        |   2
  Result         | Result             |                        |   3
  Select query   | SELECT $1, $2, $3; | $1 = 5, $2 = 6, $3 = 7 |   1
  Planner        | Planner            |                        |   2
- Executor       | ExecutorRun        |                        |   2
+ ExecutorRun    | ExecutorRun        |                        |   2
  Result         | Result             |                        |   3
  Select query   | SELECT $1, $2      | $1 = '2', $2 = '3'     |   1
  Planner        | Planner            |                        |   2
- Executor       | ExecutorRun        |                        |   2
+ ExecutorRun    | ExecutorRun        |                        |   2
  Result         | Result             |                        |   3
  Utility query  | COMMIT;            |                        |   1
  ProcessUtility | ProcessUtility     |                        |   2
@@ -153,7 +153,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| $1 = '?column?', $2 = '23', $3 = -1 |   1
               | FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm)         |                                     | 
  Planner      | Planner                                                            |                                     |   2
- Executor     | ExecutorRun                                                        |                                     |   2
+ ExecutorRun  | ExecutorRun                                                        |                                     |   2
  Result       | Result                                                             |                                     |   3
 (5 rows)
 
@@ -188,15 +188,15 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
  ProcessUtility | ProcessUtility    |                              |   2
  Select query   | SELECT $1         | $1 = '1'                     |   1
  Planner        | Planner           |                              |   2
- Executor       | ExecutorRun       |                              |   2
+ ExecutorRun    | ExecutorRun       |                              |   2
  Result         | Result            |                              |   3
  Select query   | SELECT $1, $2     | $1 = '1', $2 = '2'           |   1
  Planner        | Planner           |                              |   2
- Executor       | ExecutorRun       |                              |   2
+ ExecutorRun    | ExecutorRun       |                              |   2
  Result         | Result            |                              |   3
  Select query   | SELECT $1, $2, $3 | $1 = '1', $2 = '2', $3 = '3' |   1
  Planner        | Planner           |                              |   2
- Executor       | ExecutorRun       |                              |   2
+ ExecutorRun    | ExecutorRun       |                              |   2
  Result         | Result            |                              |   3
  Utility query  | COMMIT;           |                              |   1
  ProcessUtility | ProcessUtility    |                              |   2
@@ -228,15 +228,15 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
 --------------+-------------------+------------------------------+-----
  Select query | SELECT $1         | $1 = '1'                     |   1
  Planner      | Planner           |                              |   2
- Executor     | ExecutorRun       |                              |   2
+ ExecutorRun  | ExecutorRun       |                              |   2
  Result       | Result            |                              |   3
  Select query | SELECT $1, $2     | $1 = '1', $2 = '2'           |   1
  Planner      | Planner           |                              |   2
- Executor     | ExecutorRun       |                              |   2
+ ExecutorRun  | ExecutorRun       |                              |   2
  Result       | Result            |                              |   3
  Select query | SELECT $1, $2, $3 | $1 = '1', $2 = '2', $3 = '3' |   1
  Planner      | Planner           |                              |   2
- Executor     | ExecutorRun       |                              |   2
+ ExecutorRun  | ExecutorRun       |                              |   2
  Result       | Result            |                              |   3
 (12 rows)
 
@@ -272,11 +272,11 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
 --------------+-------------------+------------------------------+-----
  Select query | SELECT $1         | $1 = '1'                     |   1
  Planner      | Planner           |                              |   2
- Executor     | ExecutorRun       |                              |   2
+ ExecutorRun  | ExecutorRun       |                              |   2
  Result       | Result            |                              |   3
  Select query | SELECT $1, $2, $3 | $1 = '1', $2 = '2', $3 = '3' |   1
  Planner      | Planner           |                              |   2
- Executor     | ExecutorRun       |                              |   2
+ ExecutorRun  | ExecutorRun       |                              |   2
  Result       | Result            |                              |   3
 (8 rows)
 
@@ -296,7 +296,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
  ProcessUtility | ProcessUtility |            |   2
  Select query   | SELECT $1      | $1 = '1'   |   1
  Planner        | Planner        |            |   2
- Executor       | ExecutorRun    |            |   2
+ ExecutorRun    | ExecutorRun    |            |   2
  Result         | Result         |            |   3
  Utility query  | COMMIT;        |            |   1
  ProcessUtility | ProcessUtility |            |   2
