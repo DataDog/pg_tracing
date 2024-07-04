@@ -616,12 +616,18 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 		/* Generate node specific variable strings and store them */
 		SpanType	node_type;
 		const char *deparse_info;
-		char const *operation_name;
 		int			deparse_info_len;
+		const char *operation_name;
+		int			len_operation_name;
 
-		node_type = plan_to_span_type(plan);
-		operation_name = plan_to_operation(planstateTraceContext, planstate, node_type);
-		span.operation_name_offset = add_str_to_trace_buffer(operation_name, strlen(operation_name));
+		span.parallel_aware = plan->parallel_aware;
+		span.async_capable = plan->async_capable;
+
+		span_type = plan_to_span_type(plan);
+		operation_name = plan_to_rel_name(planstateTraceContext, planstate);
+		len_operation_name = strlen(operation_name);
+		if (len_operation_name > 0)
+			span.operation_name_offset = add_str_to_trace_buffer(operation_name, len_operation_name);
 
 		/* deparse_ctx is NULL if deparsing was disabled */
 		if (planstateTraceContext->deparse_ctx != NULL)

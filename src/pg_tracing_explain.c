@@ -108,7 +108,7 @@ ExplainTargetRel(const planstateTraceContext * planstateTraceContext, const Plan
 			break;
 	}
 
-	appendStringInfoString(str, " on");
+	appendStringInfoString(str, "on");
 	if (namespace != NULL)
 		appendStringInfo(str, " %s.%s", quote_identifier(namespace),
 						 quote_identifier(objectname));
@@ -146,16 +146,17 @@ ExplainIndexScanDetails(Oid indexId, ScanDirection indexorderdir,
 	const char *indexname = get_rel_name(indexId);
 
 	if (ScanDirectionIsBackward(indexorderdir))
-		appendStringInfoString(str, " Backward");
-	appendStringInfo(str, " using %s", quote_identifier(indexname));
+		appendStringInfoString(str, "Backward ");
+	appendStringInfo(str, "using %s ", quote_identifier(indexname));
 }
 
 /*
  * Generate a relation name from a planstate and add it to the stringinfo
  */
-static void
-plan_to_rel_name(const PlanState *planstate, const planstateTraceContext * planstateTraceContext, StringInfo str)
+const char *
+plan_to_rel_name(const planstateTraceContext * planstateTraceContext, const PlanState *planstate)
 {
+	StringInfo	str = makeStringInfo();
 	const Plan *plan = planstate->plan;
 
 	switch (nodeTag(plan))
@@ -203,7 +204,7 @@ plan_to_rel_name(const PlanState *planstate, const planstateTraceContext * plans
 				BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *) plan;
 				const char *indexname = get_rel_name(bitmapindexscan->indexid);
 
-				appendStringInfo(str, " on %s",
+				appendStringInfo(str, "on %s",
 								 quote_identifier(indexname));
 			}
 			break;
@@ -246,9 +247,9 @@ plan_to_rel_name(const PlanState *planstate, const planstateTraceContext * plans
 						break;
 				}
 				if (((Join *) plan)->jointype != JOIN_INNER)
-					appendStringInfo(str, " %s Join", jointype);
+					appendStringInfo(str, "%s Join", jointype);
 				else if (!IsA(plan, NestLoop))
-					appendStringInfoString(str, " Join");
+					appendStringInfoString(str, "Join");
 			}
 			break;
 		case T_SetOp:
@@ -273,12 +274,13 @@ plan_to_rel_name(const PlanState *planstate, const planstateTraceContext * plans
 						setopcmd = "???";
 						break;
 				}
-				appendStringInfo(str, " %s", setopcmd);
+				appendStringInfo(str, "%s", setopcmd);
 			}
 			break;
 		default:
 			break;
 	}
+	return str->data;
 }
 
 /*
@@ -386,26 +388,6 @@ plan_to_deparse_info(const planstateTraceContext * planstateTraceContext, const 
 			break;
 	}
 	return deparse_info->data;
-}
-
-/*
- * Generate an operation name from a planstate
- */
-char const *
-plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, SpanType span_type)
-{
-	StringInfo	operation_name = makeStringInfo();
-	Plan const *plan = planstate->plan;
-
-	if (plan->parallel_aware)
-		appendStringInfoString(operation_name, "Parallel ");
-	if (plan->async_capable)
-		appendStringInfoString(operation_name, "Async ");
-	appendStringInfoString(operation_name, span_type_to_str(span_type));
-
-	plan_to_rel_name(planstate, planstateTraceContext, operation_name);
-
-	return operation_name->data;
 }
 
 /*
