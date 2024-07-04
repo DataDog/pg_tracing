@@ -44,6 +44,8 @@
  * From https://github.com/open-telemetry/opentelemetry-proto/blob/v1.3.1/opentelemetry/proto/trace/v1/trace.proto#L159-L161
  */
 #define SPAN_KIND_SERVER 2
+#define STATUS_CODE_OK 1
+#define STATUS_CODE_ERROR 2
 
 static void
 append_text_field(StringInfo str, const char *label, const char *value, bool add_comma)
@@ -211,6 +213,21 @@ append_node_counters(StringInfo str, const NodeCounters * node_counters)
 }
 
 static void
+append_span_status_code(StringInfo str, const Span * span)
+{
+	int			code = STATUS_CODE_OK;
+
+	appendStringInfo(str, "\"status\":{");
+	if (span->sql_error_code > 0)
+	{
+		code = STATUS_CODE_ERROR;
+		append_text_field(str, "message", psprintf("SQLError: %s", unpack_sql_state(span->sql_error_code)), true);
+	}
+	append_int_field(str, "code", code, false);
+	appendStringInfo(str, "},");
+}
+
+static void
 append_span_attributes(const JsonContext * json_ctx, const Span * span)
 {
 	StringInfo	str = json_ctx->str;
@@ -268,6 +285,7 @@ append_span(const JsonContext * json_ctx, const Span * span)
 	append_int_field(str, "kind", SPAN_KIND_SERVER, true);
 	append_nano_timestamp(str, "startTimeUnixNano", span->start, true);
 	append_nano_timestamp(str, "endTimeUnixNano", span->end, true);
+	append_span_status_code(str, span);
 	append_span_attributes(json_ctx, span);
 	appendStringInfoChar(str, '}');
 }

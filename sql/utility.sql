@@ -81,7 +81,7 @@ CREATE VIEW peek_ordered_spans AS
   SELECT * FROM peek_spans_with_level order by span_start, lvl, span_end, deparse_info;
 
 -- Column type to convert json to record
-create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int);
+create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int, status jsonb);
 CREATE VIEW peek_json_spans AS
 SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_array(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[*].spans[*]')));
 
@@ -108,6 +108,7 @@ CREATE FUNCTION get_string_attribute(attributes jsonb, keyvalue text) returns te
 CREATE VIEW peek_json_spans_with_level AS
 WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, span_end,
     kind, query_id, pid, userid, dbid, sql_error_code, subxact_count,
+    status_code, status_message,
     plan_startup_cost, plan_total_cost, plan_rows, plan_width,
     rows, nloops,
     shared_blks_hit, shared_blks_read, shared_blks_dirtied, shared_blks_written,
@@ -125,6 +126,8 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
             get_int_attribute(p.attributes, 'backend.database_id'),
             get_string_attribute(p.attributes, 'query.sql_error_code'),
             get_int_attribute(p.attributes, 'query.subxact_count'),
+            p.status -> 'code',
+            p.status -> 'message',
             get_double_attribute(p.attributes, 'plan.cost.startup'),
             get_double_attribute(p.attributes, 'plan.cost.total'),
             get_double_attribute(p.attributes, 'plan.rows'),
@@ -165,6 +168,8 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
             get_int_attribute(s.attributes, 'backend.database_id'),
             get_string_attribute(s.attributes, 'query.sql_error_code'),
             get_int_attribute(s.attributes, 'query.subxact_count'),
+            s.status -> 'code',
+            s.status -> 'message',
             get_double_attribute(s.attributes, 'plan.cost.startup'),
             get_double_attribute(s.attributes, 'plan.cost.total'),
             get_double_attribute(s.attributes, 'plan.rows'),

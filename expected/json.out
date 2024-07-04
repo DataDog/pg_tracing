@@ -50,13 +50,13 @@ set statement_timeout=200;
 ERROR:  canceling statement due to statement timeout
 -- Check json generated spans with sql error code
 set statement_timeout TO DEFAULT;
-SELECT trace_id, name, sql_error_code, lvl FROM peek_ordered_json_spans;
-             trace_id             |            name             | sql_error_code | lvl 
-----------------------------------+-----------------------------+----------------+-----
- 00000000000000000000000000000001 | select * from pg_sleep($1); | 57014          |   1
- 00000000000000000000000000000001 | Planner                     |                |   2
- 00000000000000000000000000000001 | ExecutorRun                 | 57014          |   2
- 00000000000000000000000000000001 | FunctionScan on pg_sleep    | 57014          |   3
+SELECT trace_id, name, sql_error_code, status_code, status_message, lvl FROM peek_ordered_json_spans;
+             trace_id             |            name             | sql_error_code | status_code |  status_message   | lvl 
+----------------------------------+-----------------------------+----------------+-------------+-------------------+-----
+ 00000000000000000000000000000001 | select * from pg_sleep($1); | 57014          | 2           | "SQLError: 57014" |   1
+ 00000000000000000000000000000001 | Planner                     |                | 1           |                   |   2
+ 00000000000000000000000000000001 | ExecutorRun                 | 57014          | 2           | "SQLError: 57014" |   2
+ 00000000000000000000000000000001 | FunctionScan on pg_sleep    | 57014          | 2           | "SQLError: 57014" |   3
 (4 rows)
 
 CALL clean_spans();
