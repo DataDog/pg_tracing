@@ -14,7 +14,7 @@ set statement_timeout=200;
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ select * from pg_sleep(1);
 -- Check json generated spans with sql error code
 set statement_timeout TO DEFAULT;
-SELECT trace_id, name, sql_error_code, lvl FROM peek_ordered_json_spans;
+SELECT trace_id, name, sql_error_code, status_code, status_message, lvl FROM peek_ordered_json_spans;
 CALL clean_spans();
 
 -- Test subxact_count and node counters with json export
