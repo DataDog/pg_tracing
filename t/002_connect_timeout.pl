@@ -28,6 +28,10 @@ $node->safe_psql("postgres", "/*dddbs='postgres.db',traceparent='00-000000000000
 ok( $node->poll_query_until('postgres', "SELECT otel_failures >= 1 FROM pg_tracing_info;"),
     "Otel failures should be reported");
 
+my $result =
+  $node->safe_psql('postgres', "SELECT count(*) FROM pg_tracing_peek_spans;");
+is($result, qq(4), "Query's spans should still be present");
+
 # Cleanup
 $node->stop;
 

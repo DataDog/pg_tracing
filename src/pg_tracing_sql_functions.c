@@ -222,7 +222,6 @@ pg_tracing_json_spans(PG_FUNCTION_ARGS)
 
 	build_json_context(&json_ctx, qbuffer, qbuffer_size, shared_spans);
 	marshal_spans_to_json(&json_ctx);
-	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
 	LWLockRelease(pg_tracing_shared_state->lock);
 
 	PG_RETURN_TEXT_P(cstring_to_text(json_ctx.str->data));
@@ -295,7 +294,6 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	/* Consume is set, remove spans from the shared buffer */
 	if (consume)
 		drop_all_spans_locked();
-	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
 	LWLockRelease(pg_tracing_shared_state->lock);
 
 	free(qbuffer);
