@@ -41,6 +41,8 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	else
 		span->span_id = pg_prng_uint64(&pg_global_prng_state);
 
+	span->parallel_aware = false;
+	span->async_capable = false;
 	span->worker_id = -1;
 	span->operation_name_offset = -1;
 	span->parameter_offset = -1;
@@ -266,6 +268,20 @@ span_type_to_str(SpanType span_type)
 	return "Unknown";
 }
 
+static bool
+is_span_top(SpanType span_type)
+{
+	return span_type >= SPAN_TOP_SELECT
+		&& span_type <= SPAN_TOP_UNKNOWN;
+}
+
+static bool
+is_span_node(SpanType span_type)
+{
+	return span_type >= SPAN_NODE
+		&& span_type <= SPAN_NODE_UNKNOWN;
+}
+
 /*
  * Get the operation of a span.
  * For node span, the name may be pulled from the stat file.
@@ -273,16 +289,39 @@ span_type_to_str(SpanType span_type)
 const char *
 get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 {
-    /* Use worker id when available */
-    if (span->worker_id >= 0) {
-        Assert(span->operation_name_offset == -1);
-        return psprintf("Worker %d", span->worker_id);
-    }
+	const char *span_type_str;
+	const char *operation_str = NULL;
+
+	/* Use worker id when available */
+	if (span->worker_id >= 0)
+	{
+		Assert(span->operation_name_offset == -1);
+		return psprintf("Worker %d", span->worker_id);
+	}
+
+	span_type_str = span_type_to_str(span->type);
 	if (span->operation_name_offset != -1 && qbuffer_size > 0
 		&& span->operation_name_offset <= qbuffer_size)
-		return qbuffer + span->operation_name_offset;
+		operation_str = qbuffer + span->operation_name_offset;
+	else
+		return span_type_str;
 
-	return span_type_to_str(span->type);
+	/* Top span, just grab the query string */
+	if (is_span_top(span->type))
+	{
+		if (operation_str)
+			return operation_str;
+		/* Fallback to span type */
+		return span_type_str;
+	}
+
+	if (span->type == SPAN_NODE_INIT_PLAN || span->type == SPAN_NODE_SUBPLAN)
+		return operation_str;
+
+	/* Node span, prepend with the span type */
+	if (operation_str)
+		return psprintf("%s %s", span_type_str, operation_str);
+	return span_type_str;
 }
 
 /*

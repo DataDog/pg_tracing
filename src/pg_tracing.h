@@ -195,6 +195,10 @@ typedef struct Span
 
 	SpanType	type;			/* Type of the span. Used to generate the
 								 * span's name */
+
+	bool		parallel_aware;
+	bool		async_capable;
+
 	int8		nested_level;	/* Nested level of this span this span.
 								 * Internal usage only */
 	int8		parent_planstate_index; /* Index to the parent planstate of
@@ -204,7 +208,7 @@ typedef struct Span
 	int			be_pid;			/* Pid of the backend process */
 	Oid			user_id;		/* User ID when the span was created */
 	Oid			database_id;	/* Database ID where the span was created */
-	int		    worker_id;	    /* Worker id */
+	int			worker_id;		/* Worker id */
 
 	/*
 	 * We store variable size metadata in an external file. Those represent
@@ -339,7 +343,7 @@ typedef struct SpanContext
 
 /* pg_tracing_explain.c */
 extern SpanType plan_to_span_type(const Plan *plan);
-extern const char *plan_to_operation(const planstateTraceContext * planstateTraceContext, const PlanState *planstate, SpanType span_type);
+extern const char *plan_to_rel_name(const planstateTraceContext * planstateTraceContext, const PlanState *planstate);
 extern const char *plan_to_deparse_info(const planstateTraceContext * planstateTraceContext, const PlanState *planstate);
 
 /* pg_tracing_parallel.c */
