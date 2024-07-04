@@ -161,9 +161,9 @@ span_type_to_str(SpanType span_type)
 		case SPAN_NODE_NESTLOOP:
 			return "NestedLoop";
 		case SPAN_NODE_MERGE_JOIN:
-			return "Merge"; /* Join is added later by the join type */
+			return "Merge";		/* Join is added later by the join type */
 		case SPAN_NODE_HASH_JOIN:
-			return "Hash"; /* Join is added later by the join type */
+			return "Hash";		/* Join is added later by the join type */
 		case SPAN_NODE_SEQ_SCAN:
 			return "SeqScan";
 		case SPAN_NODE_SAMPLE_SCAN:
