@@ -160,24 +160,17 @@ send_spans_to_otel_collector(OtelContext * octx)
 	marshal_spans_to_json(&json_ctx);
 	MemoryContextSwitchTo(otel_exporter_mem_ctx);
 
-	/* TODO: Only drop if we manage to send spans */
-	drop_all_spans_locked();
-
-	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
-	LWLockRelease(pg_tracing_shared_state->lock);
-
 	if (json_ctx.str->len > 0)
 	{
 		CURLcode	ret;
 
 		elog(INFO, "Sending %d spans to %s", num_spans, octx->endpoint);
 		ret = send_json_trace(octx, json_ctx.str->data);
-
-		/* TODO: Switch to atomic values for stats? */
-		LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);
 		if (ret == CURLE_OK)
 		{
+			/* Send was successful, drop all spans */
 			pg_tracing_shared_state->stats.otel_sent_spans += num_spans;
+			drop_all_spans_locked();
 		}
 		else
 		{
@@ -185,10 +178,13 @@ send_spans_to_otel_collector(OtelContext * octx)
 									curl_easy_strerror(ret)));
 			pg_tracing_shared_state->stats.otel_failures++;
 		}
-		LWLockRelease(pg_tracing_shared_state->lock);
 	}
+	LWLockRelease(pg_tracing_shared_state->lock);
 
-	/* Json was pushed, we can clear the memory used for marshalling */
+	/*
+	 * Whether json was pushed or note, we can clear the memory used for
+	 * marshalling
+	 */
 	MemoryContextReset(marshal_mem_ctx);
 	free(qbuffer);
 }

@@ -832,9 +832,10 @@ drop_all_spans_locked(void)
 {
 	/* Drop all spans */
 	shared_spans->end = 0;
-
 	/* Reset query file position */
 	pg_tracing_shared_state->extent = 0;
+    /* Update last consume ts */
+    pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
 	pg_truncate(PG_TRACING_TEXT_FILE, 0);
 }
 
