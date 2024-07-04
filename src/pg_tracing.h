@@ -199,11 +199,12 @@ typedef struct Span
 								 * Internal usage only */
 	int8		parent_planstate_index; /* Index to the parent planstate of
 										 * this span. Internal usage only */
+	uint8		subxact_count;	/* Active count of backend's subtransaction */
+
 	int			be_pid;			/* Pid of the backend process */
 	Oid			user_id;		/* User ID when the span was created */
 	Oid			database_id;	/* Database ID where the span was created */
-
-	uint8		subxact_count;	/* Active count of backend's subtransaction */
+	int		    worker_id;	    /* Worker id */
 
 	/*
 	 * We store variable size metadata in an external file. Those represent

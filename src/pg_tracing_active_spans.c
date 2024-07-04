@@ -171,10 +171,9 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	if (IsParallelWorker())
 	{
 		/*
-		 * In a parallel worker, we use the worker name as the span's
-		 * operation
+		 * We're in a parallel worker, save the worker number operation
 		 */
-		span->operation_name_offset = add_worker_name_to_trace_buffer(ParallelWorkerNumber);
+		span->worker_id = ParallelWorkerNumber;
 		return;
 	}
 

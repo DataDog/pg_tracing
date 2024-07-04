@@ -41,6 +41,7 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	else
 		span->span_id = pg_prng_uint64(&pg_global_prng_state);
 
+	span->worker_id = -1;
 	span->operation_name_offset = -1;
 	span->parameter_offset = -1;
 	span->deparse_info_offset = -1;
@@ -272,6 +273,11 @@ span_type_to_str(SpanType span_type)
 const char *
 get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 {
+    /* Use worker id when available */
+    if (span->worker_id >= 0) {
+        Assert(span->operation_name_offset == -1);
+        return psprintf("Worker %d", span->worker_id);
+    }
 	if (span->operation_name_offset != -1 && qbuffer_size > 0
 		&& span->operation_name_offset <= qbuffer_size)
 		return qbuffer + span->operation_name_offset;
