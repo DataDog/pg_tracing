@@ -131,8 +131,8 @@ span_type_to_str(SpanType span_type)
 			return "ExecutorRun";
 		case SPAN_EXECUTOR_FINISH:
 			return "ExecutorFinish";
-		case SPAN_COMMIT:
-			return "Commit";
+		case SPAN_TRANSACTION_COMMIT:
+			return "TransactionCommit";
 
 		case SPAN_NODE:
 			return "Node";

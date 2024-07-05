@@ -2025,7 +2025,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 					TimestampTz start_time = GetCurrentTimestamp();
 
 					begin_span(traceparent->trace_id, &commit_span,
-							   SPAN_COMMIT, NULL, traceparent->parent_id,
+							   SPAN_TRANSACTION_COMMIT, NULL, traceparent->parent_id,
 							   current_query_id, start_time);
 				}
 				break;

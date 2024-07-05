@@ -296,7 +296,7 @@ select trace_id, span_operation, parameters, lvl from peek_ordered_spans WHERE t
  00000000000000000000000000000001 | ExecutorRun                                                                               |            |   4
  00000000000000000000000000000001 | Insert on pg_tracing_test                                                                 |            |   5
  00000000000000000000000000000001 | Result                                                                                    |            |   6
- 00000000000000000000000000000001 | Commit                                                                                    |            |   1
+ 00000000000000000000000000000001 | TransactionCommit                                                                         |            |   1
 (8 rows)
 
 -- We should have only two query_ids
@@ -310,8 +310,7 @@ SELECT query_id from pg_tracing_peek_spans where trace_id='000000000000000000000
 SELECT query_id = :query_id from pg_tracing_peek_spans where trace_id='00000000000000000000000000000001' AND span_operation = 'Commit';
  ?column? 
 ----------
- t
-(1 row)
+(0 rows)
 
 CALL clean_spans();
 -- Test prepared statement with generic plan
@@ -369,21 +368,21 @@ select span_operation, parameters, sql_error_code, lvl from peek_ordered_spans w
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ CREATE TABLE test_create_table (a int, b char(20));
 -- Check create table spans
 select trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
-             trace_id             |   span_type    |                   span_operation                    | lvl 
-----------------------------------+----------------+-----------------------------------------------------+-----
- 00000000000000000000000000000002 | Utility query  | CREATE TABLE test_create_table (a int, b char(20)); |   1
- 00000000000000000000000000000002 | ProcessUtility | ProcessUtility                                      |   2
- 00000000000000000000000000000002 | Commit         | Commit                                              |   1
+             trace_id             |     span_type     |                   span_operation                    | lvl 
+----------------------------------+-------------------+-----------------------------------------------------+-----
+ 00000000000000000000000000000002 | Utility query     | CREATE TABLE test_create_table (a int, b char(20)); |   1
+ 00000000000000000000000000000002 | ProcessUtility    | ProcessUtility                                      |   2
+ 00000000000000000000000000000002 | TransactionCommit | TransactionCommit                                   |   1
 (3 rows)
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ CREATE INDEX test_create_table_index ON test_create_table (a);
 -- Check create index spans
 select trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
-             trace_id             |   span_type    |                         span_operation                         | lvl 
-----------------------------------+----------------+----------------------------------------------------------------+-----
- 00000000000000000000000000000003 | Utility query  | CREATE INDEX test_create_table_index ON test_create_table (a); |   1
- 00000000000000000000000000000003 | ProcessUtility | ProcessUtility                                                 |   2
- 00000000000000000000000000000003 | Commit         | Commit                                                         |   1
+             trace_id             |     span_type     |                         span_operation                         | lvl 
+----------------------------------+-------------------+----------------------------------------------------------------+-----
+ 00000000000000000000000000000003 | Utility query     | CREATE INDEX test_create_table_index ON test_create_table (a); |   1
+ 00000000000000000000000000000003 | ProcessUtility    | ProcessUtility                                                 |   2
+ 00000000000000000000000000000003 | TransactionCommit | TransactionCommit                                              |   1
 (3 rows)
 
 CREATE OR REPLACE FUNCTION function_with_error(IN anyarray, OUT x anyelement, OUT n int)
@@ -417,21 +416,21 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000006-01'*/ DROP TABLE test_create_table;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000006';
-             trace_id             |   span_type    |        span_operation         | sql_error_code | lvl 
-----------------------------------+----------------+-------------------------------+----------------+-----
- 00000000000000000000000000000006 | Utility query  | DROP TABLE test_create_table; | 00000          |   1
- 00000000000000000000000000000006 | ProcessUtility | ProcessUtility                | 00000          |   2
- 00000000000000000000000000000006 | Commit         | Commit                        | 00000          |   1
+             trace_id             |     span_type     |        span_operation         | sql_error_code | lvl 
+----------------------------------+-------------------+-------------------------------+----------------+-----
+ 00000000000000000000000000000006 | Utility query     | DROP TABLE test_create_table; | 00000          |   1
+ 00000000000000000000000000000006 | ProcessUtility    | ProcessUtility                | 00000          |   2
+ 00000000000000000000000000000006 | TransactionCommit | TransactionCommit             | 00000          |   1
 (3 rows)
 
 -- Check VACUUM ANALYZE call
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000007-0000000000000007-01'*/ VACUUM ANALYZE pg_tracing_test;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000007';
-             trace_id             |   span_type    |         span_operation          | sql_error_code | lvl 
-----------------------------------+----------------+---------------------------------+----------------+-----
- 00000000000000000000000000000007 | Utility query  | VACUUM ANALYZE pg_tracing_test; | 00000          |   1
- 00000000000000000000000000000007 | ProcessUtility | ProcessUtility                  | 00000          |   2
- 00000000000000000000000000000007 | Commit         | Commit                          | 00000          |   1
+             trace_id             |     span_type     |         span_operation          | sql_error_code | lvl 
+----------------------------------+-------------------+---------------------------------+----------------+-----
+ 00000000000000000000000000000007 | Utility query     | VACUUM ANALYZE pg_tracing_test; | 00000          |   1
+ 00000000000000000000000000000007 | ProcessUtility    | ProcessUtility                  | 00000          |   2
+ 00000000000000000000000000000007 | TransactionCommit | TransactionCommit               | 00000          |   1
 (3 rows)
 
 -- Cleanup

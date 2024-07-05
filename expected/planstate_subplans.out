@@ -14,7 +14,7 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  Planner                                                                               |              |                                                                          |   2
  ExecutorRun                                                                           |              |                                                                          |   2
  Merge on m                                                                            |              |                                                                          |   3
- Commit                                                                                |              |                                                                          |   1
+ TransactionCommit                                                                     |              |                                                                          |   1
 (5 rows)
 
 -- +----------------------------------------------------------+
