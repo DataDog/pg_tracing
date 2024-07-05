@@ -2,6 +2,12 @@
 SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-00000000000000000000000000000004-0000000000000004-01';
 SELECT 1;
 
+-- Test trace context propagation through a local GUCs
+BEGIN;
+SET LOCAL pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-00000000000000000000000000000005-0000000000000005-01';
+SELECT 1;
+COMMIT;
+
 -- Test multiple statements
 SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-fffffffffffffffffffffffffffffff5-0000000000000005-01';
 SELECT 2;

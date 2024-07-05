@@ -6,6 +6,16 @@ SELECT 1;
         1
 (1 row)
 
+-- Test trace context propagation through a local GUCs
+BEGIN;
+SET LOCAL pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-00000000000000000000000000000005-0000000000000005-01';
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+COMMIT;
 -- Test multiple statements
 SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-fffffffffffffffffffffffffffffff5-0000000000000005-01';
 SELECT 2;
@@ -28,6 +38,12 @@ select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
  00000000000000000000000000000004 | Planner        |            |   2
  00000000000000000000000000000004 | ExecutorRun    |            |   2
  00000000000000000000000000000004 | Result         |            |   3
+ 00000000000000000000000000000005 | SELECT $1;     | {1}        |   1
+ 00000000000000000000000000000005 | Planner        |            |   2
+ 00000000000000000000000000000005 | ExecutorRun    |            |   2
+ 00000000000000000000000000000005 | Result         |            |   3
+ 00000000000000000000000000000005 | COMMIT;        |            |   1
+ 00000000000000000000000000000005 | ProcessUtility |            |   2
  fffffffffffffffffffffffffffffff5 | SELECT $1;     | {2}        |   1
  fffffffffffffffffffffffffffffff5 | Planner        |            |   2
  fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
@@ -36,7 +52,7 @@ select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
  fffffffffffffffffffffffffffffff5 | Planner        |            |   2
  fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
  fffffffffffffffffffffffffffffff5 | Result         |            |   3
-(12 rows)
+(18 rows)
 
 CALL clean_spans();
 -- Mix SQLCommenter and GUC propagation
