@@ -24,15 +24,15 @@ SELECT 3;
 select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
              trace_id             | span_operation | parameters | lvl 
 ----------------------------------+----------------+------------+-----
- 00000000000000000000000000000004 | SELECT $1;     | $1 = 1     |   1
+ 00000000000000000000000000000004 | SELECT $1;     | {1}        |   1
  00000000000000000000000000000004 | Planner        |            |   2
  00000000000000000000000000000004 | ExecutorRun    |            |   2
  00000000000000000000000000000004 | Result         |            |   3
- fffffffffffffffffffffffffffffff5 | SELECT $1;     | $1 = 2     |   1
+ fffffffffffffffffffffffffffffff5 | SELECT $1;     | {2}        |   1
  fffffffffffffffffffffffffffffff5 | Planner        |            |   2
  fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
  fffffffffffffffffffffffffffffff5 | Result         |            |   3
- fffffffffffffffffffffffffffffff5 | SELECT $1;     | $1 = 3     |   1
+ fffffffffffffffffffffffffffffff5 | SELECT $1;     | {3}        |   1
  fffffffffffffffffffffffffffffff5 | Planner        |            |   2
  fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
  fffffffffffffffffffffffffffffff5 | Result         |            |   3
@@ -67,24 +67,24 @@ SELECT 3;
 
 -- Check mix SQLCommenter and GUC propagation
 select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
-             trace_id             |   span_operation   |       parameters       | lvl 
-----------------------------------+--------------------+------------------------+-----
- fffffffffffffffffffffffffffffff6 | SELECT $1;         | $1 = 2                 |   1
- fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
- fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
- fffffffffffffffffffffffffffffff6 | Result             |                        |   3
- fffffffffffffffffffffffffffffff6 | SELECT $1, $2;     | $1 = 1, $2 = 1         |   1
- fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
- fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
- fffffffffffffffffffffffffffffff6 | Result             |                        |   3
- fffffffffffffffffffffffffffffff6 | SELECT $1, $2, $3; | $1 = 1, $2 = 2, $3 = 3 |   1
- fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
- fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
- fffffffffffffffffffffffffffffff6 | Result             |                        |   3
- fffffffffffffffffffffffffffffff6 | SELECT $1;         | $1 = 3                 |   1
- fffffffffffffffffffffffffffffff6 | Planner            |                        |   2
- fffffffffffffffffffffffffffffff6 | ExecutorRun        |                        |   2
- fffffffffffffffffffffffffffffff6 | Result             |                        |   3
+             trace_id             |   span_operation   | parameters | lvl 
+----------------------------------+--------------------+------------+-----
+ fffffffffffffffffffffffffffffff6 | SELECT $1;         | {2}        |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |            |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |            |   2
+ fffffffffffffffffffffffffffffff6 | Result             |            |   3
+ fffffffffffffffffffffffffffffff6 | SELECT $1, $2;     | {1,1}      |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |            |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |            |   2
+ fffffffffffffffffffffffffffffff6 | Result             |            |   3
+ fffffffffffffffffffffffffffffff6 | SELECT $1, $2, $3; | {1,2,3}    |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |            |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |            |   2
+ fffffffffffffffffffffffffffffff6 | Result             |            |   3
+ fffffffffffffffffffffffffffffff6 | SELECT $1;         | {3}        |   1
+ fffffffffffffffffffffffffffffff6 | Planner            |            |   2
+ fffffffffffffffffffffffffffffff6 | ExecutorRun        |            |   2
+ fffffffffffffffffffffffffffffff6 | Result             |            |   3
 (16 rows)
 
 CALL clean_spans();

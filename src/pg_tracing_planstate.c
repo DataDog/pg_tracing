@@ -614,7 +614,6 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 	if (node_type == SPAN_NODE)
 	{
 		/* Generate node specific variable strings and store them */
-		SpanType	node_type;
 		const char *deparse_info;
 		int			deparse_info_len;
 		const char *operation_name;

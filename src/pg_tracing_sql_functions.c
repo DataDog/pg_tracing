@@ -12,6 +12,7 @@
 
 #include "funcapi.h"
 #include "pg_tracing.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "utils/timestamp.h"
@@ -133,6 +134,31 @@ add_node_counters(const NodeCounters * node_counters, int i, Datum *values)
 }
 
 /*
+ * Generate ArrayType with span's parameters
+ */
+static Datum
+generate_array_parameters(const char *qbuffer, const Span * span)
+{
+	Datum	   *entries;
+	ArrayType  *array;
+	const char *cursor = qbuffer + span->parameter_offset;
+
+	entries = (Datum *) palloc(sizeof(Datum) * span->num_parameters);
+	for (int j = 0; j < span->num_parameters; j++)
+	{
+		size_t		len_text = strlen(cursor);
+
+		entries[j] = PointerGetDatum(cstring_to_text_with_len(cursor, len_text));
+		cursor += len_text + 1;
+	}
+
+	/* Use construct_array for PG15 compatibility */
+	array = construct_array(entries, span->num_parameters, TEXTOID,
+							-1, false, TYPALIGN_INT);
+	return PointerGetDatum(array);
+}
+
+/*
  * Build the tuple for a Span and add it to the output
  */
 static void
@@ -187,8 +213,10 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 		i = add_node_counters(&span->node_counters, i, values);
 		values[i++] = Int64GetDatumFast(span->startup);
 
-		if (span->parameter_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->parameter_offset)
-			values[i++] = CStringGetTextDatum(qbuffer + span->parameter_offset);
+		if (span->parameter_offset != -1
+			&& qbuffer_size > 0
+			&& qbuffer_size > span->parameter_offset)
+			values[i++] = generate_array_parameters(qbuffer, span);
 		else
 			nulls[i++] = 1;
 

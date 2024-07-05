@@ -396,8 +396,6 @@ plan_to_deparse_info(const planstateTraceContext * planstateTraceContext, const 
 SpanType
 plan_to_span_type(const Plan *plan)
 {
-	const char *custom_name;
-
 	switch (nodeTag(plan))
 	{
 		case T_Result:

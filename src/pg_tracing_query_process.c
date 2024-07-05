@@ -214,16 +214,16 @@ comp_location(const void *a, const void *b)
 /*
  * Normalise query: Comments are removed, Constants are replaced by $x, all tokens
  * are separated by a single space.
- * Parameters are put in the param_str which will contain all parameters values
- * using the format: "$1 = 0, $2 = 'v'"
+ * Parameters are put in the trace_txt as null terminated strings.
  */
 const char *
 normalise_query_parameters(const JumbleState *jstate, const char *query,
-						   int query_loc, int *query_len_p, char **param_str,
-						   int *param_len)
+						   int query_loc, int *query_len_p,
+						   StringInfo trace_text, int *num_parameters)
 {
 	char	   *norm_query;
 	int			query_len = *query_len_p;
+	int			len_parameter;
 	int			norm_query_buflen,	/* Space allowed for norm_query */
 				n_quer_loc = 0;
 	LocationLen *locs;
@@ -232,9 +232,6 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 	core_YYSTYPE yylval;
 	YYLTYPE		yylloc;
 	int			current_loc = 0;
-	StringInfoData buf;
-
-	initStringInfo(&buf);
 
 	if (query_loc == -1)
 	{
@@ -291,10 +288,6 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 		 */
 		if (current_loc < jstate->clocations_count && yylloc >= loc)
 		{
-			appendStringInfo(&buf,
-							 "%s$%d = ",
-							 current_loc > 0 ? ", " : "",
-							 current_loc + 1);
 			if (query[loc] == '-')
 			{
 				/*
@@ -309,7 +302,8 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 				 * from foo where bar = -2" will have identical normalized
 				 * query strings.
 				 */
-				appendStringInfoChar(&buf, '-');
+				if (trace_text)
+					appendStringInfoChar(trace_text, '-');
 				tok = core_yylex(&yylval, &yylloc, yyscanner);
 				if (tok == 0)
 					break;		/* out of inner for-loop */
@@ -317,13 +311,18 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 			if (yylloc > 0 && isspace(yyextra.scanbuf[yylloc - 1]) && n_quer_loc > 0)
 				norm_query[n_quer_loc++] = yyextra.scanbuf[yylloc - 1];
 
-			/*
-			 * Append the current parameter $x in the normalised query
-			 */
+			/* Append the current parameter $x in the normalised query */
 			n_quer_loc += sprintf(norm_query + n_quer_loc, "$%d",
 								  current_loc + 1 + jstate->highest_extern_param_id);
 
-			appendStringInfoString(&buf, yyextra.scanbuf + yylloc);
+			if (trace_text)
+			{
+				/* Add paramater's value to the trace_text */
+				len_parameter = strlen(yyextra.scanbuf + yylloc);
+				appendBinaryStringInfo(trace_text, yyextra.scanbuf + yylloc, len_parameter);
+				appendStringInfoChar(trace_text, '\0');
+				*num_parameters += 1;
+			}
 
 			current_loc++;
 		}
@@ -344,8 +343,6 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 
 	*query_len_p = n_quer_loc;
 	norm_query[n_quer_loc] = '\0';
-	*param_str = buf.data;
-	*param_len = buf.len;
 	return norm_query;
 }
 

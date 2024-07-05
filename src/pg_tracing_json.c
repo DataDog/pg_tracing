@@ -142,6 +142,34 @@ append_resource(StringInfo str)
 }
 
 static void
+append_array_value_field(StringInfo str, const char *key, const char *value,
+						 int num_values, bool add_comma)
+{
+	const char *cursor = value;
+
+	append_any_value_start(str, key);
+	appendStringInfo(str, "\"arrayValue\":{");
+	appendStringInfo(str, "\"values\":[");
+
+	for (int i = 0; i < num_values; i++)
+	{
+		int			len_val = strlen(cursor);
+
+		appendStringInfoChar(str, '{');
+		append_text_field(str, "stringValue", cursor, false);
+		appendStringInfoChar(str, '}');
+		if (i != num_values - 1)
+			appendStringInfoChar(str, ',');
+		/* Advance to next parameter, including null terminating the string */
+		cursor += len_val + 1;
+	}
+	appendStringInfo(str, "]}}}");
+
+	if (add_comma)
+		appendStringInfoChar(str, ',');
+}
+
+static void
 append_plan_counters(StringInfo str, const PlanCounters * plan_counters)
 {
 	append_attribute_double(str, "plan.cost.startup", plan_counters->startup_cost, true, true);
@@ -242,10 +270,12 @@ append_span_attributes(const JsonContext * json_ctx, const Span * span)
 
 		append_attribute_int(str, "query.startup", span->startup, true, true);
 		if (span->parameter_offset != -1 && json_ctx->qbuffer_size > 0 && json_ctx->qbuffer_size > span->parameter_offset)
-			append_attribute_string(str, "query.parameters", json_ctx->qbuffer + span->parameter_offset, true);
+			append_array_value_field(str, "query.parameters",
+									 json_ctx->qbuffer + span->parameter_offset, span->num_parameters, true);
 
 		if (span->deparse_info_offset != -1 && json_ctx->qbuffer_size > 0 && json_ctx->qbuffer_size > span->deparse_info_offset)
-			append_attribute_string(str, "query.deparse_info", json_ctx->qbuffer + span->deparse_info_offset, true);
+			append_attribute_string(str, "query.deparse_info",
+									json_ctx->qbuffer + span->deparse_info_offset, true);
 	}
 
 	if (span->sql_error_code > 0)

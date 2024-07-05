@@ -5,16 +5,16 @@ WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHER
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
 -- Check generated spans for init plan
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001' AND lvl < 4;
-                                    span_operation                                     | deparse_info |                                                   parameters                                                    | lvl 
----------------------------------------------------------------------------------------+--------------+-----------------------------------------------------------------------------------------------------------------+-----
- WITH cte_init AS MATERIALIZED (SELECT $1 a, $2 b)                                    +|              | $1 = 1, $2 = 'cte_init val', $3 = 1, $4 = 'merge source InitPlan', $5 = 0, $6 = ' merge update', $7 = 1, $8 = 1 |   1
- MERGE INTO m USING (select $3 k, $4 v offset $5) o ON m.k=o.k                        +|              |                                                                                                                 | 
- WHEN MATCHED THEN UPDATE SET v = (SELECT b || $6 FROM cte_init WHERE a = $7 LIMIT $8)+|              |                                                                                                                 | 
- WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);                                        |              |                                                                                                                 | 
- Planner                                                                               |              |                                                                                                                 |   2
- ExecutorRun                                                                           |              |                                                                                                                 |   2
- Merge on m                                                                            |              |                                                                                                                 |   3
- Commit                                                                                |              |                                                                                                                 |   1
+                                    span_operation                                     | deparse_info |                                parameters                                | lvl 
+---------------------------------------------------------------------------------------+--------------+--------------------------------------------------------------------------+-----
+ WITH cte_init AS MATERIALIZED (SELECT $1 a, $2 b)                                    +|              | {1,"'cte_init val'",1,"'merge source InitPlan'",0,"' merge update'",1,1} |   1
+ MERGE INTO m USING (select $3 k, $4 v offset $5) o ON m.k=o.k                        +|              |                                                                          | 
+ WHEN MATCHED THEN UPDATE SET v = (SELECT b || $6 FROM cte_init WHERE a = $7 LIMIT $8)+|              |                                                                          | 
+ WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);                                        |              |                                                                          | 
+ Planner                                                                               |              |                                                                          |   2
+ ExecutorRun                                                                           |              |                                                                          |   2
+ Merge on m                                                                            |              |                                                                          |   3
+ Commit                                                                                |              |                                                                          |   1
 (5 rows)
 
 -- +----------------------------------------------------------+

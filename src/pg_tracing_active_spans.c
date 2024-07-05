@@ -24,17 +24,6 @@ static pgTracingSpans * active_spans = NULL;
  */
 static Span next_active_span;
 
-/*
- * Add the worker name to the provided stringinfo
- */
-static int
-add_worker_name_to_trace_buffer(int parallel_worker_number)
-{
-	char	   *worker_name = psprintf("Worker %d", parallel_worker_number);
-
-	return add_str_to_trace_buffer(worker_name, strlen(worker_name));
-}
-
 void
 cleanup_active_spans(void)
 {
@@ -180,16 +169,21 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	if (span_context->jstate && span_context->jstate->clocations_count > 0 && query != NULL)
 	{
 		/* jstate is available, normalise query and extract parameters' values */
-		char	   *param_str;
-		int			param_len;
+		int			num_parameters = 0;
+		int			parameter_offset = span_context->current_trace_text->len;
+		StringInfo	trace_text = NULL;
+
+		if (span_context->export_parameters)
+			/* We want parameter's value, push trace_text StringInfo */
+			trace_text = span_context->current_trace_text;
 
 		query_len = query->stmt_len;
 		normalised_query = normalise_query_parameters(span_context->jstate, span_context->query_text,
 													  query->stmt_location, &query_len,
-													  &param_str, &param_len);
-		Assert(param_len > 0);
-		if (span_context->export_parameters)
-			span->parameter_offset = add_str_to_trace_buffer(param_str, param_len);
+													  trace_text, &num_parameters);
+		span->num_parameters = num_parameters;
+		if (num_parameters > 0 && span_context->export_parameters)
+			span->parameter_offset = parameter_offset;
 	}
 	else
 	{

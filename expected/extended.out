@@ -8,12 +8,12 @@ SELECT $1, $2 \bind 1 2 \g
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
-  span_type   | span_operation |     parameters     | lvl 
---------------+----------------+--------------------+-----
- Select query | SELECT $1, $2  | $1 = '1', $2 = '2' |   1
- Planner      | Planner        |                    |   2
- ExecutorRun  | ExecutorRun    |                    |   2
- Result       | Result         |                    |   3
+  span_type   | span_operation | parameters | lvl 
+--------------+----------------+------------+-----
+ Select query | SELECT $1, $2  | {1,2}      |   1
+ Planner      | Planner        |            |   2
+ ExecutorRun  | ExecutorRun    |            |   2
+ Result       | Result         |            |   3
 (4 rows)
 
 CALL clean_spans();
@@ -64,28 +64,28 @@ SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
-   span_type    | span_operation |     parameters     | lvl 
-----------------+----------------+--------------------+-----
- Utility query  | BEGIN;         |                    |   1
- ProcessUtility | ProcessUtility |                    |   2
- Select query   | SELECT $1      | $1 = '1'           |   1
- Planner        | Planner        |                    |   2
- ExecutorRun    | ExecutorRun    |                    |   2
- Result         | Result         |                    |   3
- Select query   | SELECT $1, $2  | $1 = '2', $2 = '3' |   1
- Planner        | Planner        |                    |   2
- ExecutorRun    | ExecutorRun    |                    |   2
- Result         | Result         |                    |   3
- Utility query  | COMMIT;        |                    |   1
- ProcessUtility | ProcessUtility |                    |   2
- Utility query  | BEGIN          |                    |   1
- ProcessUtility | ProcessUtility |                    |   2
- Select query   | SELECT $1      | $1 = '1'           |   1
- Planner        | Planner        |                    |   2
- ExecutorRun    | ExecutorRun    |                    |   2
- Result         | Result         |                    |   3
- Utility query  | COMMIT;        |                    |   1
- ProcessUtility | ProcessUtility |                    |   2
+   span_type    | span_operation | parameters | lvl 
+----------------+----------------+------------+-----
+ Utility query  | BEGIN;         |            |   1
+ ProcessUtility | ProcessUtility |            |   2
+ Select query   | SELECT $1      | {1}        |   1
+ Planner        | Planner        |            |   2
+ ExecutorRun    | ExecutorRun    |            |   2
+ Result         | Result         |            |   3
+ Select query   | SELECT $1, $2  | {2,3}      |   1
+ Planner        | Planner        |            |   2
+ ExecutorRun    | ExecutorRun    |            |   2
+ Result         | Result         |            |   3
+ Utility query  | COMMIT;        |            |   1
+ ProcessUtility | ProcessUtility |            |   2
+ Utility query  | BEGIN          |            |   1
+ ProcessUtility | ProcessUtility |            |   2
+ Select query   | SELECT $1      | {1}        |   1
+ Planner        | Planner        |            |   2
+ ExecutorRun    | ExecutorRun    |            |   2
+ Result         | Result         |            |   3
+ Utility query  | COMMIT;        |            |   1
+ ProcessUtility | ProcessUtility |            |   2
 (20 rows)
 
 CALL clean_spans();
@@ -118,24 +118,24 @@ SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
-   span_type    |   span_operation   |       parameters       | lvl 
-----------------+--------------------+------------------------+-----
- Utility query  | BEGIN;             |                        |   1
- ProcessUtility | ProcessUtility     |                        |   2
- Select query   | SELECT $1          | $1 = '1'               |   1
- Planner        | Planner            |                        |   2
- ExecutorRun    | ExecutorRun        |                        |   2
- Result         | Result             |                        |   3
- Select query   | SELECT $1, $2, $3; | $1 = 5, $2 = 6, $3 = 7 |   1
- Planner        | Planner            |                        |   2
- ExecutorRun    | ExecutorRun        |                        |   2
- Result         | Result             |                        |   3
- Select query   | SELECT $1, $2      | $1 = '2', $2 = '3'     |   1
- Planner        | Planner            |                        |   2
- ExecutorRun    | ExecutorRun        |                        |   2
- Result         | Result             |                        |   3
- Utility query  | COMMIT;            |                        |   1
- ProcessUtility | ProcessUtility     |                        |   2
+   span_type    |   span_operation   | parameters | lvl 
+----------------+--------------------+------------+-----
+ Utility query  | BEGIN;             |            |   1
+ ProcessUtility | ProcessUtility     |            |   2
+ Select query   | SELECT $1          | {1}        |   1
+ Planner        | Planner            |            |   2
+ ExecutorRun    | ExecutorRun        |            |   2
+ Result         | Result             |            |   3
+ Select query   | SELECT $1, $2, $3; | {5,6,7}    |   1
+ Planner        | Planner            |            |   2
+ ExecutorRun    | ExecutorRun        |            |   2
+ Result         | Result             |            |   3
+ Select query   | SELECT $1, $2      | {2,3}      |   1
+ Planner        | Planner            |            |   2
+ ExecutorRun    | ExecutorRun        |            |   2
+ Result         | Result             |            |   3
+ Utility query  | COMMIT;            |            |   1
+ ProcessUtility | ProcessUtility     |            |   2
 (16 rows)
 
 CALL clean_spans();
@@ -147,14 +147,14 @@ SELECT 1 \gdesc
 (1 row)
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
-  span_type   |                           span_operation                           |             parameters              | lvl 
---------------+--------------------------------------------------------------------+-------------------------------------+-----
- Select query | SELECT $1                                                          | $1 = 1                              |   1
- Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| $1 = '?column?', $2 = '23', $3 = -1 |   1
-              | FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm)         |                                     | 
- Planner      | Planner                                                            |                                     |   2
- ExecutorRun  | ExecutorRun                                                        |                                     |   2
- Result       | Result                                                             |                                     |   3
+  span_type   |                           span_operation                           |      parameters      | lvl 
+--------------+--------------------------------------------------------------------+----------------------+-----
+ Select query | SELECT $1                                                          | {1}                  |   1
+ Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| {'?column?','23',-1} |   1
+              | FROM (VALUES ($1, $2::pg_catalog.oid,$3)) s(name, tp, tpm)         |                      | 
+ Planner      | Planner                                                            |                      |   2
+ ExecutorRun  | ExecutorRun                                                        |                      |   2
+ Result       | Result                                                             |                      |   3
 (5 rows)
 
 CALL clean_spans();
@@ -182,24 +182,24 @@ SELECT $1, $2, $3 \bind 1 2 3 \g
 
 COMMIT;
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000001';
-   span_type    |  span_operation   |          parameters          | lvl 
-----------------+-------------------+------------------------------+-----
- Utility query  | BEGIN;            |                              |   1
- ProcessUtility | ProcessUtility    |                              |   2
- Select query   | SELECT $1         | $1 = '1'                     |   1
- Planner        | Planner           |                              |   2
- ExecutorRun    | ExecutorRun       |                              |   2
- Result         | Result            |                              |   3
- Select query   | SELECT $1, $2     | $1 = '1', $2 = '2'           |   1
- Planner        | Planner           |                              |   2
- ExecutorRun    | ExecutorRun       |                              |   2
- Result         | Result            |                              |   3
- Select query   | SELECT $1, $2, $3 | $1 = '1', $2 = '2', $3 = '3' |   1
- Planner        | Planner           |                              |   2
- ExecutorRun    | ExecutorRun       |                              |   2
- Result         | Result            |                              |   3
- Utility query  | COMMIT;           |                              |   1
- ProcessUtility | ProcessUtility    |                              |   2
+   span_type    |  span_operation   | parameters | lvl 
+----------------+-------------------+------------+-----
+ Utility query  | BEGIN;            |            |   1
+ ProcessUtility | ProcessUtility    |            |   2
+ Select query   | SELECT $1         | {1}        |   1
+ Planner        | Planner           |            |   2
+ ExecutorRun    | ExecutorRun       |            |   2
+ Result         | Result            |            |   3
+ Select query   | SELECT $1, $2     | {1,2}      |   1
+ Planner        | Planner           |            |   2
+ ExecutorRun    | ExecutorRun       |            |   2
+ Result         | Result            |            |   3
+ Select query   | SELECT $1, $2, $3 | {1,2,3}    |   1
+ Planner        | Planner           |            |   2
+ ExecutorRun    | ExecutorRun       |            |   2
+ Result         | Result            |            |   3
+ Utility query  | COMMIT;           |            |   1
+ ProcessUtility | ProcessUtility    |            |   2
 (16 rows)
 
 -- Test tracing only individual statements with extended protocol
@@ -224,20 +224,20 @@ BEGIN;
 
 COMMIT;
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000002';
-  span_type   |  span_operation   |          parameters          | lvl 
---------------+-------------------+------------------------------+-----
- Select query | SELECT $1         | $1 = '1'                     |   1
- Planner      | Planner           |                              |   2
- ExecutorRun  | ExecutorRun       |                              |   2
- Result       | Result            |                              |   3
- Select query | SELECT $1, $2     | $1 = '1', $2 = '2'           |   1
- Planner      | Planner           |                              |   2
- ExecutorRun  | ExecutorRun       |                              |   2
- Result       | Result            |                              |   3
- Select query | SELECT $1, $2, $3 | $1 = '1', $2 = '2', $3 = '3' |   1
- Planner      | Planner           |                              |   2
- ExecutorRun  | ExecutorRun       |                              |   2
- Result       | Result            |                              |   3
+  span_type   |  span_operation   | parameters | lvl 
+--------------+-------------------+------------+-----
+ Select query | SELECT $1         | {1}        |   1
+ Planner      | Planner           |            |   2
+ ExecutorRun  | ExecutorRun       |            |   2
+ Result       | Result            |            |   3
+ Select query | SELECT $1, $2     | {1,2}      |   1
+ Planner      | Planner           |            |   2
+ ExecutorRun  | ExecutorRun       |            |   2
+ Result       | Result            |            |   3
+ Select query | SELECT $1, $2, $3 | {1,2,3}    |   1
+ Planner      | Planner           |            |   2
+ ExecutorRun  | ExecutorRun       |            |   2
+ Result       | Result            |            |   3
 (12 rows)
 
 -- Test tracing only subset of individual statements with extended protocol
@@ -268,16 +268,16 @@ SELECT $1 \bind 1 \g
 
 COMMIT;
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000003';
-  span_type   |  span_operation   |          parameters          | lvl 
---------------+-------------------+------------------------------+-----
- Select query | SELECT $1         | $1 = '1'                     |   1
- Planner      | Planner           |                              |   2
- ExecutorRun  | ExecutorRun       |                              |   2
- Result       | Result            |                              |   3
- Select query | SELECT $1, $2, $3 | $1 = '1', $2 = '2', $3 = '3' |   1
- Planner      | Planner           |                              |   2
- ExecutorRun  | ExecutorRun       |                              |   2
- Result       | Result            |                              |   3
+  span_type   |  span_operation   | parameters | lvl 
+--------------+-------------------+------------+-----
+ Select query | SELECT $1         | {1}        |   1
+ Planner      | Planner           |            |   2
+ ExecutorRun  | ExecutorRun       |            |   2
+ Result       | Result            |            |   3
+ Select query | SELECT $1, $2, $3 | {1,2,3}    |   1
+ Planner      | Planner           |            |   2
+ ExecutorRun  | ExecutorRun       |            |   2
+ Result       | Result            |            |   3
 (8 rows)
 
 -- Test tracing the whole transaction with extended protocol with BEGIN sent through extended protocol
@@ -294,7 +294,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
 ----------------+----------------+------------+-----
  Utility query  | BEGIN          |            |   1
  ProcessUtility | ProcessUtility |            |   2
- Select query   | SELECT $1      | $1 = '1'   |   1
+ Select query   | SELECT $1      | {1}        |   1
  Planner        | Planner        |            |   2
  ExecutorRun    | ExecutorRun    |            |   2
  Result         | Result         |            |   3
