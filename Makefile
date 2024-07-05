@@ -45,9 +45,8 @@ TAP_TESTS = 1
 include $(PGXS)
 
 regresscheck_noinstall:
-	$(pg_regress_check) \
-        $(REGRESSCHECKS_OPTS) \
-        $(REGRESSCHECKS)
+	$(pg_regress_check) $(REGRESSCHECKS_OPTS) $(REGRESSCHECKS) || \
+	(cat regression.diffs && exit 1)
 
 regresscheck: install regresscheck_noinstall
 
@@ -78,4 +77,4 @@ run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
-		bash -c "PG_VERSION=$(PG_VERSION) make regresscheck_noinstall || (cat /usr/src/pg_tracing/regression.diffs && exit 1); make installcheck"
+		bash -c "PG_VERSION=$(PG_VERSION) make regresscheck_noinstall && make installcheck"
