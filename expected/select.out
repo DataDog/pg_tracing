@@ -263,18 +263,18 @@ SELECT lazy_function('{1,2,3,4}'::int[]) FROM (VALUES (1,2)) as t;
 (4 rows)
 
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
-   span_type    |                                                                                             span_operation                                                                                              |     parameters      | lvl 
-----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------+-----
- Utility query  | CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement) RETURNS SETOF anyelement LANGUAGE sql AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)'; |                     |   1
- ProcessUtility | ProcessUtility                                                                                                                                                                                          |                     |   2
- Commit         | Commit                                                                                                                                                                                                  |                     |   1
- Select query   | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3)) as t;                                                                                                                                             | {"'{1,2,3,4}'",1,2} |   1
- Planner        | Planner                                                                                                                                                                                                 |                     |   2
- ExecutorRun    | ExecutorRun                                                                                                                                                                                             |                     |   2
- ProjectSet     | ProjectSet                                                                                                                                                                                              |                     |   3
- Result         | Result                                                                                                                                                                                                  |                     |   4
- Select query   | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | {1,1,1}             |   4
- Planner        | Planner                                                                                                                                                                                                 |                     |   5
+     span_type     |                                                                                             span_operation                                                                                              |     parameters      | lvl 
+-------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------+-----
+ Utility query     | CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement) RETURNS SETOF anyelement LANGUAGE sql AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)'; |                     |   1
+ ProcessUtility    | ProcessUtility                                                                                                                                                                                          |                     |   2
+ TransactionCommit | TransactionCommit                                                                                                                                                                                       |                     |   1
+ Select query      | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3)) as t;                                                                                                                                             | {"'{1,2,3,4}'",1,2} |   1
+ Planner           | Planner                                                                                                                                                                                                 |                     |   2
+ ExecutorRun       | ExecutorRun                                                                                                                                                                                             |                     |   2
+ ProjectSet        | ProjectSet                                                                                                                                                                                              |                     |   3
+ Result            | Result                                                                                                                                                                                                  |                     |   4
+ Select query      | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | {1,1,1}             |   4
+ Planner           | Planner                                                                                                                                                                                                 |                     |   5
 (10 rows)
 
 CALL clean_spans();

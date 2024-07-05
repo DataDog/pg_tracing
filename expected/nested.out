@@ -261,7 +261,7 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  ExecutorRun                                     |   5
  Insert on pg_tracing_test                       |   6
  Result                                          |   7
- Commit                                          |   1
+ TransactionCommit                               |   1
 (10 rows)
 
 -- Make sure we have 2 query_id associated with the trace

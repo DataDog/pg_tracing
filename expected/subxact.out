@@ -44,7 +44,7 @@ select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
  Result                                                           |             |             2 |   3
  COMMIT;                                                          |             |             2 |   1
  ProcessUtility                                                   |             |             2 |   2
- Commit                                                           |             |             2 |   1
+ TransactionCommit                                                |             |             2 |   1
 (27 rows)
 
 -- Cleaning
