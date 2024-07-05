@@ -4,11 +4,19 @@
 
 pg_tracing is a PostgreSQL extension allows to generate server-side spans for distributed tracing.
 
-When pg_tracing is active, it generates spans on sampled queries. To access these spans, the extension provides two views: `pg_tracing_consume_spans` and `pg_tracing_peek_spans`. The utility functions `pg_tracing_reset` and `pg_tracing_info` provide ways to read and reset extension's statistics. These are not available globally but can be enabled for a specific database with `CREATE EXTENSION pg_tracing`.
+When pg_tracing is active, it generates spans on sampled queries. To access these spans, the extension provides two ways:
+- `pg_tracing_consume_spans` and `pg_tracing_peek_spans` views output spans as a set of records
+- `pg_tracing_json_spans` function outputs spans as a OTLP json
 
-Trace propagation currently relies on [SQLCommenter](https://google.github.io/sqlcommenter/). More mechanisms will be added in the future.
+The utility functions `pg_tracing_reset` and `pg_tracing_info` provide ways to read and reset extension's statistics. These are not available globally but can be enabled for a specific database with `CREATE EXTENSION pg_tracing`.
 
-> [!WARNING]  
+There are currently two mechanisms to propagate trace context:
+- As a SQL comment using [SQLCommenter](https://google.github.io/sqlcommenter/)
+- As a GUC parameter `pg_tracing.trace_context`
+
+See [Trace Propagation](#trace-propagation) for more details.
+
+> [!WARNING]
 > This extension is still in early development and may be unstable.
 
 ## PostgreSQL Version Compatibility
@@ -25,7 +33,8 @@ pg_tracing generates spans for the following events:
 - Execution Plan: A span is created for each node of the execution plan (SeqScan, NestedLoop, HashJoin...)
 - Nested queries: Statements invoked within another statement (like a function)
 - Triggers: Statements executed through BEFORE and AFTER trigger are tracked
-- Parallel Workers: Processes created to handle queries like Parallel SeqScans are tracked 
+- Parallel Workers: Processes created to handle queries like Parallel SeqScans are tracked
+- Transaction Commit: Time spent fsync changes on the WAL
 
 ## Documentation
 
@@ -48,11 +57,14 @@ To compile and install the extension, run:
 git clone https://github.com/DataDog/pg_tracing.git
 cd pg_tracing
 make install
+# To compile and install with debug symbols:
+PG_CFLAGS="-g" make install
 ```
 
 ## Setup
 
-The extension must be loaded by adding pg_tracing to the [shared_preload_libraries](https://www.postgresql.org/docs/current/runtime-config-client.html#GUC-SHARED-PRELOAD-LIBRARIES) in `postgresql.conf`. A server restart is needed to add or remove the extension.
+The extension must be loaded by adding pg_tracing to the [shared_preload_libraries](https://www.postgresql.org/docs/current/runtime-config-client.html#GUC-SHARED-PRELOAD-LIBRARIES) in `postgresql.conf`.
+A server restart is needed to add or remove the extension.
 
 ```
 # postgresql.conf
@@ -61,13 +73,17 @@ shared_preload_libraries = 'pg_tracing'
 compute_query_id = on
 pg_tracing.max_span = 10000
 pg_tracing.track = all
+
+# Send spans every 2 seconds to an otel collector
+pg_tracing.otel_endpoint = http://127.0.0.1:4318/v1/traces
+pg_tracing.otel_naptime = 2000
 ```
 
 The extension requires additional shared memory proportional to `pg_tracing.max_span`. Note that this memory is consumed whenever the extension is loaded, even if no spans are generated.
 
-When `pg_tracing` is active, it generates spans on sampled queries. To access these spans, the extension provides two views: `pg_tracing_consume_spans` and `pg_tracing_peek_spans`. The utility functions `pg_tracing_reset` and `pg_tracing_info` provide ways to read and reset extension's statistics. These are not available globally but can be enabled for a specific database with `CREATE EXTENSION pg_tracing`.
+## Trace Propagation
 
-## Usage
+### SQLCommenter
 
 Trace context can be propagated through [SQLCommenter](https://google.github.io/sqlcommenter/). By default, all queries with a SQLCommenter with a sampled flag enabled will generate spans.
 
@@ -83,6 +99,32 @@ select trace_id, parent_id, span_id, span_start, span_end, span_type, span_opera
  00000000000000000000000000000123 | 4268a4281c5316dd | 87cb96b6459880a0 | 2024-03-19 13:46:43.979642+00 | 2024-03-19 13:46:43.979978+00 | Planner      | Planner
  00000000000000000000000000000123 | 4268a4281c5316dd | f5994f9159d8e80d | 2024-03-19 13:46:43.980081+00 | 2024-03-19 13:46:43.980111+00 | Executor     | ExecutorRun
 ```
+
+### `trace_context` GUC
+
+The GUC variable `pg_tracing.trace_context` can also be used to propagate trace context.
+
+```sql
+BEGIN;
+SET LOCAL pg_tracing.trace_context='traceparent=''00-00000000000000000000000000000005-0000000000000005-01''';
+UPDATE pgbench_accounts SET abalance=1 where aid=1;
+COMMIT;
+
+-- Check generated span
+select trace_id, span_start, span_end, span_type, span_operation from pg_tracing_consume_spans order by span_start;
+             trace_id             |          span_start           |           span_end            |     span_type     |                      span_operation
+----------------------------------+-------------------------------+-------------------------------+-------------------+-----------------------------------------------------------
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.305234+00 | 2024-07-05 14:24:55.305988+00 | Update query      | UPDATE pgbench_accounts SET abalance=$1 where aid=$2;
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.305266+00 | 2024-07-05 14:24:55.30552+00  | Planner           | Planner
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.305586+00 | 2024-07-05 14:24:55.305906+00 | ExecutorRun       | ExecutorRun
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.305591+00 | 2024-07-05 14:24:55.305903+00 | Update            | Update on pgbench_accounts
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.305593+00 | 2024-07-05 14:24:55.305806+00 | IndexScan         | IndexScan using pgbench_accounts_pkey on pgbench_accounts
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.649757+00 | 2024-07-05 14:24:55.649792+00 | Utility query     | COMMIT;
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.649787+00 | 2024-07-05 14:24:55.649792+00 | ProcessUtility    | ProcessUtility
+ 00000000000000000000000000000005 | 2024-07-05 14:24:55.649816+00 | 2024-07-05 14:24:55.650613+00 | TransactionCommit | TransactionCommit
+```
+
+### Standalone Sampling
 
 Queries can also be sampled randomly through the `pg_tracing.sample_rate` parameter. Setting this to 1 will trace all queries.
 
@@ -102,6 +144,14 @@ select trace_id, parent_id, span_id, span_start, span_end, span_type, span_opera
  458fbefd7034e670eb3d9c930862c378 | bdecb6e35d429f3d | 8805f7749249536b | 2024-01-10 09:54:16.321485+00 | 2024-01-10 09:54:16.321529+00 | Executor     | ExecutorRun
 ```
 
-## Authors
+## Sending Spans
 
-* [Anthonin Bonnefoy](https://github.com/bonnefoa)
+Spans can be automatically sent to an otel collector by setting `pg_tracing.otel_endpoint` parameter:
+
+```
+# postgresql.conf
+pg_tracing.otel_endpoint = http://127.0.0.1:4318/v1/traces
+pg_tracing.otel_naptime = 2000
+```
+
+If an otel endpoint is defined, a background worker will be started and will send spans every $naptime using OTLP HTTP/JSON.
