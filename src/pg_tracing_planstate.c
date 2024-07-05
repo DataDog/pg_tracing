@@ -176,10 +176,7 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 
 	if (index_planstart >= max_planstart)
 	{
-		/*
-		 * We need to extend the traced_planstates array, switch to pg_tracing
-		 * memory context beforehand
-		 */
+		/* We need to extend the traced_planstates array */
 		int			old_max_planstart = max_planstart;
 
 		Assert(traced_planstates != NULL);
@@ -412,35 +409,33 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 			 * their start. Fallback to the parent start.
 			 */
 			span_start = parent_start;
+			span_id = pg_prng_uint64(&pg_global_prng_state);
 			break;
 		case T_Hash:
 			/* For hash node, use the child's start */
 			traced_planstate = get_traced_planstate(outerPlanState(planstate));
-			span_start = traced_planstate->node_start;
-			break;
-		default:
-			traced_planstate = get_traced_planstate(planstate);
-			/* TODO: better fallback if planstate is not found */
 			Assert(traced_planstate != NULL);
 			span_start = traced_planstate->node_start;
+
+			/*
+			 * We still need to generate a dedicated span_id since
+			 * traced_planstate's span_id will be used by the child
+			 */
+			span_id = pg_prng_uint64(&pg_global_prng_state);
+			break;
+		default:
+
+			/*
+			 * We should have a traced_planstate, use it for span_start and
+			 * span_id
+			 */
+			traced_planstate = get_traced_planstate(planstate);
+			Assert(traced_planstate != NULL);
+			span_start = traced_planstate->node_start;
+			span_id = traced_planstate->span_id;
 			break;
 	}
 	Assert(span_start > 0);
-
-	if (traced_planstate != NULL)
-	{
-		switch (nodeTag(traced_planstate->planstate->plan))
-		{
-			case T_Result:
-			case T_ProjectSet:
-				span_id = traced_planstate->span_id;
-				break;
-			default:
-				span_id = pg_prng_uint64(&pg_global_prng_state);
-		}
-	}
-	else
-		span_id = pg_prng_uint64(&pg_global_prng_state);
 
 	span_end = get_span_end_from_planstate(planstate, span_start, root_end);
 
