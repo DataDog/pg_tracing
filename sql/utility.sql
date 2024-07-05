@@ -103,6 +103,14 @@ CREATE FUNCTION get_string_attribute(attributes jsonb, keyvalue text) returns te
     RETURN (jsonb_path_query_first(jsonb_path_query_first(attributes, '$ ? (@.key == $key)', jsonb_build_object('key', keyvalue)),
                                    '$.value.stringValue')) ->>0;
 
+CREATE FUNCTION get_string_array_attribute(attributes jsonb, keyvalue text) returns text[]
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURN (SELECT NULLIF(ARRAY(SELECT jsonb_array_elements_text(jsonb_path_query_array(
+                jsonb_path_query_first(attributes,
+                                       '$ ? (@.key == $key)', jsonb_build_object('key', keyvalue)),
+                                       '$.value.arrayValue.values[*].stringValue[*]'))), '{}'));
+
 -- View spans generated from json with their nested level
 -- TODO: There's probably a way to make this cleaner...
 CREATE VIEW peek_json_spans_with_level AS
@@ -156,7 +164,7 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
             get_double_attribute(p.attributes, 'jit.optimization_counter'),
             get_double_attribute(p.attributes, 'jit.emission_counter'),
             get_double_attribute(p.attributes, 'query.startup'),
-            get_string_attribute(p.attributes, 'query.parameters'),
+            get_string_array_attribute(p.attributes, 'query.parameters'),
             get_string_attribute(p.attributes, 'query.deparse_info'),
             1
         FROM peek_json_spans p where not "parentSpanId"=ANY(SELECT span_id from pg_tracing_peek_spans)
@@ -198,7 +206,7 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
             get_double_attribute(s.attributes, 'jit.optimization_counter'),
             get_double_attribute(s.attributes, 'jit.emission_counter'),
             get_double_attribute(s.attributes, 'query.startup'),
-            get_string_attribute(s.attributes, 'query.parameters'),
+            get_string_array_attribute(s.attributes, 'query.parameters'),
             get_string_attribute(s.attributes, 'query.deparse_info'),
             lvl + 1
         FROM peek_json_spans s, list_trace_spans st

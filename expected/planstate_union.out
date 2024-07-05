@@ -10,18 +10,18 @@ SELECT count(*) FROM pg_tracing_test WHERE a + 0 < 10000;
 (2 rows)
 
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
-                     span_operation                      |        deparse_info        |             parameters              | lvl 
----------------------------------------------------------+----------------------------+-------------------------------------+-----
- SELECT count(*) FROM pg_tracing_test WHERE a + $1 < $2 +|                            | $1 = 0, $2 = 10, $3 = 0, $4 = 10000 |   1
- UNION ALL                                              +|                            |                                     | 
- SELECT count(*) FROM pg_tracing_test WHERE a + $3 < $4; |                            |                                     | 
- Planner                                                 |                            |                                     |   2
- ExecutorRun                                             |                            |                                     |   2
- Append                                                  |                            |                                     |   3
- Aggregate                                               |                            |                                     |   4
- SeqScan on pg_tracing_test                              | Filter : ((a + 0) < 10)    |                                     |   5
- Aggregate                                               |                            |                                     |   4
- SeqScan on pg_tracing_test pg_tracing_test_1            | Filter : ((a + 0) < 10000) |                                     |   5
+                     span_operation                      |        deparse_info        |   parameters   | lvl 
+---------------------------------------------------------+----------------------------+----------------+-----
+ SELECT count(*) FROM pg_tracing_test WHERE a + $1 < $2 +|                            | {0,10,0,10000} |   1
+ UNION ALL                                              +|                            |                | 
+ SELECT count(*) FROM pg_tracing_test WHERE a + $3 < $4; |                            |                | 
+ Planner                                                 |                            |                |   2
+ ExecutorRun                                             |                            |                |   2
+ Append                                                  |                            |                |   3
+ Aggregate                                               |                            |                |   4
+ SeqScan on pg_tracing_test                              | Filter : ((a + 0) < 10)    |                |   5
+ Aggregate                                               |                            |                |   4
+ SeqScan on pg_tracing_test pg_tracing_test_1            | Filter : ((a + 0) < 10000) |                |   5
 (8 rows)
 
 -- +------------------------------------------+

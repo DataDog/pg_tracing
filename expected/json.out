@@ -29,18 +29,18 @@ SELECT trace_id, name, kind, lvl FROM peek_ordered_json_spans;
 (8 rows)
 
 -- Test plan attributes with json export
-SELECT trace_id, name, plan_startup_cost, plan_total_cost, plan_rows, plan_width, lvl FROM peek_ordered_json_spans;
-             trace_id             |    name     | plan_startup_cost | plan_total_cost | plan_rows | plan_width | lvl 
-----------------------------------+-------------+-------------------+-----------------+-----------+------------+-----
- 00000000000000000000000000000001 | SELECT $1;  |                   |                 |           |            |   1
- 00000000000000000000000000000001 | Planner     |                   |                 |           |            |   2
- 00000000000000000000000000000001 | ExecutorRun |                   |                 |           |            |   2
- 00000000000000000000000000000001 | Result      |                   |            0.01 |         1 |          4 |   3
- 00000000000000000000000000000002 | SELECT $1, +|                   |                 |           |            |   1
-                                  | $2;         |                   |                 |           |            | 
- 00000000000000000000000000000002 | Planner     |                   |                 |           |            |   2
- 00000000000000000000000000000002 | ExecutorRun |                   |                 |           |            |   2
- 00000000000000000000000000000002 | Result      |                   |            0.01 |         1 |          8 |   3
+SELECT trace_id, name, plan_startup_cost, plan_total_cost, plan_rows, plan_width, parameters, lvl FROM peek_ordered_json_spans;
+             trace_id             |    name     | plan_startup_cost | plan_total_cost | plan_rows | plan_width | parameters | lvl 
+----------------------------------+-------------+-------------------+-----------------+-----------+------------+------------+-----
+ 00000000000000000000000000000001 | SELECT $1;  |                   |                 |           |            | {1}        |   1
+ 00000000000000000000000000000001 | Planner     |                   |                 |           |            |            |   2
+ 00000000000000000000000000000001 | ExecutorRun |                   |                 |           |            |            |   2
+ 00000000000000000000000000000001 | Result      |                   |            0.01 |         1 |          4 |            |   3
+ 00000000000000000000000000000002 | SELECT $1, +|                   |                 |           |            | {1,2}      |   1
+                                  | $2;         |                   |                 |           |            |            | 
+ 00000000000000000000000000000002 | Planner     |                   |                 |           |            |            |   2
+ 00000000000000000000000000000002 | ExecutorRun |                   |                 |           |            |            |   2
+ 00000000000000000000000000000002 | Result      |                   |            0.01 |         1 |          8 |            |   3
 (8 rows)
 
 CALL clean_spans();
@@ -99,7 +99,7 @@ CALL clean_spans();
 SELECT trace_id, name, parameters, deparse_info, lvl FROM peek_ordered_json_spans;
              trace_id             |                        name                         | parameters |    deparse_info     | lvl 
 ----------------------------------+-----------------------------------------------------+------------+---------------------+-----
- 00000000000000000000000000000001 | SELECT * FROM pg_tracing_test WHERE a=$1;           | $1 = 1     |                     |   1
+ 00000000000000000000000000000001 | SELECT * FROM pg_tracing_test WHERE a=$1;           | {1}        |                     |   1
  00000000000000000000000000000001 | Planner                                             |            |                     |   2
  00000000000000000000000000000001 | ExecutorRun                                         |            |                     |   2
  00000000000000000000000000000001 | IndexScan using pg_tracing_index on pg_tracing_test |            | Index Cond: (a = 1) |   3

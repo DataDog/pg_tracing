@@ -60,6 +60,7 @@
 #include "storage/proc.h"
 #include "tcop/utility.h"
 #include "utils/varlena.h"
+#include "utils/lsyscache.h"
 
 PG_MODULE_MAGIC;
 
@@ -746,13 +747,40 @@ is_query_id_filtered(uint64 query_id)
 int
 add_str_to_trace_buffer(const char *str, int str_len)
 {
-	int			position = current_trace_text->cursor;
+	int			position = current_trace_text->len;
 
 	Assert(str_len > 0);
 
 	appendBinaryStringInfo(current_trace_text, str, str_len);
 	appendStringInfoChar(current_trace_text, '\0');
-	current_trace_text->cursor = current_trace_text->len;
+	return position;
+}
+
+/*
+ * Append parameters to StringInfo trace buffer
+ */
+static int
+add_parameters_to_trace_buffer(ParamListInfo params)
+{
+	int			position = current_trace_text->len;
+
+	for (int paramno = 0; paramno < params->numParams; paramno++)
+	{
+		ParamExternData *param = &params->params[paramno];
+
+		if (param->isnull || !OidIsValid(param->ptype))
+			appendStringInfoChar(current_trace_text, '\0');
+		else
+		{
+			Oid			typoutput;
+			bool		typisvarlena;
+			char	   *pstring;
+
+			getTypeOutputInfo(param->ptype, &typoutput, &typisvarlena);
+			pstring = OidOutputFunctionCall(typoutput, param->value);
+			appendBinaryStringInfo(current_trace_text, pstring, strlen(pstring) + 1);
+		}
+	}
 	return position;
 }
 
@@ -834,8 +862,8 @@ drop_all_spans_locked(void)
 	shared_spans->end = 0;
 	/* Reset query file position */
 	pg_tracing_shared_state->extent = 0;
-    /* Update last consume ts */
-    pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
+	/* Update last consume ts */
+	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
 	pg_truncate(PG_TRACING_TEXT_FILE, 0);
 }
 
@@ -1291,6 +1319,7 @@ end_nested_level(const TimestampTz *input_span_end_time)
 static void
 initialise_span_context(SpanContext * span_context,
 						Traceparent * traceparent,
+						StringInfo current_trace_text,
 						const PlannedStmt *pstmt,
 						const JumbleState *jstate,
 						Query *query, const char *query_text)
@@ -1299,6 +1328,7 @@ initialise_span_context(SpanContext * span_context,
 
 	span_context->start_time = GetCurrentTimestamp();
 	span_context->traceparent = traceparent;
+	span_context->current_trace_text = current_trace_text;
 	span_context->pstmt = pstmt;
 	span_context->query = query;
 	span_context->jstate = jstate;
@@ -1382,7 +1412,8 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 
 	/* Statement is sampled, initialize memory and push a new active span */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, NULL, jstate, query, pstate->p_sourcetext);
+	initialise_span_context(&span_context, traceparent, current_trace_text,
+							NULL, jstate, query, pstate->p_sourcetext);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
 					 HOOK_PARSE);
 }
@@ -1431,7 +1462,8 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 
 	/* statement is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, NULL, NULL, query, query_string);
+	initialise_span_context(&span_context, traceparent, current_trace_text,
+							NULL, NULL, query, query_string);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
 					 HOOK_PLANNER);
 	/* Create and start the planner span */
@@ -1461,18 +1493,16 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	pop_active_span(&span_end_time);
 
 	/* If we have a prepared statement, add bound parameters to the top span */
-	if (params != NULL && pg_tracing_export_parameters)
+	if (pg_tracing_export_parameters &&
+		!IsAbortedTransactionBlockState() &&
+		params != NULL &&
+		params->paramFetch == NULL &&
+		params->numParams > 0)
 	{
-		char	   *paramStr = BuildParamLogString(params, NULL,
-												   pg_tracing_max_parameter_str);
+		Span	   *span = peek_active_span();
 
-		if (paramStr != NULL)
-		{
-			Span	   *span = peek_active_span();
-
-			span->parameter_offset = add_str_to_trace_buffer(paramStr,
-															 strlen(paramStr));
-		}
+		span->parameter_offset = add_parameters_to_trace_buffer(params);
+		span->num_parameters = params->numParams;
 	}
 	return result;
 }
@@ -1525,7 +1555,8 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 	/* Statement is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
+	initialise_span_context(&span_context, traceparent, current_trace_text,
+							queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
 					 HOOK_EXECUTOR);
 
@@ -1594,7 +1625,8 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 
 	/* ExecutorRun is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
+	initialise_span_context(&span_context, traceparent, current_trace_text,
+							queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
 					 HOOK_EXECUTOR);
 	/* Start ExecutorRun span as a new active span */
@@ -1705,7 +1737,8 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 
 	/* Statement is sampled */
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
+	initialise_span_context(&span_context, traceparent, current_trace_text,
+							queryDesc->plannedstmt, NULL, NULL, queryDesc->sourceText);
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(queryDesc->operation),
 					 HOOK_EXECUTOR);
 	/* Create ExecutorFinish as a new potential top span */
@@ -1888,7 +1921,8 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	in_aborted_transaction = IsAbortedTransactionBlockState();
 
 	initialize_trace_level();
-	initialise_span_context(&span_context, traceparent, pstmt, NULL, NULL, queryString);
+	initialise_span_context(&span_context, traceparent, current_trace_text,
+							pstmt, NULL, NULL, queryString);
 	if (track_utility)
 	{
 		push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(pstmt->commandType),
