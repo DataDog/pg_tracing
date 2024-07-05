@@ -91,7 +91,8 @@ parse_traceparent_value(Traceparent * traceparent, const char *traceparent_str)
 	/* Check that '-' are at the expected places */
 	if (traceparent_str[2] != '-' ||
 		traceparent_str[35] != '-' ||
-		traceparent_str[52] != '-')
+		traceparent_str[52] != '-' ||
+		traceparent_str[55] != '\'')
 		return PARSE_INCORRECT_FORMAT;
 
 	/* Parse traceparent parameters */
@@ -175,16 +176,16 @@ parse_trace_context(Traceparent * traceparent, const char *trace_context_str,
 
 	/*
 	 * Locate traceparent parameter and make sure it has the expected size
-	 * "traceparent" + "=" + '' -> 13 characters
-	 * 00-00000000000000000000000000000009-0000000000000005-01 -> 55
-	 * characters
+	 * "traceparent" + "=" + ' -> 13 characters
+	 * 00-00000000000000000000000000000009-0000000000000005-01 -> 55 ' -> 1
+	 * character characters
 	 */
 	traceparent_str = strstr(trace_context_str, "traceparent='");
 	if (traceparent_str == NULL)
 		return PARSE_NO_TRACEPARENT_FIELD;
 
 	if (traceparent_str > end_trace_context ||
-		end_trace_context - traceparent_str < 55 + 13)
+		end_trace_context - traceparent_str < 55 + 13 + 1)
 		return PARSE_INCORRECT_TRACEPARENT_SIZE;
 
 	/* Move to the start of the traceparent values */
