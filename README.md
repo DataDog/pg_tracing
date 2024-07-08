@@ -2,7 +2,7 @@
 
 ![nested_loop trace](https://gist.githubusercontent.com/bonnefoa/c4204828fff8ff1d4ed2b275fbbbdfaa/raw/313dd65703aba3a53da5eaacd1c447ef64ec7bef/nested_loop.png)
 
-pg_tracing is a PostgreSQL extension allows to generate server-side spans for distributed tracing.
+pg_tracing is a PostgreSQL extension that generates server-side spans for distributed tracing.
 
 When pg_tracing is active, it generates spans on sampled queries. To access these spans, the extension provides two ways:
 - `pg_tracing_consume_spans` and `pg_tracing_peek_spans` views output spans as a set of records
@@ -146,7 +146,7 @@ select trace_id, parent_id, span_id, span_start, span_end, span_type, span_opera
 
 ## Sending Spans
 
-Spans can be automatically sent to an otel collector by setting `pg_tracing.otel_endpoint` parameter:
+Spans can be automatically sent to an otel collector by setting the `pg_tracing.otel_endpoint` parameter:
 
 ```
 # postgresql.conf
@@ -154,4 +154,4 @@ pg_tracing.otel_endpoint = http://127.0.0.1:4318/v1/traces
 pg_tracing.otel_naptime = 2000
 ```
 
-If an otel endpoint is defined, a background worker will be started and will send spans every $naptime using OTLP HTTP/JSON.
+If an otel endpoint is defined, a background worker will be started and will send spans every $naptime using the OTLP HTTP/JSON protocol.
