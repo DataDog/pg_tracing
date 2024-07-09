@@ -990,26 +990,34 @@ set_trace_id(Traceparent * traceparent)
 
 	/*
 	 * We want to keep the same trace id for all statements within the same
-	 * transaction. For that, we check if we're in the same local xid.
+	 * transaction. For that, we check if we're in the same local xid and a
+	 * trace_id was assigned to this transaction.
 	 */
-	if (!new_lxid)
+	if (!new_lxid && !traceid_zero(tx_start_traceparent.trace_id))
 	{
 		/* We're in the same transaction, use the transaction trace context */
-		Assert(!traceid_zero(tx_start_traceparent.trace_id));
-		*traceparent = tx_start_traceparent;
+		traceparent->trace_id = tx_start_traceparent.trace_id;
 		return;
 	}
 
-	/*
-	 * We leave parent_id to 0 as a way to indicate that this is a standalone
-	 * trace.
-	 */
-	Assert(traceparent->parent_id == 0);
-
 	traceparent->trace_id.traceid_left = pg_prng_int64(&pg_global_prng_state);
 	traceparent->trace_id.traceid_right = pg_prng_int64(&pg_global_prng_state);
-	/* We're at the begining of a new local transaction, save trace context */
-	tx_start_traceparent = *traceparent;
+
+	if (new_lxid)
+
+		/*
+		 * We're at the begining of a new local transaction, save trace
+		 * context
+		 */
+		tx_start_traceparent = *traceparent;
+	else
+
+		/*
+		 * We sampled a statement in a middle of a transaction, save the
+		 * trace_id to reuse it if statements are sampled within the same
+		 * transaction
+		 */
+		tx_start_traceparent.trace_id = traceparent->trace_id;
 }
 
 /*
