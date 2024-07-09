@@ -12,7 +12,6 @@
 
 #include "pg_tracing.h"
 #include "postmaster/bgworker.h"
-#include "utils/timestamp.h"
 #include "postmaster/interrupt.h"
 #include "utils/memutils.h"
 #include "storage/latch.h"

@@ -10,8 +10,6 @@
  */
 #include "postgres.h"
 
-#include "version_compat.h"
-
 #if PG_VERSION_NUM < 160000
 
 /*
