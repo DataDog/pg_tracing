@@ -21,6 +21,7 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  ProcessUtility | ProcessUtility |   2
 (8 rows)
 
+CALL clean_spans();
 -- Test with override of the trace context in the middle of a transaction
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ BEGIN;
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ SELECT 1; COMMIT;
@@ -46,6 +47,102 @@ SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00
  ExecutorRun  | ExecutorRun    |   2
  Result       | Result         |   3
 (4 rows)
+
+CALL clean_spans();
+-- Test with a 0 traceid in the middle of a transaction
+BEGIN;
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000000-0000000000000001-01'*/ SELECT 2;
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT 3;
+ ?column? 
+----------
+        3
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000000-0000000000000001-01'*/ SELECT 4;
+ ?column? 
+----------
+        4
+(1 row)
+
+END;
+-- Only one trace id should have been generated
+SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans;
+  span_type   | span_operation | lvl 
+--------------+----------------+-----
+ Select query | SELECT $1;     |   1
+ Planner      | Planner        |   2
+ ExecutorRun  | ExecutorRun    |   2
+ Result       | Result         |   3
+ Select query | SELECT $1;     |   1
+ Planner      | Planner        |   2
+ ExecutorRun  | ExecutorRun    |   2
+ Result       | Result         |   3
+(8 rows)
+
+CALL clean_spans();
+-- Test with a 0 parent_id in the middle of a transaction
+BEGIN;
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000000-0000000000000000-01'*/ SELECT 2;
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT 3;
+ ?column? 
+----------
+        3
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000000-0000000000000000-01'*/ SELECT 4;
+ ?column? 
+----------
+        4
+(1 row)
+
+END;
+-- Only one trace id and parent id should have been generated
+SELECT count(distinct(trace_id)) = 1, count(distinct(parent_id)) = 1 FROM peek_ordered_spans WHERE lvl=1;
+ ?column? | ?column? 
+----------+----------
+ t        | t
+(1 row)
+
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans;
+  span_type   | span_operation | lvl 
+--------------+----------------+-----
+ Select query | SELECT $1;     |   1
+ Planner      | Planner        |   2
+ ExecutorRun  | ExecutorRun    |   2
+ Result       | Result         |   3
+ Select query | SELECT $1;     |   1
+ Planner      | Planner        |   2
+ ExecutorRun  | ExecutorRun    |   2
+ Result       | Result         |   3
+(8 rows)
 
 CALL clean_spans();
 CALL reset_settings();
