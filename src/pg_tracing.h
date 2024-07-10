@@ -79,6 +79,7 @@ typedef enum SpanType
 	SPAN_EXECUTOR_RUN,			/* Wraps Executor run hook */
 	SPAN_EXECUTOR_FINISH,		/* Wraps Executor finish hook */
 	SPAN_TRANSACTION_COMMIT,	/* Wraps time between pre-commit and commit */
+	SPAN_TRANSACTION_BLOCK,		/* Represents an explicit transaction block */
 
 	/* Represents a node execution, generated from planstate */
 	SPAN_NODE,

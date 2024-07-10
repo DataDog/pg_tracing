@@ -7,44 +7,52 @@ more than one row returned for \gset
 CLOSE c;
 COMMIT;
 -- First declare
--- +----------------------------------------+
--- | A: Declare (Utility)                   |
+-- +--------------------------------------------------------+
+-- | A: TransactionBlock...                                 |
+-- +----------------------------------------+---------------+
+-- | B: Declare (Utility)                   |
 -- ++------------------------------------+--+
---  | B: ProcessUtility                  |
+--  | C: ProcessUtility                  |
 --  +-+-------------------------------+--+
---    | C: Declare cursor... (Select) |
+--    | D: Declare cursor... (Select) |
 --    +-------------------------------+
---    | D: Planner   |
+--    | E: Planner   |
 --    +--------------+
 SELECT span_id AS span_a_id,
         get_epoch(span_start) as span_a_start,
         get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans
         where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
-          AND span_operation='DECLARE c CURSOR FOR SELECT * from pg_tracing_test;' \gset
+          AND span_operation='TransactionBlock' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='ProcessUtility' \gset
+        where parent_id=:'span_a_id'
+          AND span_operation='DECLARE c CURSOR FOR SELECT * from pg_tracing_test;' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_b_id' and span_type='Select query' \gset
+        where parent_id =:'span_b_id' and span_operation='ProcessUtility' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_c_id' and span_operation='Planner' \gset
-SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_b_end, :span_c_end, :span_d_end]) as v;
+        where parent_id =:'span_c_id' and span_type='Select query' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='Planner' \gset
+SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_c_end, :span_d_end, :span_e_end]) as v;
  root_ends_last 
 ----------------
  t
 (1 row)
 
-SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
-       :span_d_end <= :span_c_end as nested_planner_ends_before_parent;
+SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
+       :span_e_end <= :span_d_end as nested_planner_ends_before_parent;
  nested_declare_starts_after_parent | nested_planner_ends_before_parent 
 ------------------------------------+-----------------------------------
  t                                  | t
@@ -60,35 +68,35 @@ SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
 --    +------------------+------------+
 --    | D: ExecutorRun   |
 --    +------------------+
-SELECT span_id AS span_a_id,
-        get_epoch(span_start) as span_a_start,
-        get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
-          AND span_operation='FETCH FORWARD 20 from c' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='ProcessUtility' \gset
+        where parent_id=:'span_a_id'
+          AND span_operation='FETCH FORWARD 20 from c' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_b_id' and span_type='Select query' \gset
+        where parent_id =:'span_b_id' and span_operation='ProcessUtility' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_c_id' and span_operation='ExecutorRun' \gset
-SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_b_end, :span_c_end, :span_d_end]) as v;
+        where parent_id =:'span_c_id' and span_type='Select query' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='ExecutorRun' \gset
+SELECT :span_b_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_c_end, :span_d_end, :span_e_end]) as v;
  root_ends_last 
 ----------------
  t
 (1 row)
 
-SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
-       :span_d_end <= :span_c_end as nested_planner_ends_before_parent;
+SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
+       :span_e_end <= :span_d_end as nested_planner_ends_before_parent;
  nested_declare_starts_after_parent | nested_planner_ends_before_parent 
 ------------------------------------+-----------------------------------
  t                                  | t
@@ -96,35 +104,35 @@ SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
 
 -- Fetch Backward
 -- Same structure as fetch forward
-SELECT span_id AS span_a_id,
-        get_epoch(span_start) as span_a_start,
-        get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
-          AND span_operation='FETCH BACKWARD 10 from c' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='ProcessUtility' \gset
+        where parent_id=:'span_a_id'
+          AND span_operation='FETCH BACKWARD 10 from c' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_b_id' and span_type='Select query' \gset
+        where parent_id =:'span_b_id' and span_operation='ProcessUtility' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_c_id' and span_operation='ExecutorRun' \gset
-SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_b_end, :span_c_end, :span_d_end]) as v;
+        where parent_id =:'span_c_id' and span_type='Select query' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='ExecutorRun' \gset
+SELECT :span_b_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_c_end, :span_d_end, :span_e_end]) as v;
  root_ends_last 
 ----------------
  t
 (1 row)
 
-SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
-       :span_d_end <= :span_c_end as nested_planner_ends_before_parent;
+SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
+       :span_e_end <= :span_d_end as nested_planner_ends_before_parent;
  nested_declare_starts_after_parent | nested_planner_ends_before_parent 
 ------------------------------------+-----------------------------------
  t                                  | t
@@ -132,28 +140,29 @@ SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
 
 -- Check
 SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
-   span_type    |                   span_operation                    | lvl 
-----------------+-----------------------------------------------------+-----
- Utility query  | BEGIN;                                              |   1
- ProcessUtility | ProcessUtility                                      |   2
- Utility query  | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   1
- ProcessUtility | ProcessUtility                                      |   2
- Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
- Planner        | Planner                                             |   4
- Utility query  | FETCH FORWARD 20 from c                             |   1
- ProcessUtility | ProcessUtility                                      |   2
- Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
- ExecutorRun    | ExecutorRun                                         |   4
- Utility query  | FETCH BACKWARD 10 from c                            |   1
- ProcessUtility | ProcessUtility                                      |   2
- Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
- ExecutorRun    | ExecutorRun                                         |   4
- Utility query  | CLOSE c;                                            |   1
- ProcessUtility | ProcessUtility                                      |   2
- Select query   | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
- Utility query  | COMMIT;                                             |   1
- ProcessUtility | ProcessUtility                                      |   2
-(19 rows)
+    span_type     |                   span_operation                    | lvl 
+------------------+-----------------------------------------------------+-----
+ TransactionBlock | TransactionBlock                                    |   1
+ Utility query    | BEGIN;                                              |   2
+ ProcessUtility   | ProcessUtility                                      |   3
+ Utility query    | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   2
+ ProcessUtility   | ProcessUtility                                      |   3
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
+ Planner          | Planner                                             |   5
+ Utility query    | FETCH FORWARD 20 from c                             |   2
+ ProcessUtility   | ProcessUtility                                      |   3
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
+ ExecutorRun      | ExecutorRun                                         |   5
+ Utility query    | FETCH BACKWARD 10 from c                            |   2
+ ProcessUtility   | ProcessUtility                                      |   3
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
+ ExecutorRun      | ExecutorRun                                         |   5
+ Utility query    | CLOSE c;                                            |   2
+ ProcessUtility   | ProcessUtility                                      |   3
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
+ Utility query    | COMMIT;                                             |   2
+ ProcessUtility   | ProcessUtility                                      |   3
+(20 rows)
 
 -- Clean created spans
 CALL clean_spans();

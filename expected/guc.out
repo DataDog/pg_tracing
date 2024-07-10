@@ -32,27 +32,28 @@ SELECT 3;
 
 -- Check results for GUC propagation with simple and multiple statements
 select trace_id, span_operation, parameters, lvl from peek_ordered_spans;
-             trace_id             | span_operation | parameters | lvl 
-----------------------------------+----------------+------------+-----
- 00000000000000000000000000000004 | SELECT $1;     | {1}        |   1
- 00000000000000000000000000000004 | Planner        |            |   2
- 00000000000000000000000000000004 | ExecutorRun    |            |   2
- 00000000000000000000000000000004 | Result         |            |   3
- 00000000000000000000000000000005 | SELECT $1;     | {1}        |   1
- 00000000000000000000000000000005 | Planner        |            |   2
- 00000000000000000000000000000005 | ExecutorRun    |            |   2
- 00000000000000000000000000000005 | Result         |            |   3
- 00000000000000000000000000000005 | COMMIT;        |            |   1
- 00000000000000000000000000000005 | ProcessUtility |            |   2
- fffffffffffffffffffffffffffffff5 | SELECT $1;     | {2}        |   1
- fffffffffffffffffffffffffffffff5 | Planner        |            |   2
- fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
- fffffffffffffffffffffffffffffff5 | Result         |            |   3
- fffffffffffffffffffffffffffffff5 | SELECT $1;     | {3}        |   1
- fffffffffffffffffffffffffffffff5 | Planner        |            |   2
- fffffffffffffffffffffffffffffff5 | ExecutorRun    |            |   2
- fffffffffffffffffffffffffffffff5 | Result         |            |   3
-(18 rows)
+             trace_id             |  span_operation  | parameters | lvl 
+----------------------------------+------------------+------------+-----
+ 00000000000000000000000000000004 | SELECT $1;       | {1}        |   1
+ 00000000000000000000000000000004 | Planner          |            |   2
+ 00000000000000000000000000000004 | ExecutorRun      |            |   2
+ 00000000000000000000000000000004 | Result           |            |   3
+ 00000000000000000000000000000004 | TransactionBlock |            |   1
+ 00000000000000000000000000000005 | SELECT $1;       | {1}        |   2
+ 00000000000000000000000000000005 | Planner          |            |   3
+ 00000000000000000000000000000005 | ExecutorRun      |            |   3
+ 00000000000000000000000000000005 | Result           |            |   4
+ 00000000000000000000000000000005 | COMMIT;          |            |   2
+ 00000000000000000000000000000005 | ProcessUtility   |            |   3
+ fffffffffffffffffffffffffffffff5 | SELECT $1;       | {2}        |   1
+ fffffffffffffffffffffffffffffff5 | Planner          |            |   2
+ fffffffffffffffffffffffffffffff5 | ExecutorRun      |            |   2
+ fffffffffffffffffffffffffffffff5 | Result           |            |   3
+ fffffffffffffffffffffffffffffff5 | SELECT $1;       | {3}        |   1
+ fffffffffffffffffffffffffffffff5 | Planner          |            |   2
+ fffffffffffffffffffffffffffffff5 | ExecutorRun      |            |   2
+ fffffffffffffffffffffffffffffff5 | Result           |            |   3
+(19 rows)
 
 CALL clean_spans();
 -- Mix SQLCommenter and GUC propagation
@@ -135,3 +136,5 @@ select count(*) = 0 from peek_ordered_spans;
  t
 (1 row)
 
+-- Cleaning
+CALL clean_spans();
