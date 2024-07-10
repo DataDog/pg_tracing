@@ -215,6 +215,9 @@ static bool within_declare_cursor = false;
 /* Commit span used in xact callbacks */
 static Span commit_span;
 
+/* Tx block span used to represent explicit transaction block */
+static Span tx_block_span;
+
 /*
  * query id at level 0 of the current tracing.
  * Used to assign queryId to the commit span
@@ -1336,6 +1339,11 @@ initialise_span_context(SpanContext * span_context,
 
 	span_context->start_time = GetCurrentTimestamp();
 	span_context->traceparent = traceparent;
+	if (!traceid_zero(tx_block_span.trace_id) && nested_level == 0)
+	{
+		/* We have an ongoing transaction block. Use it as parent for level 0 */
+		span_context->traceparent->parent_id = tx_block_span.span_id;
+	}
 	span_context->current_trace_text = current_trace_text;
 	span_context->pstmt = pstmt;
 	span_context->query = query;
@@ -1422,6 +1430,21 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	initialize_trace_level();
 	initialise_span_context(&span_context, traceparent, current_trace_text,
 							NULL, jstate, query, pstate->p_sourcetext);
+
+	if (query->utilityStmt && nodeTag(query->utilityStmt) == T_TransactionStmt)
+	{
+		TransactionStmt *stmt = (TransactionStmt *) query->utilityStmt;
+
+		if (stmt->kind == TRANS_STMT_BEGIN && nested_level == 0)
+		{
+			/* We have an explicit BEGIN, start a transaction block span */
+			begin_span(traceparent->trace_id, &tx_block_span, SPAN_TRANSACTION_BLOCK, NULL,
+					   traceparent->parent_id, span_context.query_id, GetCurrentTransactionStartTimestamp());
+            /* Update traceparent context to use the tx_block span as parent */
+			span_context.traceparent->parent_id = tx_block_span.span_id;
+		}
+	}
+
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
 					 HOOK_PARSE);
 }
@@ -2010,6 +2033,7 @@ static void
 pg_tracing_xact_callback(XactEvent event, void *arg)
 {
 	Traceparent *traceparent = &executor_traceparent;
+	TimestampTz current_ts;
 
 	if (current_trace_spans == NULL)
 		return;
@@ -2030,24 +2054,36 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 
 				if (traceparent->sampled && is_modifying_xact)
 				{
-					TimestampTz start_time = GetCurrentTimestamp();
+					current_ts = GetCurrentTimestamp();
 
 					begin_span(traceparent->trace_id, &commit_span,
 							   SPAN_TRANSACTION_COMMIT, NULL, traceparent->parent_id,
-							   current_query_id, start_time);
+							   current_query_id, current_ts);
 				}
 				break;
 			}
 		case XACT_EVENT_COMMIT:
-			end_nested_level(NULL);
+			current_ts = GetCurrentTimestamp();
+			end_nested_level(&current_ts);
 			if (commit_span.span_id > 0)
 			{
-				end_span(&commit_span, NULL);
+				end_span(&commit_span, &current_ts);
 				store_span(&commit_span);
+			}
+			if (tx_block_span.span_id > 0)
+			{
+				/*
+				 * We don't use GetCurrentTransactionStopTimestamp as that
+				 * would make the commit span overlaps and ends after the
+				 * TransactionBlock
+				 */
+				end_span(&tx_block_span, &current_ts);
+				store_span(&tx_block_span);
 			}
 
 			end_tracing();
 			reset_span(&commit_span);
+			reset_span(&tx_block_span);
 			break;
 		case XACT_EVENT_PARALLEL_COMMIT:
 			end_nested_level(NULL);
@@ -2058,6 +2094,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 			end_nested_level(NULL);
 			end_tracing();
 			reset_span(&commit_span);
+			reset_span(&tx_block_span);
 			break;
 		default:
 			break;

@@ -34,5 +34,8 @@ $$ LANGUAGE plpgsql;
 -- Create test tables with data
 CALL reset_pg_tracing_test_table();
 
+-- Create test table to test modifications
+CREATE TABLE test_modifications (a int, b char(20));
+
 CREATE TABLE m AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i;
 ALTER TABLE m ADD UNIQUE (k);

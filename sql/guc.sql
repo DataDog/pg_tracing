@@ -43,3 +43,6 @@ SET pg_tracing.trace_context='dddbs=''postgres.db'',traceparent=''00-fffffffffff
 
 -- GUC errors and no GUC tracecontext should not generate spans
 select count(*) = 0 from peek_ordered_spans;
+
+-- Cleaning
+CALL clean_spans();

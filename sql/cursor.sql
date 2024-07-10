@@ -6,14 +6,16 @@ CLOSE c;
 COMMIT;
 
 -- First declare
--- +----------------------------------------+
--- | A: Declare (Utility)                   |
+-- +--------------------------------------------------------+
+-- | A: TransactionBlock...                                 |
+-- +----------------------------------------+---------------+
+-- | B: Declare (Utility)                   |
 -- ++------------------------------------+--+
---  | B: ProcessUtility                  |
+--  | C: ProcessUtility                  |
 --  +-+-------------------------------+--+
---    | C: Declare cursor... (Select) |
+--    | D: Declare cursor... (Select) |
 --    +-------------------------------+
---    | D: Planner   |
+--    | E: Planner   |
 --    +--------------+
 
 SELECT span_id AS span_a_id,
@@ -21,26 +23,32 @@ SELECT span_id AS span_a_id,
         get_epoch(span_end) as span_a_end
 		from pg_tracing_peek_spans
         where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
-          AND span_operation='DECLARE c CURSOR FOR SELECT * from pg_tracing_test;' \gset
+          AND span_operation='TransactionBlock' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='ProcessUtility' \gset
+        where parent_id=:'span_a_id'
+          AND span_operation='DECLARE c CURSOR FOR SELECT * from pg_tracing_test;' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_b_id' and span_type='Select query' \gset
+        where parent_id =:'span_b_id' and span_operation='ProcessUtility' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_c_id' and span_operation='Planner' \gset
+        where parent_id =:'span_c_id' and span_type='Select query' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='Planner' \gset
 
-SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_b_end, :span_c_end, :span_d_end]) as v;
-SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
-       :span_d_end <= :span_c_end as nested_planner_ends_before_parent;
+SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_c_end, :span_d_end, :span_e_end]) as v;
+SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
+       :span_e_end <= :span_d_end as nested_planner_ends_before_parent;
 
 
 -- Fetch forward
@@ -54,60 +62,60 @@ SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
 --    | D: ExecutorRun   |
 --    +------------------+
 
-SELECT span_id AS span_a_id,
-        get_epoch(span_start) as span_a_start,
-        get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
-          AND span_operation='FETCH FORWARD 20 from c' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='ProcessUtility' \gset
+        where parent_id=:'span_a_id'
+          AND span_operation='FETCH FORWARD 20 from c' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_b_id' and span_type='Select query' \gset
+        where parent_id =:'span_b_id' and span_operation='ProcessUtility' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_c_id' and span_operation='ExecutorRun' \gset
+        where parent_id =:'span_c_id' and span_type='Select query' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='ExecutorRun' \gset
 
-SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_b_end, :span_c_end, :span_d_end]) as v;
-SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
-       :span_d_end <= :span_c_end as nested_planner_ends_before_parent;
+SELECT :span_b_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_c_end, :span_d_end, :span_e_end]) as v;
+SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
+       :span_e_end <= :span_d_end as nested_planner_ends_before_parent;
 
 -- Fetch Backward
 -- Same structure as fetch forward
 
-SELECT span_id AS span_a_id,
-        get_epoch(span_start) as span_a_start,
-        get_epoch(span_end) as span_a_end
-		from pg_tracing_peek_spans
-        where trace_id='00000000000000000000000000000001' AND parent_id='0000000000000001'
-          AND span_operation='FETCH BACKWARD 10 from c' \gset
 SELECT span_id AS span_b_id,
         get_epoch(span_start) as span_b_start,
         get_epoch(span_end) as span_b_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='ProcessUtility' \gset
+        where parent_id=:'span_a_id'
+          AND span_operation='FETCH BACKWARD 10 from c' \gset
 SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_b_id' and span_type='Select query' \gset
+        where parent_id =:'span_b_id' and span_operation='ProcessUtility' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_c_id' and span_operation='ExecutorRun' \gset
+        where parent_id =:'span_c_id' and span_type='Select query' \gset
+SELECT span_id AS span_e_id,
+        get_epoch(span_start) as span_e_start,
+        get_epoch(span_end) as span_e_end
+		from pg_tracing_peek_spans
+        where parent_id =:'span_d_id' and span_operation='ExecutorRun' \gset
 
-SELECT :span_a_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_b_end, :span_c_end, :span_d_end]) as v;
-SELECT :span_c_start >= :span_b_start as nested_declare_starts_after_parent,
-       :span_d_end <= :span_c_end as nested_planner_ends_before_parent;
+SELECT :span_b_end >= MAX(v) as root_ends_last FROM UNNEST(ARRAY[:span_c_end, :span_d_end, :span_e_end]) as v;
+SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
+       :span_e_end <= :span_d_end as nested_planner_ends_before_parent;
 
 -- Check
 SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
