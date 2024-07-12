@@ -269,13 +269,13 @@ append_span_attributes(const JsonContext * json_ctx, const Span * span)
 		append_plan_counters(str, &span->plan_counters);
 
 		append_attribute_int(str, "query.startup", span->startup, true, true);
-		if (span->parameter_offset != -1 && json_ctx->qbuffer_size > 0 && json_ctx->qbuffer_size > span->parameter_offset)
+		if (span->parameter_offset != -1)
 			append_array_value_field(str, "query.parameters",
-									 json_ctx->qbuffer + span->parameter_offset, span->num_parameters, true);
+									 shared_str + span->parameter_offset, span->num_parameters, true);
 
-		if (span->deparse_info_offset != -1 && json_ctx->qbuffer_size > 0 && json_ctx->qbuffer_size > span->deparse_info_offset)
+		if (span->deparse_info_offset != -1)
 			append_attribute_string(str, "query.deparse_info",
-									json_ctx->qbuffer + span->deparse_info_offset, true);
+									shared_str + span->deparse_info_offset, true);
 	}
 
 	if (span->sql_error_code > 0)
@@ -299,7 +299,7 @@ append_span(const JsonContext * json_ctx, const Span * span)
 	const char *operation_name;
 	StringInfo	str = json_ctx->str;
 
-	operation_name = get_operation_name(span, json_ctx->qbuffer, json_ctx->qbuffer_size);
+	operation_name = get_operation_name(span);
 
 	pg_snprintf(trace_id, 33, INT64_HEX_FORMAT INT64_HEX_FORMAT,
 				span->trace_id.traceid_left,
@@ -403,11 +403,9 @@ aggregate_span_by_type(JsonContext * json_ctx, const pgTracingSpans * pgTracingS
  * Prepare json context for json marshalling
  */
 void
-build_json_context(JsonContext * json_ctx, const char *qbuffer, Size qbuffer_size, const pgTracingSpans * pgTracingSpans)
+build_json_context(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans)
 {
 	json_ctx->str = makeStringInfo();
-	json_ctx->qbuffer = qbuffer;
-	json_ctx->qbuffer_size = qbuffer_size;
 	memset(json_ctx->span_type_count, 0, sizeof(json_ctx->span_type_count));
 	memset(json_ctx->span_type_to_spans, 0, sizeof(json_ctx->span_type_to_spans));
 

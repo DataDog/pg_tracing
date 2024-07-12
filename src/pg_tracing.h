@@ -240,6 +240,8 @@ typedef struct pgTracingStats
 	int64		processed_spans;	/* number of spans processed */
 	int64		dropped_traces; /* number of traces aborted due to full buffer */
 	int64		dropped_spans;	/* number of dropped spans due to full buffer */
+	int64		dropped_str;	/* number of dropped str due to full
+								 * shared_str */
 	int64		otel_sent_spans;	/* number of spans sent to otel collector */
 	int64		otel_failures;	/* number of failures to send spans to otel
 								 * collector */
@@ -255,7 +257,7 @@ typedef struct pgTracingSharedState
 {
 	LWLock	   *lock;			/* protects shared spans, shared state and
 								 * query file */
-	Size		extent;			/* current extent of query file */
+	Size		extent;			/* current extent of shared str */
 	pgTracingStats stats;		/* global statistics for pg_tracing */
 }			pgTracingSharedState;
 
@@ -267,6 +269,8 @@ typedef struct planstateTraceContext
 	List	   *ancestors;
 	List	   *deparse_ctx;
 	List	   *rtable_names;
+	StringInfo	deparse_info_buffer;
+	StringInfo	plan_name_buffer;
 }			planstateTraceContext;
 
 /*
@@ -326,8 +330,6 @@ typedef struct TracedPlanstate
 typedef struct JsonContext
 {
 	StringInfo	str;
-	const char *qbuffer;
-	Size		qbuffer_size;
 	int			span_type_count[NUM_SPAN_TYPE];
 	const		Span **span_type_to_spans[NUM_SPAN_TYPE];
 }			JsonContext;
@@ -336,7 +338,8 @@ typedef struct SpanContext
 {
 	TimestampTz start_time;
 	Traceparent *traceparent;
-	StringInfo	current_trace_text;
+	StringInfo	parameters_buffer;
+	StringInfo	operation_name_buffer;
 	const PlannedStmt *pstmt;
 	const Query *query;
 	const JumbleState *jstate;
@@ -360,8 +363,9 @@ extern void fetch_parallel_context(Traceparent * traceparent);
 
 extern void
 			process_planstate(const Traceparent * traceparent, const QueryDesc *queryDesc,
-							  int sql_error_code, bool deparse_plan, uint64 parent_id,
-							  TimestampTz parent_start, TimestampTz parent_end);
+							  int sql_error_code, bool deparse_plan, uint64 parent_id, uint64 query_id,
+							  TimestampTz parent_start, TimestampTz parent_end,
+							  StringInfo deparse_info_buffer, StringInfo plan_name_buffer);
 
 extern void
 			setup_ExecProcNode_override(MemoryContext context, QueryDesc *queryDesc);
@@ -382,9 +386,6 @@ extern void extract_trace_context_from_query(Traceparent * traceparent, const ch
 extern ParseTraceparentErr parse_trace_context(Traceparent * traceparent, const char *trace_context_str, int trace_context_len);
 extern char *parse_code_to_err(ParseTraceparentErr err);
 extern const char *normalise_query(const char *query, int query_loc, int *query_len_p);
-extern bool text_store_file(pgTracingSharedState * pg_tracing, const char *query,
-							int query_len, Size *query_offset);
-extern char *qtext_load_file(Size *buffer_size);
 
 /* pg_tracing_span.c */
 extern void begin_span(TraceId trace_id, Span * span, SpanType type,
@@ -393,34 +394,33 @@ extern void begin_span(TraceId trace_id, Span * span, SpanType type,
 extern void end_span(Span * span, const TimestampTz *end_time);
 extern void reset_span(Span * span);
 extern const char *get_span_type(const Span * span);
-extern const char *get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size);
+extern const char *get_operation_name(const Span * span);
 extern void adjust_file_offset(Span * span, Size file_position);
 extern bool traceid_zero(TraceId trace_id);
 extern const char *span_type_to_str(SpanType span_type);
 
 
 /* pg_tracing_sql_functions.c */
-pgTracingStats get_empty_pg_tracing_stats(void);
+extern pgTracingStats get_empty_pg_tracing_stats(void);
 
 /* pg_tracing_active_spans.c */
-Span	   *pop_active_span(const TimestampTz *end_time);
-Span	   *peek_active_span(void);
-Span	   *push_active_span(MemoryContext context, const SpanContext * span_context,
-							 SpanType span_type, HookPhase hook_phase);
-Span	   *push_child_active_span(MemoryContext context, const SpanContext * span_context,
-								   SpanType span_type);
+extern Span * pop_active_span(const TimestampTz *end_time);
+extern Span * peek_active_span(void);
+extern Span * push_active_span(MemoryContext context, const SpanContext * span_context,
+							   SpanType span_type, HookPhase hook_phase);
+extern Span * push_child_active_span(MemoryContext context, const SpanContext * span_context,
+									 SpanType span_type);
 
-void		cleanup_active_spans(void);
+extern void cleanup_active_spans(void);
 
 /* pg_tracing.c */
 extern pgTracingSharedState * pg_tracing_shared_state;
 extern pgTracingSpans * shared_spans;
-
+extern char *shared_str;
 extern int	nested_level;
+
 extern void
 			store_span(const Span * span);
-extern int
-			add_str_to_trace_buffer(const char *str, int str_len);
 extern void
 			cleanup_tracing(void);
 extern void
@@ -428,12 +428,26 @@ extern void
 extern void
 			pg_tracing_shmem_startup(void);
 extern void reset_traceparent(Traceparent * traceparent);
+extern Size
+			append_str_to_shared_str(const char *txt, int str_len);
+
+/* pg_tracing_strinfo.c */
+extern int
+			appendStringInfoNT(StringInfo strinfo, const char *str, int str_len);
 
 /* pg_tracing_json.c */
 extern void
 			marshal_spans_to_json(JsonContext * json_ctx);
 extern void
-			build_json_context(JsonContext * json_ctx, const char *qbuffer, Size qbuffer_size, const pgTracingSpans * pgTracingSpans);
+			build_json_context(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans);
+
+/* pg_tracing_operation_hash.c */
+extern void
+			init_operation_hash(void);
+extern void
+			reset_operation_hash(void);
+extern Size
+			lookup_operation_name(const Span * span, const char *txt);
 
 /* pg_tracing_otel.c */
 extern void

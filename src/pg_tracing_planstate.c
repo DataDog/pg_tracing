@@ -621,7 +621,8 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 		operation_name = plan_to_rel_name(planstateTraceContext, planstate);
 		len_operation_name = strlen(operation_name);
 		if (len_operation_name > 0)
-			span.operation_name_offset = add_str_to_trace_buffer(operation_name, len_operation_name);
+			span.operation_name_offset = appendStringInfoNT(planstateTraceContext->plan_name_buffer,
+															operation_name, len_operation_name);
 
 		/* deparse_ctx is NULL if deparsing was disabled */
 		if (planstateTraceContext->deparse_ctx != NULL)
@@ -629,11 +630,13 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 			deparse_info = plan_to_deparse_info(planstateTraceContext, planstate);
 			deparse_info_len = strlen(deparse_info);
 			if (deparse_info_len > 0)
-				span.deparse_info_offset = add_str_to_trace_buffer(deparse_info, deparse_info_len);
+				span.deparse_info_offset = appendStringInfoNT(planstateTraceContext->deparse_info_buffer,
+															  deparse_info, deparse_info_len);
 		}
 	}
 	else if (subplan_name != NULL)
-		span.operation_name_offset = add_str_to_trace_buffer(subplan_name, strlen(subplan_name));
+		span.operation_name_offset = appendStringInfoNT(planstateTraceContext->plan_name_buffer,
+														subplan_name, strlen(subplan_name));
 
 	span.node_counters.rows = (int64) planstate->instrument->ntuples / planstate->instrument->nloops;
 	span.node_counters.nloops = (int64) planstate->instrument->nloops;
@@ -658,12 +661,13 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 void
 process_planstate(const Traceparent * traceparent, const QueryDesc *queryDesc,
 				  int sql_error_code, bool deparse_plan, uint64 parent_id,
-				  TimestampTz parent_start, TimestampTz parent_end)
+				  uint64 query_id,
+				  TimestampTz parent_start, TimestampTz parent_end,
+				  StringInfo deparse_info_buffer, StringInfo plan_name_buffer)
 {
 	Bitmapset  *rels_used = NULL;
 	planstateTraceContext planstateTraceContext;
 	TimestampTz latest_end = 0;
-	uint64		query_id = queryDesc->plannedstmt->queryId;
 
 	if (queryDesc->planstate == NULL || queryDesc->planstate->instrument == NULL)
 		return;
@@ -671,6 +675,8 @@ process_planstate(const Traceparent * traceparent, const QueryDesc *queryDesc,
 	planstateTraceContext.rtable_names = select_rtable_names_for_explain(queryDesc->plannedstmt->rtable, rels_used);
 	planstateTraceContext.trace_id = traceparent->trace_id;
 	planstateTraceContext.ancestors = NULL;
+	planstateTraceContext.deparse_info_buffer = deparse_info_buffer;
+	planstateTraceContext.plan_name_buffer = plan_name_buffer;
 	planstateTraceContext.sql_error_code = sql_error_code;
 	/* Prepare the planstate context for deparsing */
 	planstateTraceContext.deparse_ctx = NULL;

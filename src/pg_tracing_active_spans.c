@@ -170,17 +170,21 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	{
 		/* jstate is available, normalise query and extract parameters' values */
 		int			num_parameters = 0;
-		int			parameter_offset = span_context->current_trace_text->len;
-		StringInfo	trace_text = NULL;
+		int			parameter_offset = span_context->parameters_buffer->len;
+		StringInfo	parameters_buffer = NULL;
 
 		if (span_context->export_parameters)
-			/* We want parameter's value, push trace_text StringInfo */
-			trace_text = span_context->current_trace_text;
+
+			/*
+			 * We want parameters' value, propagate parameters_buffer
+			 * StringInfo
+			 */
+			parameters_buffer = span_context->parameters_buffer;
 
 		query_len = query->stmt_len;
 		normalised_query = normalise_query_parameters(span_context->jstate, span_context->query_text,
 													  query->stmt_location, &query_len,
-													  trace_text, &num_parameters);
+													  parameters_buffer, &num_parameters);
 		span->num_parameters = num_parameters;
 		if (num_parameters > 0 && span_context->export_parameters)
 			span->parameter_offset = parameter_offset;
@@ -211,8 +215,8 @@ begin_active_span(const SpanContext * span_context, Span * span,
 		normalised_query = normalise_query(span_context->query_text, stmt_location, &query_len);
 	}
 	if (query_len > 0)
-		span->operation_name_offset = add_str_to_trace_buffer(normalised_query,
-															  query_len);
+		span->operation_name_offset = appendStringInfoNT(span_context->operation_name_buffer, normalised_query,
+														 query_len);
 }
 
 /*

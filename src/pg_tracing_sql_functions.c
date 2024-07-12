@@ -34,6 +34,7 @@ get_empty_pg_tracing_stats(void)
 	stats.processed_spans = 0;
 	stats.dropped_traces = 0;
 	stats.dropped_spans = 0;
+	stats.dropped_str = 0;
 	stats.otel_sent_spans = 0;
 	stats.otel_failures = 0;
 	stats.last_consume = 0;
@@ -137,11 +138,11 @@ add_node_counters(const NodeCounters * node_counters, int i, Datum *values)
  * Generate ArrayType with span's parameters
  */
 static Datum
-generate_array_parameters(const char *qbuffer, const Span * span)
+generate_array_parameters(const Span * span)
 {
 	Datum	   *entries;
 	ArrayType  *array;
-	const char *cursor = qbuffer + span->parameter_offset;
+	const char *cursor = shared_str + span->parameter_offset;
 
 	entries = (Datum *) palloc(sizeof(Datum) * span->num_parameters);
 	for (int j = 0; j < span->num_parameters; j++)
@@ -162,8 +163,7 @@ generate_array_parameters(const char *qbuffer, const Span * span)
  * Build the tuple for a Span and add it to the output
  */
 static void
-add_result_span(ReturnSetInfo *rsinfo, Span * span,
-				const char *qbuffer, Size qbuffer_size)
+add_result_span(ReturnSetInfo *rsinfo, Span * span)
 {
 #define PG_TRACING_TRACES_COLS	44
 	Datum		values[PG_TRACING_TRACES_COLS] = {0};
@@ -177,7 +177,7 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 	char		span_id[17];
 
 	span_type = span_type_to_str(span->type);
-	operation_name = get_operation_name(span, qbuffer, qbuffer_size);
+	operation_name = get_operation_name(span);
 	sql_error_code = unpack_sql_state(span->sql_error_code);
 
 	pg_snprintf(trace_id, 33, INT64_HEX_FORMAT INT64_HEX_FORMAT,
@@ -213,15 +213,13 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 		i = add_node_counters(&span->node_counters, i, values);
 		values[i++] = Int64GetDatumFast(span->startup);
 
-		if (span->parameter_offset != -1
-			&& qbuffer_size > 0
-			&& qbuffer_size > span->parameter_offset)
-			values[i++] = generate_array_parameters(qbuffer, span);
+		if (span->parameter_offset != -1)
+			values[i++] = generate_array_parameters(span);
 		else
 			nulls[i++] = 1;
 
-		if (span->deparse_info_offset != -1 && qbuffer_size > 0 && qbuffer_size > span->deparse_info_offset)
-			values[i++] = CStringGetTextDatum(qbuffer + span->deparse_info_offset);
+		if (span->deparse_info_offset != -1)
+			values[i++] = CStringGetTextDatum(shared_str + span->deparse_info_offset);
 	}
 
 	for (int j = i; j < PG_TRACING_TRACES_COLS; j++)
@@ -233,22 +231,13 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span,
 Datum
 pg_tracing_json_spans(PG_FUNCTION_ARGS)
 {
-	const char *qbuffer;
-	Size		qbuffer_size = 0;
 	JsonContext json_ctx;
 
 	/* Don't trace this */
 	cleanup_tracing();
 
 	LWLockAcquire(pg_tracing_shared_state->lock, LW_SHARED);
-	qbuffer = qtext_load_file(&qbuffer_size);
-	if (qbuffer == NULL)
-	{
-		LWLockRelease(pg_tracing_shared_state->lock);
-		return (Datum) 0;
-	}
-
-	build_json_context(&json_ctx, qbuffer, qbuffer_size, shared_spans);
+	build_json_context(&json_ctx, shared_spans);
 	marshal_spans_to_json(&json_ctx);
 	LWLockRelease(pg_tracing_shared_state->lock);
 
@@ -267,8 +256,6 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	bool		consume;
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	Span	   *span;
-	char	   *qbuffer;
-	Size		qbuffer_size = 0;
 	LWLockMode	lock_mode = LW_SHARED;
 
 	consume = PG_GETARG_BOOL(0);
@@ -295,28 +282,11 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	 */
 	cleanup_tracing();
 
-	qbuffer = qtext_load_file(&qbuffer_size);
-	if (qbuffer == NULL)
-
-		/*
-		 * It's possible to get NULL if file was truncated while we read it.
-		 * Abort in this case.
-		 */
-		return (Datum) 0;
-
 	LWLockAcquire(pg_tracing_shared_state->lock, lock_mode);
-	/* There was a new write, reload the text file */
-	if (pg_tracing_shared_state->extent <= qbuffer_size)
-	{
-		free(qbuffer);
-		qbuffer = qtext_load_file(&qbuffer_size);
-	}
-	Assert(pg_tracing_shared_state->extent <= qbuffer_size);
-
 	for (int i = 0; i < shared_spans->end; i++)
 	{
 		span = shared_spans->spans + i;
-		add_result_span(rsinfo, span, qbuffer, qbuffer_size);
+		add_result_span(rsinfo, span);
 	}
 
 	/* Consume is set, remove spans from the shared buffer */
@@ -324,7 +294,6 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 		drop_all_spans_locked();
 	LWLockRelease(pg_tracing_shared_state->lock);
 
-	free(qbuffer);
 	return (Datum) 0;
 }
 

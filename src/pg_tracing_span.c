@@ -54,6 +54,7 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	span->database_id = MyDatabaseId;
 	span->user_id = GetUserId();
 	span->subxact_count = MyProc->subxidStatus.count;
+	Assert(query_id > 0);
 	span->query_id = query_id;
 	memset(&span->node_counters, 0, sizeof(NodeCounters));
 	memset(&span->plan_counters, 0, sizeof(PlanCounters));
@@ -283,7 +284,7 @@ is_span_top(SpanType span_type)
  * For node span, the name may be pulled from the stat file.
  */
 const char *
-get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
+get_operation_name(const Span * span)
 {
 	const char *span_type_str;
 	const char *operation_str = NULL;
@@ -296,9 +297,9 @@ get_operation_name(const Span * span, const char *qbuffer, Size qbuffer_size)
 	}
 
 	span_type_str = span_type_to_str(span->type);
-	if (span->operation_name_offset != -1 && qbuffer_size > 0
-		&& span->operation_name_offset <= qbuffer_size)
-		operation_str = qbuffer + span->operation_name_offset;
+	/* TODO: Check for maximum offset */
+	if (span->operation_name_offset != -1)
+		operation_str = shared_str + span->operation_name_offset;
 	else
 		return span_type_str;
 

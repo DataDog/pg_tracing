@@ -80,7 +80,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
  Utility query    | COMMIT;          |            |   2
  ProcessUtility   | ProcessUtility   |            |   3
  TransactionBlock | TransactionBlock |            |   1
- Utility query    | BEGIN            |            |   2
+ Utility query    | BEGIN;           |            |   2
  ProcessUtility   | ProcessUtility   |            |   3
  Select query     | SELECT $1        | {1}        |   2
  Planner          | Planner          |            |   3
@@ -297,7 +297,7 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE 
     span_type     |  span_operation  | parameters | lvl 
 ------------------+------------------+------------+-----
  TransactionBlock | TransactionBlock |            |   1
- Utility query    | BEGIN            |            |   2
+ Utility query    | BEGIN;           |            |   2
  ProcessUtility   | ProcessUtility   |            |   3
  Select query     | SELECT $1        | {1}        |   2
  Planner          | Planner          |            |   3
