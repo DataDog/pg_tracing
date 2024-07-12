@@ -120,24 +120,10 @@ static void
 send_spans_to_otel_collector(OtelContext * octx)
 {
 	int			num_spans = 0;
-	char	   *qbuffer;
-	Size		qbuffer_size = 0;
 	JsonContext json_ctx;
 
-	/*
-	 * Do a quick check with a shared lock to see if there are any spans to
-	 * send
-	 */
-	LWLockAcquire(pg_tracing_shared_state->lock, LW_SHARED);
-	if (shared_spans->end == 0)
-	{
-		LWLockRelease(pg_tracing_shared_state->lock);
-		return;
-	}
-	LWLockRelease(pg_tracing_shared_state->lock);
-
 	LWLockAcquire(pg_tracing_shared_state->lock, LW_EXCLUSIVE);
-	/* Recheck for spans to send */
+	/* Check if we have spans to send */
 	if (shared_spans->end == 0)
 	{
 		LWLockRelease(pg_tracing_shared_state->lock);
@@ -145,17 +131,10 @@ send_spans_to_otel_collector(OtelContext * octx)
 	}
 	num_spans = shared_spans->end;
 
-	qbuffer = qtext_load_file(&qbuffer_size);
-	if (qbuffer == NULL)
-	{
-		LWLockRelease(pg_tracing_shared_state->lock);
-		return;
-	}
-
 	/* Do marshalling within marshal memory context */
 	MemoryContextSwitchTo(marshal_mem_ctx);
 	/* Build the json context */
-	build_json_context(&json_ctx, qbuffer, qbuffer_size, shared_spans);
+	build_json_context(&json_ctx, shared_spans);
 	marshal_spans_to_json(&json_ctx);
 	MemoryContextSwitchTo(otel_exporter_mem_ctx);
 
@@ -185,7 +164,6 @@ send_spans_to_otel_collector(OtelContext * octx)
 	 * marshalling
 	 */
 	MemoryContextReset(marshal_mem_ctx);
-	free(qbuffer);
 }
 
 /*
