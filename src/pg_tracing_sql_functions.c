@@ -237,7 +237,7 @@ pg_tracing_json_spans(PG_FUNCTION_ARGS)
 	cleanup_tracing();
 
 	LWLockAcquire(pg_tracing_shared_state->lock, LW_SHARED);
-	build_json_context(&json_ctx, shared_spans);
+	build_json_context(&json_ctx, shared_spans, shared_str, shared_spans->end);
 	marshal_spans_to_json(&json_ctx);
 	LWLockRelease(pg_tracing_shared_state->lock);
 
