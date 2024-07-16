@@ -330,8 +330,10 @@ typedef struct TracedPlanstate
 typedef struct JsonContext
 {
 	StringInfo	str;
+	int			num_spans;
 	int			span_type_count[NUM_SPAN_TYPE];
 	const		Span **span_type_to_spans[NUM_SPAN_TYPE];
+	const char *spans_str;
 }			JsonContext;
 
 typedef struct SpanContext
@@ -439,7 +441,10 @@ extern int
 extern void
 			marshal_spans_to_json(JsonContext * json_ctx);
 extern void
-			build_json_context(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans);
+			build_json_context(JsonContext * json_ctx,
+							   const pgTracingSpans * pgTracingSpans,
+							   const char *spans_str,
+							   int num_spans);
 
 /* pg_tracing_operation_hash.c */
 extern void

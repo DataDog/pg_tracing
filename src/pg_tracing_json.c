@@ -271,11 +271,11 @@ append_span_attributes(const JsonContext * json_ctx, const Span * span)
 		append_attribute_int(str, "query.startup", span->startup, true, true);
 		if (span->parameter_offset != -1)
 			append_array_value_field(str, "query.parameters",
-									 shared_str + span->parameter_offset, span->num_parameters, true);
+									 json_ctx->spans_str + span->parameter_offset, span->num_parameters, true);
 
 		if (span->deparse_info_offset != -1)
 			append_attribute_string(str, "query.deparse_info",
-									shared_str + span->deparse_info_offset, true);
+									json_ctx->spans_str + span->deparse_info_offset, true);
 	}
 
 	if (span->sql_error_code > 0)
@@ -403,11 +403,13 @@ aggregate_span_by_type(JsonContext * json_ctx, const pgTracingSpans * pgTracingS
  * Prepare json context for json marshalling
  */
 void
-build_json_context(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans)
+build_json_context(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans, const char *spans_str, int num_spans)
 {
 	json_ctx->str = makeStringInfo();
 	memset(json_ctx->span_type_count, 0, sizeof(json_ctx->span_type_count));
 	memset(json_ctx->span_type_to_spans, 0, sizeof(json_ctx->span_type_to_spans));
+	json_ctx->spans_str = spans_str;
+	json_ctx->num_spans = num_spans;
 
 	aggregate_span_by_type(json_ctx, pgTracingSpans);
 }
