@@ -1427,6 +1427,43 @@ initialise_span_context(SpanContext * span_context,
 }
 
 /*
+ * Start a tx_block span if we have an explicit BEGIN utility statement
+ */
+static void
+start_tx_block_span(const Node *utilityStmt, SpanContext * span_context)
+{
+	TransactionStmt *stmt;
+
+	if (nested_level > 0)
+		return;
+	if (utilityStmt == NULL || nodeTag(utilityStmt) != T_TransactionStmt)
+		return;
+
+	stmt = (TransactionStmt *) utilityStmt;
+	if (stmt->kind != TRANS_STMT_BEGIN)
+		/* Not an explicit begin, bail out */
+		return;
+
+	/*
+	 * ProcessUtility may start a new transaction with a BEGIN. We want to
+	 * prevent tracing to be cleared if next parse doesn't have the same lxid
+	 * so we udpate the latest_lxid observed.
+	 */
+	update_latest_lxid();
+
+	if (tx_block_span.span_id > 0)
+		/* We already have an ongoing tx_block span */
+		return;
+
+	/* We have an explicit BEGIN, start a transaction block span */
+	begin_span(span_context->traceparent->trace_id, &tx_block_span,
+			   SPAN_TRANSACTION_BLOCK, NULL, span_context->traceparent->parent_id,
+			   span_context->query_id, GetCurrentTransactionStartTimestamp());
+	/* Update traceparent context to use the tx_block span as parent */
+	span_context->traceparent->parent_id = tx_block_span.span_id;
+}
+
+/*
  * Post-parse-analyze hook
  *
  * Tracing can be started here if:
@@ -1500,19 +1537,11 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	initialise_span_context(&span_context, traceparent,
 							NULL, jstate, query, pstate->p_sourcetext);
 
-	if (query->utilityStmt && nodeTag(query->utilityStmt) == T_TransactionStmt)
-	{
-		TransactionStmt *stmt = (TransactionStmt *) query->utilityStmt;
-
-		if (stmt->kind == TRANS_STMT_BEGIN && nested_level == 0)
-		{
-			/* We have an explicit BEGIN, start a transaction block span */
-			begin_span(traceparent->trace_id, &tx_block_span, SPAN_TRANSACTION_BLOCK, NULL,
-					   traceparent->parent_id, span_context.query_id, GetCurrentTransactionStartTimestamp());
-			/* Update traceparent context to use the tx_block span as parent */
-			span_context.traceparent->parent_id = tx_block_span.span_id;
-		}
-	}
+	/*
+	 * With queries using simple protocol, post parse is a good place to start
+	 * tx_block span
+	 */
+	start_tx_block_span(query->utilityStmt, &span_context);
 
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
 					 HOOK_PARSE);
@@ -1999,19 +2028,6 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	within_declare_cursor = nodeTag(pstmt->utilityStmt) == T_DeclareCursorStmt;
 
 	/*
-	 * ProcessUtility may start a new transaction with a BEGIN. We want to
-	 * prevent tracing to be cleared if next parse doesn't have the same lxid
-	 * so we udpate the latest_lxid observed.
-	 */
-	if (nodeTag(pstmt->utilityStmt) == T_TransactionStmt)
-	{
-		TransactionStmt *stmt = (TransactionStmt *) pstmt->utilityStmt;
-
-		if (stmt->kind == TRANS_STMT_BEGIN)
-			update_latest_lxid();
-	}
-
-	/*
 	 * Save track utility value since this value could be modified by a SET
 	 * command
 	 */
@@ -2026,6 +2042,8 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	initialize_trace_level();
 	initialise_span_context(&span_context, traceparent,
 							pstmt, NULL, NULL, queryString);
+	start_tx_block_span(pstmt->utilityStmt, &span_context);
+
 	if (track_utility)
 	{
 		push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(pstmt->commandType),
