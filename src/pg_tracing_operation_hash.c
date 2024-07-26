@@ -75,23 +75,22 @@ lookup_operation_name(const Span * span, const char *txt)
 
 	key.query_id = span->query_id;
 	key.span_type = span->type;
-	Assert(span->query_id != 0);
-
-	if (operation_name_hash == NULL)
+	if (span->query_id == 0)
 	{
-		HASHCTL		info;
-
-		info.keysize = sizeof(operationKey);
-		info.entrysize = sizeof(operationEntry);
-		operation_name_hash = ShmemInitHash("pg_tracing operation name hash", 100,
-											10000, &info, HASH_ELEM | HASH_BLOBS);
+		/*
+		 * We may have a 0 query_id in some cases where PostgreSQL doesn't
+		 * correctly propagate queryId. In those cases, we can't use the hash
+		 * and need to fallback to write text without hash tracking
+		 */
+		offset = pg_tracing_shared_state->extent;
+		append_str_to_shared_str(txt, strlen(txt) + 1);
+		return offset;
 	}
+
 	entry = (operationEntry *) hash_search(operation_name_hash, &key, HASH_ENTER, &found);
 
 	if (found)
-	{
 		return entry->query_offset;
-	}
 
 	offset = pg_tracing_shared_state->extent;
 	append_str_to_shared_str(txt, strlen(txt) + 1);
