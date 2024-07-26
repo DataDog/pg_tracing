@@ -54,7 +54,6 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	span->database_id = MyDatabaseId;
 	span->user_id = GetUserId();
 	span->subxact_count = MyProc->subxidStatus.count;
-	Assert(query_id > 0);
 	span->query_id = query_id;
 	memset(&span->node_counters, 0, sizeof(NodeCounters));
 	memset(&span->plan_counters, 0, sizeof(PlanCounters));
@@ -342,4 +341,14 @@ bool
 traceid_zero(TraceId trace_id)
 {
 	return trace_id.traceid_left == 0 && trace_id.traceid_right == 0;
+}
+
+/*
+* Returns true if trace ids are equals
+*/
+bool
+traceid_equal(TraceId trace_id_1, TraceId trace_id_2)
+{
+	return trace_id_1.traceid_left == trace_id_2.traceid_left &&
+		trace_id_1.traceid_right == trace_id_2.traceid_right;
 }
