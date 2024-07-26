@@ -179,8 +179,8 @@ static Traceparent * guc_tracecontext;
 /* trace context used in nested levels or within executor hooks */
 static Traceparent executor_traceparent;
 
-/* traceparent extracted at the start of a transaction */
-static Traceparent tx_start_traceparent;
+/* traceparent of the current transaction */
+static Traceparent tx_traceparent;
 
 /* Latest local transaction id traced */
 static LocalTransactionId latest_lxid = InvalidLocalTransactionId;
@@ -1037,7 +1037,7 @@ set_trace_id(Traceparent * traceparent)
 		 * statement in the transaction
 		 */
 		if (new_lxid)
-			tx_start_traceparent = *traceparent;
+			tx_traceparent = *traceparent;
 		return;
 	}
 
@@ -1046,10 +1046,10 @@ set_trace_id(Traceparent * traceparent)
 	 * transaction. For that, we check if we're in the same local xid and a
 	 * trace_id was assigned to this transaction.
 	 */
-	if (!new_lxid && !traceid_zero(tx_start_traceparent.trace_id))
+	if (!new_lxid && !traceid_zero(tx_traceparent.trace_id))
 	{
 		/* We're in the same transaction, use the transaction trace context */
-		traceparent->trace_id = tx_start_traceparent.trace_id;
+		traceparent->trace_id = tx_traceparent.trace_id;
 		return;
 	}
 
@@ -1062,7 +1062,7 @@ set_trace_id(Traceparent * traceparent)
 		 * We're at the begining of a new local transaction, save trace
 		 * context
 		 */
-		tx_start_traceparent = *traceparent;
+		tx_traceparent = *traceparent;
 	else
 
 		/*
@@ -1070,7 +1070,7 @@ set_trace_id(Traceparent * traceparent)
 		 * trace_id to reuse it if statements are sampled within the same
 		 * transaction
 		 */
-		tx_start_traceparent.trace_id = traceparent->trace_id;
+		tx_traceparent.trace_id = traceparent->trace_id;
 }
 
 /*
@@ -1200,10 +1200,7 @@ cleanup:
 void
 reset_traceparent(Traceparent * traceparent)
 {
-	traceparent->sampled = 0;
-	traceparent->trace_id.traceid_right = 0;
-	traceparent->trace_id.traceid_left = 0;
-	traceparent->parent_id = 0;
+	memset(traceparent, 0, sizeof(Traceparent));
 }
 
 /*
@@ -1481,7 +1478,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 
 	if (new_lxid)
 		/* We have a new local transaction, reset the tx_start traceparent */
-		reset_traceparent(&tx_start_traceparent);
+		reset_traceparent(&tx_traceparent);
 
 	if (!pg_tracing_mem_ctx->isReset && new_lxid && is_root_level)
 
@@ -1512,14 +1509,14 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	extract_trace_context(traceparent, pstate, query->queryId);
 	new_local_transaction_statement = is_root_level && !new_lxid;
 
-	if (!traceparent->sampled && (new_local_transaction_statement && tx_start_traceparent.sampled))
+	if (!traceparent->sampled && (new_local_transaction_statement && tx_traceparent.sampled))
 	{
 		/*
 		 * We're in the same traced local transaction, use the trace context
 		 * extracted at the start of this transaction
 		 */
-		Assert(!traceid_zero(tx_start_traceparent.trace_id));
-		*traceparent = tx_start_traceparent;
+		Assert(!traceid_zero(tx_traceparent.trace_id));
+		*traceparent = tx_traceparent;
 	}
 
 	if (!traceparent->sampled)
