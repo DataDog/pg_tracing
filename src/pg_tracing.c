@@ -1012,9 +1012,6 @@ process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
 		TimestampTz parent_start = per_level_infos[nested_level].executor_start;
 		uint64		query_id = queryDesc->plannedstmt->queryId;
 
-		if (query_id == 0)
-			query_id = current_query_id;
-
 		process_planstate(traceparent, queryDesc, sql_error_code,
 						  pg_tracing_deparse_plan, parent_id, query_id,
 						  parent_start, parent_end,
@@ -1421,9 +1418,6 @@ initialise_span_context(SpanContext * span_context,
 		span_context->query_id = pstmt->queryId;
 	else
 		span_context->query_id = query->queryId;
-
-	if (span_context->query_id == 0)
-		span_context->query_id = current_query_id;
 }
 
 /*
@@ -2097,9 +2091,6 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 
 		process_utility_span->node_counters.rows = qc->nprocessed;
 	}
-
-	if (nested_level == 0)
-		current_query_id = pstmt->queryId;
 
 	/* End ProcessUtility span and store it */
 	pop_active_span(&span_end_time);
