@@ -62,7 +62,15 @@ SELECT span_id AS span_commit,
             AND span_operation='TransactionCommit' \gset
 -- Transaction block should end after TransactionCommit span
 SELECT :span_tx_block_end >= :span_commit_end;
-
-
 CALL clean_spans();
+
+-- Test with transaction block created with sample rate
+SET pg_tracing.sample_rate = 1.0;
+BEGIN;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT 1;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000002-01'*/ SELECT 2;
+COMMIT;
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000001';
+
 CALL reset_settings();
+CALL clean_spans();
