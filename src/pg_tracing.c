@@ -1745,6 +1745,13 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		return;
 	}
 
+	/*
+	 * Temporary workaround around a known issue where query id is not
+	 * propagated with extended protocol. See
+	 * https://www.postgresql.org/message-id/flat/CA+427g8DiW3aZ6pOpVgkPbqK97ouBdf18VLiHFesea2jUk3XoQ@mail.gmail.com
+	 */
+	pgstat_report_query_id(queryDesc->plannedstmt->queryId, false);
+
 	/* ExecutorRun is sampled */
 	initialize_trace_level();
 	initialise_span_context(&span_context, traceparent,
@@ -2013,6 +2020,13 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	}
 
 	/* Statement is sampled */
+
+	/*
+	 * Temporary workaround around a known issue where query id is not
+	 * propagated with extended protocol. See
+	 * https://www.postgresql.org/message-id/flat/CA+427g8DiW3aZ6pOpVgkPbqK97ouBdf18VLiHFesea2jUk3XoQ@mail.gmail.com
+	 */
+	pgstat_report_query_id(pstmt->queryId, false);
 
 	/*
 	 * Keep track if we're in a declare cursor as we want to disable query
