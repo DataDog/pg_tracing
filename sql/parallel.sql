@@ -15,8 +15,10 @@ set local pg_tracing.trace_parallel_workers = false;
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ select 4 from pg_class limit 1;
 commit;
 
--- Get root top span id
-SELECT span_id as root_span_id from pg_tracing_peek_spans where span_type='Select query' and trace_id='00000000000000000000000000000001' and parent_id='0000000000000001' \gset
+-- get tx block
+select span_id as tx_block_id from pg_tracing_peek_spans where span_type='TransactionBlock' and trace_id='00000000000000000000000000000001' and parent_id='0000000000000001' \gset
+-- get root top span id
+select span_id as root_span_id from pg_tracing_peek_spans where span_type='Select query' and trace_id='00000000000000000000000000000001' and parent_id=:'tx_block_id' \gset
 -- Get executor top span id
 SELECT span_id as executor_span_id from pg_tracing_peek_spans where span_operation='ExecutorRun' and trace_id='00000000000000000000000000000001' and parent_id=:'root_span_id' \gset
 

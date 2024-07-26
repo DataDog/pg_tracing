@@ -228,21 +228,22 @@ BEGIN;
 
 COMMIT;
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000002';
-  span_type   |  span_operation   | parameters | lvl 
---------------+-------------------+------------+-----
- Select query | SELECT $1         | {1}        |   1
- Planner      | Planner           |            |   2
- ExecutorRun  | ExecutorRun       |            |   2
- Result       | Result            |            |   3
- Select query | SELECT $1, $2     | {1,2}      |   1
- Planner      | Planner           |            |   2
- ExecutorRun  | ExecutorRun       |            |   2
- Result       | Result            |            |   3
- Select query | SELECT $1, $2, $3 | {1,2,3}    |   1
- Planner      | Planner           |            |   2
- ExecutorRun  | ExecutorRun       |            |   2
- Result       | Result            |            |   3
-(12 rows)
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   1
+ Select query     | SELECT $1         | {1}        |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | SELECT $1, $2     | {1,2}      |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | SELECT $1, $2, $3 | {1,2,3}    |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+(13 rows)
 
 -- Test tracing only subset of individual statements with extended protocol
 BEGIN;
@@ -272,17 +273,18 @@ SELECT $1 \bind 1 \g
 
 COMMIT;
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000003';
-  span_type   |  span_operation   | parameters | lvl 
---------------+-------------------+------------+-----
- Select query | SELECT $1         | {1}        |   1
- Planner      | Planner           |            |   2
- ExecutorRun  | ExecutorRun       |            |   2
- Result       | Result            |            |   3
- Select query | SELECT $1, $2, $3 | {1,2,3}    |   1
- Planner      | Planner           |            |   2
- ExecutorRun  | ExecutorRun       |            |   2
- Result       | Result            |            |   3
-(8 rows)
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   1
+ Select query     | SELECT $1         | {1}        |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | SELECT $1, $2, $3 | {1,2,3}    |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+(9 rows)
 
 -- Test tracing the whole transaction with extended protocol with BEGIN sent through extended protocol
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ BEGIN \bind \g

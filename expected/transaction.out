@@ -86,17 +86,18 @@ SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
 (1 row)
 
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans;
-  span_type   | span_operation | lvl 
---------------+----------------+-----
- Select query | SELECT $1;     |   1
- Planner      | Planner        |   2
- ExecutorRun  | ExecutorRun    |   2
- Result       | Result         |   3
- Select query | SELECT $1;     |   1
- Planner      | Planner        |   2
- ExecutorRun  | ExecutorRun    |   2
- Result       | Result         |   3
-(8 rows)
+    span_type     |  span_operation  | lvl 
+------------------+------------------+-----
+ TransactionBlock | TransactionBlock |   1
+ Select query     | SELECT $1;       |   2
+ Planner          | Planner          |   3
+ ExecutorRun      | ExecutorRun      |   3
+ Result           | Result           |   4
+ Select query     | SELECT $1;       |   2
+ Planner          | Planner          |   3
+ ExecutorRun      | ExecutorRun      |   3
+ Result           | Result           |   4
+(9 rows)
 
 CALL clean_spans();
 -- Test with a 0 parent_id in the middle of a transaction
@@ -134,17 +135,18 @@ SELECT count(distinct(trace_id)) = 1, count(distinct(parent_id)) = 1 FROM peek_o
 (1 row)
 
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans;
-  span_type   | span_operation | lvl 
---------------+----------------+-----
- Select query | SELECT $1;     |   1
- Planner      | Planner        |   2
- ExecutorRun  | ExecutorRun    |   2
- Result       | Result         |   3
- Select query | SELECT $1;     |   1
- Planner      | Planner        |   2
- ExecutorRun  | ExecutorRun    |   2
- Result       | Result         |   3
-(8 rows)
+    span_type     |  span_operation  | lvl 
+------------------+------------------+-----
+ TransactionBlock | TransactionBlock |   1
+ Select query     | SELECT $1;       |   2
+ Planner          | Planner          |   3
+ ExecutorRun      | ExecutorRun      |   3
+ Result           | Result           |   4
+ Select query     | SELECT $1;       |   2
+ Planner          | Planner          |   3
+ ExecutorRun      | ExecutorRun      |   3
+ Result           | Result           |   4
+(9 rows)
 
 CALL clean_spans();
 -- Test modification within transaction block

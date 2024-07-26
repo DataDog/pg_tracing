@@ -1442,23 +1442,37 @@ initialise_span_context(SpanContext * span_context,
 		span_context->query_id = query->queryId;
 }
 
+static bool
+should_start_tx_block(const Node *utilityStmt)
+{
+	TransactionStmt *stmt;
+    if (GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
+        /* There's an ongoing tx block, we can create the matching span */
+        return true;
+    if (utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt) {
+        stmt = (TransactionStmt *) utilityStmt;
+        /* If we have an explicit BEGIN statement, start a tx block */
+        return (stmt->kind == TRANS_STMT_BEGIN);
+    }
+    return false;
+}
+
 /*
  * Start a tx_block span if we have an explicit BEGIN utility statement
  */
 static void
 start_tx_block_span(const Node *utilityStmt, SpanContext * span_context)
 {
-	TransactionStmt *stmt;
-
 	if (nested_level > 0)
 		return;
-	if (utilityStmt == NULL || nodeTag(utilityStmt) != T_TransactionStmt)
+
+	if (tx_block_span.span_id > 0)
+		/* We already have an ongoing tx_block span */
 		return;
 
-	stmt = (TransactionStmt *) utilityStmt;
-	if (stmt->kind != TRANS_STMT_BEGIN)
-		/* Not an explicit begin, bail out */
-		return;
+    if (!should_start_tx_block(utilityStmt))
+        /* Not a candidate to start tx block */
+        return;
 
 	/*
 	 * ProcessUtility may start a new transaction with a BEGIN. We want to
@@ -1466,10 +1480,6 @@ start_tx_block_span(const Node *utilityStmt, SpanContext * span_context)
 	 * so we udpate the latest_lxid observed.
 	 */
 	update_latest_lxid();
-
-	if (tx_block_span.span_id > 0)
-		/* We already have an ongoing tx_block span */
-		return;
 
 	/* We have an explicit BEGIN, start a transaction block span */
 	begin_span(span_context->traceparent->trace_id, &tx_block_span,
