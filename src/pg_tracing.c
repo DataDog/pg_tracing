@@ -1055,6 +1055,8 @@ set_trace_id(Traceparent * traceparent)
 
 	traceparent->trace_id.traceid_left = pg_prng_int64(&pg_global_prng_state);
 	traceparent->trace_id.traceid_right = pg_prng_int64(&pg_global_prng_state);
+	/* Tag it as generated */
+	traceparent->generated = true;
 
 	if (new_lxid)
 

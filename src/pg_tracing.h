@@ -281,6 +281,7 @@ typedef struct Traceparent
 	TraceId		trace_id;		/* Id of the trace */
 	uint64		parent_id;		/* Span id of the parent */
 	int			sampled;		/* Is current statement sampled? */
+	bool		generated;		/* Was it generated? */
 }			Traceparent;
 
 /*
