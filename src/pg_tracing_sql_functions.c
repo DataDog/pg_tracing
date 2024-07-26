@@ -294,7 +294,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 		drop_all_spans_locked();
 	LWLockRelease(pg_tracing_shared_state->lock);
 
-	return (Datum) 0;
+	PG_RETURN_VOID();
 }
 
 /*
