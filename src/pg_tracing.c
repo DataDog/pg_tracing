@@ -1389,6 +1389,28 @@ end_nested_level(const TimestampTz *input_span_end_time)
 	}
 }
 
+/*
+ * Adjust the tx_traceparent if the latest captured traceparent is more
+ * relevant, i.e. provided from upstream and not automatically generated.
+ */
+static void
+adjust_tx_traceparent(const Traceparent * traceparent)
+{
+	if (traceid_equal(traceparent->trace_id, tx_block_span.trace_id))
+		return;
+	if (!tx_traceparent.generated || traceparent->generated)
+		return;
+
+	/*
+	 * We have a generated tx_traceparent and a provided traceparent, give
+	 * priority to the provided traceparent and amend the existing spans
+	 */
+	tx_block_span.trace_id = traceparent->trace_id;
+	tx_traceparent.trace_id = traceparent->trace_id;
+	for (int i = 0; i < current_trace_spans->end; i++)
+		current_trace_spans->spans[i].trace_id = traceparent->trace_id;
+}
+
 static void
 initialise_span_context(SpanContext * span_context,
 						Traceparent * traceparent,
@@ -1402,6 +1424,7 @@ initialise_span_context(SpanContext * span_context,
 	span_context->traceparent = traceparent;
 	if (!traceid_zero(tx_block_span.trace_id) && nested_level == 0)
 	{
+		adjust_tx_traceparent(span_context->traceparent);
 		/* We have an ongoing transaction block. Use it as parent for level 0 */
 		span_context->traceparent->parent_id = tx_block_span.span_id;
 	}
