@@ -399,6 +399,7 @@ extern const char *get_span_type(const Span * span);
 extern const char *get_operation_name(const Span * span);
 extern void adjust_file_offset(Span * span, Size file_position);
 extern bool traceid_zero(TraceId trace_id);
+extern bool traceid_equal(TraceId trace_id_1, TraceId trace_id_2);
 extern const char *span_type_to_str(SpanType span_type);
 
 
