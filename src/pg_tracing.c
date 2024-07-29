@@ -309,7 +309,7 @@ _PG_init(void)
 							NULL);
 
 	DefineCustomIntVariable("pg_tracing.max_parameter_size",
-							"Maximum size of parameters. -1 to disable parameter in top span.",
+							"Maximum size of parameters. -1 to disable parameters in span metadata.",
 							NULL,
 							&pg_tracing_max_parameter_str,
 							1024,
@@ -322,7 +322,7 @@ _PG_init(void)
 							NULL);
 
 	DefineCustomIntVariable("pg_tracing.shared_str_size",
-							"Size of the allocated string area used for spans' strings (operation_name, parameters, deparse infos...).",
+							"Size of the allocated area in the shared memory used for spans' strings (operation_name, parameters, deparse infos...).",
 							NULL,
 							&pg_tracing_shared_str_size,
 							5242880,
@@ -900,7 +900,7 @@ store_span(const Span * span)
 }
 
 /*
- * Drop all spans from the shared buffer and truncate the query file.
+ * Drop all spans from the shared buffer and reset shared str position.
  * Exclusive lock on pg_tracing->lock should be acquired beforehand.
  */
 void
@@ -914,7 +914,6 @@ drop_all_spans_locked(void)
 	reset_operation_hash();
 	/* Update last consume ts */
 	pg_tracing_shared_state->stats.last_consume = GetCurrentTimestamp();
-	pg_truncate(PG_TRACING_TEXT_FILE, 0);
 }
 
 /*

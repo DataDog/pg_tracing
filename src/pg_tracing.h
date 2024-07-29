@@ -16,7 +16,6 @@
 #include "version_compat.h"
 
 /* Location of external text file */
-#define PG_TRACING_TEXT_FILE	PG_STAT_TMP_DIR "/pg_tracing.stat"
 #define INT64_HEX_FORMAT "%016" INT64_MODIFIER "x"
 
 /*
@@ -256,7 +255,7 @@ typedef struct pgTracingStats
 typedef struct pgTracingSharedState
 {
 	LWLock	   *lock;			/* protects shared spans, shared state and
-								 * query file */
+								 * shared str */
 	Size		extent;			/* current extent of shared str */
 	pgTracingStats stats;		/* global statistics for pg_tracing */
 }			pgTracingSharedState;

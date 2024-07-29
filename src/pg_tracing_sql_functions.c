@@ -276,7 +276,7 @@ pg_tracing_spans(PG_FUNCTION_ARGS)
 	/*
 	 * If this query was sampled and we're consuming tracing_spans buffer, the
 	 * spans will target a query string that doesn't exist anymore in the
-	 * query file. Better abort the sampling and clean ongoing traces. Since
+	 * shared str. Better abort the sampling and clean ongoing traces. Since
 	 * this will be called within an ExecutorRun, we will need to check for
 	 * current_trace_spans at the end of the ExecutorRun hook.
 	 */

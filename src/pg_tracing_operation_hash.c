@@ -24,7 +24,7 @@ typedef struct operationKey
 typedef struct operationEntry
 {
 	operationKey key;			/* hash key of entry - MUST BE FIRST */
-	Size		query_offset;	/* query text offset in external file */
+	Size		query_offset;	/* query text offset in shared str */
 }			operationEntry;
 
 /*
