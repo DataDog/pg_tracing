@@ -2191,6 +2191,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 				}
 				break;
 			}
+		case XACT_EVENT_ABORT:
 		case XACT_EVENT_COMMIT:
 			current_ts = GetCurrentTimestamp();
 			end_nested_level(&current_ts);
@@ -2217,13 +2218,6 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_COMMIT:
 			end_nested_level(NULL);
 			end_tracing();
-			break;
-		case XACT_EVENT_ABORT:
-			/* TODO: Create an abort span */
-			end_nested_level(NULL);
-			end_tracing();
-			reset_span(&commit_span);
-			reset_span(&tx_block_span);
 			break;
 		default:
 			break;
