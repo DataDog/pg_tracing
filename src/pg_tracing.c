@@ -1446,15 +1446,17 @@ static bool
 should_start_tx_block(const Node *utilityStmt)
 {
 	TransactionStmt *stmt;
-    if (GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
-        /* There's an ongoing tx block, we can create the matching span */
-        return true;
-    if (utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt) {
-        stmt = (TransactionStmt *) utilityStmt;
-        /* If we have an explicit BEGIN statement, start a tx block */
-        return (stmt->kind == TRANS_STMT_BEGIN);
-    }
-    return false;
+
+	if (GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
+		/* There's an ongoing tx block, we can create the matching span */
+		return true;
+	if (utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt)
+	{
+		stmt = (TransactionStmt *) utilityStmt;
+		/* If we have an explicit BEGIN statement, start a tx block */
+		return (stmt->kind == TRANS_STMT_BEGIN);
+	}
+	return false;
 }
 
 /*
@@ -1470,9 +1472,9 @@ start_tx_block_span(const Node *utilityStmt, SpanContext * span_context)
 		/* We already have an ongoing tx_block span */
 		return;
 
-    if (!should_start_tx_block(utilityStmt))
-        /* Not a candidate to start tx block */
-        return;
+	if (!should_start_tx_block(utilityStmt))
+		/* Not a candidate to start tx block */
+		return;
 
 	/*
 	 * ProcessUtility may start a new transaction with a BEGIN. We want to
