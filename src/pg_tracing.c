@@ -128,6 +128,8 @@ static char *pg_tracing_filter_query_ids = NULL;	/* only sample query
 													 * matching query ids */
 static char *pg_tracing_otel_endpoint = NULL;	/* Otel collector to send
 												 * spans to */
+char	   *pg_tracing_otel_service_name = NULL;	/* Service name set in
+													 * otel traces */
 static int	pg_tracing_otel_naptime;	/* Delay between upload of spans to
 										 * otel collector */
 static int	pg_tracing_otel_connect_timeout_ms; /* Connect timeout to the otel
@@ -481,6 +483,17 @@ _PG_init(void)
 							   "If unset, no background worker to export to otel is created.",
 							   &pg_tracing_otel_endpoint,
 							   NULL,
+							   PGC_POSTMASTER,
+							   0,
+							   NULL,
+							   NULL,
+							   NULL);
+
+	DefineCustomStringVariable("pg_tracing.otel_service_name",
+							   "Service Name to set in traces sent to otel.",
+							   NULL,
+							   &pg_tracing_otel_service_name,
+							   "PostgreSQL_Server",
 							   PGC_POSTMASTER,
 							   0,
 							   NULL,

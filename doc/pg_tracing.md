@@ -201,6 +201,10 @@ URL of the otel collector to send spans to. Example: 'http://127.0.0.1:4318/v1/t
 
 Interval in milliseconds between upload of spans to the otel collector. This parameter can only be set at server start.
 
+### pg_tracing.otel_service_name (string)
+
+Service name to set in traces sent to otel collector. This parameter can only be set at server start.
+
 ### pg_tracing.otel_connect_timeout_ms (integer)
 
 Maximum time in milliseconds to connect to the otel collector. This includes DNS resolution and protocol handshake. This parameter can only be set at server start.
