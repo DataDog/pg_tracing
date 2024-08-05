@@ -132,13 +132,12 @@ append_attribute_double(StringInfo str, const char *key, double value, bool skip
 }
 
 static void
-append_resource(StringInfo str)
+append_resource(JsonContext * json_ctx)
 {
-	appendStringInfo(str, "\"resource\":");
-	appendStringInfo(str, "{\"attributes\": [");
-	/* TODO: Make the service name configurable */
-	append_attribute_string(str, "service.name", "PostgreSQL_Server", false);
-	appendStringInfo(str, "]}");
+	appendStringInfo(json_ctx->str, "\"resource\":");
+	appendStringInfo(json_ctx->str, "{\"attributes\": [");
+	append_attribute_string(json_ctx->str, "service.name", json_ctx->service_name, false);
+	appendStringInfo(json_ctx->str, "]}");
 }
 
 static void
@@ -410,6 +409,7 @@ build_json_context(JsonContext * json_ctx, const pgTracingSpans * pgTracingSpans
 	memset(json_ctx->span_type_to_spans, 0, sizeof(json_ctx->span_type_to_spans));
 	json_ctx->spans_str = spans_str;
 	json_ctx->num_spans = num_spans;
+	json_ctx->service_name = pg_tracing_otel_service_name;
 
 	aggregate_span_by_type(json_ctx, pgTracingSpans);
 }
@@ -421,7 +421,7 @@ void
 marshal_spans_to_json(JsonContext * json_ctx)
 {
 	appendStringInfo(json_ctx->str, "{\"resourceSpans\": [{");
-	append_resource(json_ctx->str);
+	append_resource(json_ctx);
 	appendStringInfoChar(json_ctx->str, ',');
 	append_scope_spans_array(json_ctx);
 	appendStringInfo(json_ctx->str, "}]}");

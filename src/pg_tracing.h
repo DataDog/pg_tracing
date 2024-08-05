@@ -334,6 +334,7 @@ typedef struct JsonContext
 	int			span_type_count[NUM_SPAN_TYPE];
 	const		Span **span_type_to_spans[NUM_SPAN_TYPE];
 	const char *spans_str;
+	const char *service_name;
 }			JsonContext;
 
 typedef struct SpanContext
@@ -421,6 +422,7 @@ extern pgTracingSharedState * pg_tracing_shared_state;
 extern pgTracingSpans * shared_spans;
 extern char *shared_str;
 extern int	nested_level;
+extern char *pg_tracing_otel_service_name;
 
 extern void
 			store_span(const Span * span);

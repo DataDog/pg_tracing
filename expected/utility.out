@@ -73,7 +73,8 @@ CREATE VIEW peek_ordered_spans AS
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int, status jsonb);
 CREATE VIEW peek_json_spans AS
-SELECT * FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_array(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[*].spans[*]')));
+SELECT *, jsonb_path_query_first(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].resource.attributes[0].value.stringValue') as service_name
+    FROM jsonb_populate_recordset(null::span_json, (SELECT jsonb_path_query_array(pg_tracing_json_spans()::jsonb, '$.resourceSpans[0].scopeSpans[*].spans[*]')));
 CREATE FUNCTION get_int_attribute(attributes jsonb, keyvalue text) returns bigint
     LANGUAGE SQL
     IMMUTABLE
@@ -97,10 +98,10 @@ CREATE FUNCTION get_string_array_attribute(attributes jsonb, keyvalue text) retu
                                        '$ ? (@.key == $key)', jsonb_build_object('key', keyvalue)),
                                        '$.value.arrayValue.values[*].stringValue[*]'))), '{}'));
 -- View spans generated from json with their nested level
--- TODO: There's probably a way to make this cleaner...
+-- TODO: There's probably a better way to do this...
 CREATE VIEW peek_json_spans_with_level AS
 WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, span_end,
-    kind, query_id, pid, userid, dbid, sql_error_code, subxact_count,
+    kind, service_name, query_id, pid, userid, dbid, sql_error_code, subxact_count,
     status_code, status_message,
     plan_startup_cost, plan_total_cost, plan_rows, plan_width,
     rows, nloops,
@@ -113,6 +114,7 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
     startup, parameters, deparse_info,
     lvl) AS (
         SELECT p."traceId", p."parentSpanId", p."spanId", p."name", p."startTimeUnixNano", p."endTimeUnixNano", p.kind,
+            p.service_name,
             get_int_attribute(p.attributes, 'query.query_id'),
             get_int_attribute(p.attributes, 'backend.pid'),
             get_int_attribute(p.attributes, 'backend.user_id'),
@@ -155,6 +157,7 @@ WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, name, span_start, 
         FROM peek_json_spans p where not "parentSpanId"=ANY(SELECT span_id from pg_tracing_peek_spans)
       UNION ALL
         SELECT s."traceId", s."parentSpanId", s."spanId", s."name", s."startTimeUnixNano", s."endTimeUnixNano", s.kind,
+            s.service_name,
             get_int_attribute(s.attributes, 'query.query_id'),
             get_int_attribute(s.attributes, 'backend.pid'),
             get_int_attribute(s.attributes, 'backend.user_id'),

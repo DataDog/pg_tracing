@@ -34,6 +34,12 @@ CALL clean_spans();
 -- Test parameters and deparse_info
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT * FROM pg_tracing_test WHERE a=1;
 SELECT trace_id, name, parameters, deparse_info, lvl FROM peek_ordered_json_spans;
+CALL clean_spans();
+
+-- Test service name
+/*traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT * FROM pg_tracing_test WHERE a=1;
+SELECT trace_id, name, service_name FROM peek_ordered_json_spans;
 
 -- Cleanup
+CALL reset_settings();
 CALL clean_spans();
