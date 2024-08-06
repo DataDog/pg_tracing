@@ -142,19 +142,25 @@ generate_array_parameters(const Span * span)
 {
 	Datum	   *entries;
 	ArrayType  *array;
+	int			current_entry = 0;
 	const char *cursor = shared_str + span->parameter_offset;
+	int			total_parameters = span->num_parameters + span->num_truncated_parameters;
 
-	entries = (Datum *) palloc(sizeof(Datum) * span->num_parameters);
-	for (int j = 0; j < span->num_parameters; j++)
+	entries = (Datum *) palloc(sizeof(Datum) * total_parameters);
+	for (int i = 0; i < span->num_parameters; i++)
 	{
 		size_t		len_text = strlen(cursor);
 
-		entries[j] = PointerGetDatum(cstring_to_text_with_len(cursor, len_text));
+		entries[current_entry++] = PointerGetDatum(cstring_to_text_with_len(cursor, len_text));
 		cursor += len_text + 1;
+	}
+	for (int i = 0; i < span->num_truncated_parameters; i++)
+	{
+		entries[current_entry++] = PointerGetDatum(cstring_to_text_with_len("...", 3));
 	}
 
 	/* Use construct_array for PG15 compatibility */
-	array = construct_array(entries, span->num_parameters, TEXTOID,
+	array = construct_array(entries, total_parameters, TEXTOID,
 							-1, false, TYPALIGN_INT);
 	return PointerGetDatum(array);
 }

@@ -27,11 +27,11 @@ OBJS = \
 	src/pg_tracing_strinfo.o \
 	src/version_compat.o
 
-REGRESSCHECKS = setup utility select insert trigger cursor json transaction
+REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction
 ifeq ($(PG_VERSION),15)
 REGRESSCHECKS += trigger_15
 else
-REGRESSCHECKS += extended trigger_16
+REGRESSCHECKS += extended trigger_16 parameters_16
 endif
 REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
 				 planstate_projectset planstate_subplans planstate_union \

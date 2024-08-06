@@ -46,6 +46,7 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	span->worker_id = -1;
 	span->operation_name_offset = -1;
 	span->num_parameters = 0;
+	span->num_truncated_parameters = 0;
 	span->parameter_offset = -1;
 	span->deparse_info_offset = -1;
 	span->sql_error_code = 0;

@@ -189,10 +189,6 @@ Controls the fraction of statements that generate spans. Statements with traceco
 
 Controls the fraction of statements with SQLCommenter tracecontext and an enabled sampled flag that will generate spans. The default value is 1.
 
-### pg_tracing.export_parameters (boolean)
-
-Controls whether the query's parameters should be exported in spans metadata. The default value is `on`.
-
 ### pg_tracing.otel_endpoint (string)
 
 URL of the otel collector to send spans to. Example: 'http://127.0.0.1:4318/v1/traces'. This parameter can only be set at server start. The default value is NULL.

@@ -218,10 +218,12 @@ comp_location(const void *a, const void *b)
  * Parameters are put in the trace_txt as null terminated strings.
  */
 const char *
-normalise_query_parameters(const JumbleState *jstate, const char *query,
+normalise_query_parameters(const SpanContext * span_context, Span * span,
 						   int query_loc, int *query_len_p,
-						   StringInfo trace_text, int *num_parameters)
+						   StringInfo parameters_buffer)
 {
+	const char *query = span_context->query_text;
+	const JumbleState *jstate = span_context->jstate;
 	char	   *norm_query;
 	int			query_len = *query_len_p;
 	int			len_parameter;
@@ -232,7 +234,12 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 	core_yy_extra_type yyextra;
 	core_YYSTYPE yylval;
 	YYLTYPE		yylloc;
+	int			bytes_written;
 	int			current_loc = 0;
+	bool		full_buffer = false;
+
+	if (parameters_buffer)
+		span->parameter_offset = parameters_buffer->len;
 
 	if (query_loc == -1)
 	{
@@ -271,6 +278,8 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 		int			loc = locs[current_loc].location;
 		int			tok;
 
+		bytes_written = 0;
+
 		loc -= query_loc;
 
 		tok = core_yylex(&yylval, &yylloc, yyscanner);
@@ -303,8 +312,7 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 				 * from foo where bar = -2" will have identical normalized
 				 * query strings.
 				 */
-				if (trace_text)
-					appendStringInfoChar(trace_text, '-');
+				bytes_written = append_str_to_parameters_buffer("-", 1, false);
 				tok = core_yylex(&yylval, &yylloc, yyscanner);
 				if (tok == 0)
 					break;		/* out of inner for-loop */
@@ -316,13 +324,22 @@ normalise_query_parameters(const JumbleState *jstate, const char *query,
 			n_quer_loc += sprintf(norm_query + n_quer_loc, "$%d",
 								  current_loc + 1 + jstate->highest_extern_param_id);
 
-			if (trace_text)
+			if (parameters_buffer)
 			{
-				/* Add paramater's value to the trace_text */
 				len_parameter = strlen(yyextra.scanbuf + yylloc);
-				appendBinaryStringInfo(trace_text, yyextra.scanbuf + yylloc, len_parameter);
-				appendStringInfoChar(trace_text, '\0');
-				*num_parameters += 1;
+
+
+				/*
+				 * We may have added a - char before, add this to the
+				 * bytes_written so it is counted as a parameter
+				 */
+				bytes_written += append_str_to_parameters_buffer(yyextra.scanbuf + yylloc, len_parameter, true);
+				if (bytes_written == 0)
+					/* Nothing was written, the parameter was fully truncated */
+					span->num_truncated_parameters++;
+				else
+					/* We have at least a partial parameter */
+					span->num_parameters++;
 			}
 
 			current_loc++;
