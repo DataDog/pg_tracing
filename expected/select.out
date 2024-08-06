@@ -172,24 +172,6 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  Result         |            |   3
 (4 rows)
 
--- Check that parameters are not exported when disabled
-SET pg_tracing.export_parameters=false;
-/*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000d-000000000000000d-01'*/ select 1, 2, 3;
- ?column? | ?column? | ?column? 
-----------+----------+----------
-        1 |        2 |        3
-(1 row)
-
-SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000d';
-   span_operation   | parameters | lvl 
---------------------+------------+-----
- select $1, $2, $3; |            |   1
- Planner            |            |   2
- ExecutorRun        |            |   2
- Result             |            |   3
-(4 rows)
-
-SET pg_tracing.export_parameters=true;
 -- Check multi statement query
 CALL clean_spans();
 SET pg_tracing.sample_rate = 1.0;

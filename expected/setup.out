@@ -16,6 +16,7 @@ AS $$
     SET pg_tracing.sample_rate TO DEFAULT;
     SET pg_tracing.caller_sample_rate TO DEFAULT;
     SET pg_tracing.track_utility TO DEFAULT;
+    SET pg_tracing.max_parameter_size TO DEFAULT;
 $$;
 CREATE OR REPLACE PROCEDURE reset_pg_tracing_test_table() AS $$
 BEGIN

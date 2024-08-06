@@ -206,6 +206,9 @@ typedef struct Span
 	uint8		subxact_count;	/* Active count of backend's subtransaction */
 
 	uint16		num_parameters; /* Number of parameters */
+	uint16		num_truncated_parameters;	/* Number of fully truncated
+											 * parameters due to reaching
+											 * max_parameter_size */
 
 	int			be_pid;			/* Pid of the backend process */
 	Oid			user_id;		/* User ID when the span was created */
@@ -213,13 +216,13 @@ typedef struct Span
 	int			worker_id;		/* Worker id */
 
 	/*
-	 * We store variable size metadata in an external file. Those represent
-	 * the position of NULL terminated strings in the file. Set to -1 if
+	 * We store variable size metadata in shared memory. Those represent the
+	 * position of NULL terminated strings in the shared_str. Set to -1 if
 	 * unused.
 	 */
-	Size		operation_name_offset;	/* operation represented by the span */
-	Size		parameter_offset;	/* query parameters values */
-	Size		deparse_info_offset;	/* info from deparsed plan */
+	int			operation_name_offset;	/* operation represented by the span */
+	int			parameter_offset;	/* query parameters values */
+	int			deparse_info_offset;	/* info from deparsed plan */
 
 	PlanCounters plan_counters; /* Counters with plan costs */
 	NodeCounters node_counters; /* Counters with node costs (jit, wal,
@@ -348,7 +351,7 @@ typedef struct SpanContext
 	const JumbleState *jstate;
 	const char *query_text;
 	uint64		query_id;
-	bool		export_parameters;
+	int			max_parameter_size;
 }			SpanContext;
 
 /* pg_tracing_explain.c */
@@ -382,9 +385,9 @@ extern TimestampTz
 			get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end);
 
 /* pg_tracing_query_process.c */
-extern const char *normalise_query_parameters(const JumbleState *jstate, const char *query,
-											  int query_loc, int *query_len_p, StringInfo trace_text,
-											  int *num_parameters);
+extern const char *normalise_query_parameters(const SpanContext * span_context, Span * span,
+											  int query_loc, int *query_len_p,
+											  StringInfo parameters_buffer);
 extern void extract_trace_context_from_query(Traceparent * traceparent, const char *query);
 extern ParseTraceparentErr parse_trace_context(Traceparent * traceparent, const char *trace_context_str, int trace_context_len);
 extern char *parse_code_to_err(ParseTraceparentErr err);
@@ -434,7 +437,9 @@ extern void
 			pg_tracing_shmem_startup(void);
 extern void reset_traceparent(Traceparent * traceparent);
 extern Size
-			append_str_to_shared_str(const char *txt, int str_len);
+			append_str_to_shared_str(const char *str, int str_len);
+extern int
+			append_str_to_parameters_buffer(const char *str, int str_len, bool add_null);
 
 /* pg_tracing_strinfo.c */
 extern int

@@ -169,11 +169,9 @@ begin_active_span(const SpanContext * span_context, Span * span,
 	if (span_context->jstate && span_context->jstate->clocations_count > 0 && query != NULL)
 	{
 		/* jstate is available, normalise query and extract parameters' values */
-		int			num_parameters = 0;
-		int			parameter_offset = span_context->parameters_buffer->len;
 		StringInfo	parameters_buffer = NULL;
 
-		if (span_context->export_parameters)
+		if (span_context->max_parameter_size)
 
 			/*
 			 * We want parameters' value, propagate parameters_buffer
@@ -182,12 +180,9 @@ begin_active_span(const SpanContext * span_context, Span * span,
 			parameters_buffer = span_context->parameters_buffer;
 
 		query_len = query->stmt_len;
-		normalised_query = normalise_query_parameters(span_context->jstate, span_context->query_text,
+		normalised_query = normalise_query_parameters(span_context, span,
 													  query->stmt_location, &query_len,
-													  parameters_buffer, &num_parameters);
-		span->num_parameters = num_parameters;
-		if (num_parameters > 0 && span_context->export_parameters)
-			span->parameter_offset = parameter_offset;
+													  parameters_buffer);
 	}
 	else
 	{

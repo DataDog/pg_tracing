@@ -102,8 +102,8 @@ typedef struct PerLevelInfos
 /* GUC variables */
 static int	pg_tracing_max_span;	/* Maximum number of spans to store */
 static int	pg_tracing_shared_str_size; /* Size of the shared str area */
-static int	pg_tracing_max_parameter_str;	/* Maximum number of spans to
-											 * store */
+static int	pg_tracing_max_parameter_size;	/* Maximum size of the parameter
+											 * str shared across a transaction */
 static bool pg_tracing_planstate_spans = true;	/* Generate spans from the
 												 * execution plan */
 static bool pg_tracing_deparse_plan = true; /* Deparse plan to generate more
@@ -116,9 +116,6 @@ static double pg_tracing_sample_rate = 0;	/* Sample rate applied to queries
 static double pg_tracing_caller_sample_rate = 1;	/* Sample rate applied to
 													 * queries with
 													 * SQLCommenter */
-static bool pg_tracing_export_parameters = true;	/* Export query's
-													 * parameters as span
-													 * metadata */
 static int	pg_tracing_track = PG_TRACING_TRACK_ALL;	/* tracking level */
 static bool pg_tracing_track_utility = true;	/* whether to track utility
 												 * commands */
@@ -311,12 +308,12 @@ _PG_init(void)
 							NULL);
 
 	DefineCustomIntVariable("pg_tracing.max_parameter_size",
-							"Maximum size of parameters. -1 to disable parameters in span metadata.",
+							"Maximum size of parameters shared across spans in the same transaction. 0 to disable parameters in span metadata.",
 							NULL,
-							&pg_tracing_max_parameter_str,
-							1024,
+							&pg_tracing_max_parameter_size,
+							4096,
 							0,
-							10000,
+							100000,
 							PGC_USERSET,
 							0,
 							NULL,
@@ -440,17 +437,6 @@ _PG_init(void)
 							   check_filter_query_ids,
 							   assign_filter_query_ids,
 							   NULL);
-
-	DefineCustomBoolVariable("pg_tracing.export_parameters",
-							 "Export query's parameters as span metadata.",
-							 NULL,
-							 &pg_tracing_export_parameters,
-							 true,
-							 PGC_USERSET,
-							 0,
-							 NULL,
-							 NULL,
-							 NULL);
 
 	DefineCustomIntVariable("pg_tracing.otel_naptime",
 							"Duration between each upload of spans to the otel collector (in milliseconds).",
@@ -799,7 +785,7 @@ is_query_id_filtered(uint64 query_id)
  * shared_state lock should be acquired
  */
 Size
-append_str_to_shared_str(const char *txt, int str_len)
+append_str_to_shared_str(const char *str, int str_len)
 {
 	Size		extent = pg_tracing_shared_state->extent;
 
@@ -810,27 +796,58 @@ append_str_to_shared_str(const char *txt, int str_len)
 		return -1;
 	}
 
-	/* Copy txt to the shared buffer */
-	memcpy(shared_str + pg_tracing_shared_state->extent, txt, str_len);
+	/* Copy str to the shared buffer */
+	memcpy(shared_str + pg_tracing_shared_state->extent, str, str_len);
 	/* Update our tracked extent */
 	pg_tracing_shared_state->extent += str_len;
 	return extent;
 }
 
 /*
- * Append parameters to StringInfo trace buffer
+ * Append a str to parameters_buffer.
+ *
+ * If the maximum defined by pg_tracing_max_parameter_size was reached,
+ * buffer_full will be set to true.
  */
-static int
-append_parameters_to_trace_str_buffer(ParamListInfo params)
+int
+append_str_to_parameters_buffer(const char *str, int str_len, bool add_null)
 {
-	int			position = parameters_buffer->len;
+	int			available_len = pg_tracing_max_parameter_size - parameters_buffer->len;
+
+	if (available_len <= 0)
+		return 0;
+
+	if (str_len > available_len)
+	{
+		/* Not enough room, parameter will be truncated */
+		appendBinaryStringInfo(parameters_buffer, str, available_len);
+		appendBinaryStringInfo(parameters_buffer, "...\0", 4);
+		return available_len;
+	}
+
+	/* We can copy the whole str */
+	appendBinaryStringInfo(parameters_buffer, str, str_len);
+	if (add_null)
+		appendStringInfoChar(parameters_buffer, '\0');
+	return str_len;
+}
+
+/*
+ * Append param list from a prepared statement to the parameter_buffers
+ */
+static void
+append_prepared_statements_parameters(Span * span, ParamListInfo params)
+{
+	int			bytes_written = 0;
+
+	span->parameter_offset = parameters_buffer->len;
 
 	for (int paramno = 0; paramno < params->numParams; paramno++)
 	{
 		ParamExternData *param = &params->params[paramno];
 
 		if (param->isnull || !OidIsValid(param->ptype))
-			appendStringInfoChar(parameters_buffer, '\0');
+			bytes_written = append_str_to_parameters_buffer("\0", 1, false);
 		else
 		{
 			Oid			typoutput;
@@ -839,10 +856,15 @@ append_parameters_to_trace_str_buffer(ParamListInfo params)
 
 			getTypeOutputInfo(param->ptype, &typoutput, &typisvarlena);
 			pstring = OidOutputFunctionCall(typoutput, param->value);
-			appendBinaryStringInfo(parameters_buffer, pstring, strlen(pstring) + 1);
+			bytes_written = append_str_to_parameters_buffer(pstring, strlen(pstring), true);
 		}
+		if (bytes_written == 0)
+		{
+			span->num_truncated_parameters = params->numParams - span->num_parameters;
+			return;
+		}
+		span->num_parameters++;
 	}
-	return position;
 }
 
 /*
@@ -1446,7 +1468,7 @@ initialise_span_context(SpanContext * span_context,
 	span_context->query = query;
 	span_context->jstate = jstate;
 	span_context->query_text = query_text;
-	span_context->export_parameters = pg_tracing_export_parameters;
+	span_context->max_parameter_size = pg_tracing_max_parameter_size;
 
 	if (span_context->pstmt)
 		span_context->query_id = pstmt->queryId;
@@ -1662,7 +1684,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	pop_active_span(&span_end_time);
 
 	/* If we have a prepared statement, add bound parameters to the top span */
-	if (pg_tracing_export_parameters &&
+	if (pg_tracing_max_parameter_size &&
 		!IsAbortedTransactionBlockState() &&
 		params != NULL &&
 		params->paramFetch == NULL &&
@@ -1670,8 +1692,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	{
 		Span	   *span = peek_active_span();
 
-		span->parameter_offset = append_parameters_to_trace_str_buffer(params);
-		span->num_parameters = params->numParams;
+		append_prepared_statements_parameters(span, params);
 	}
 	return result;
 }
