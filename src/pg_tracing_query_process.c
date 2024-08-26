@@ -219,8 +219,7 @@ comp_location(const void *a, const void *b)
  */
 const char *
 normalise_query_parameters(const SpanContext * span_context, Span * span,
-						   int query_loc, int *query_len_p,
-						   StringInfo parameters_buffer)
+						   int query_loc, int *query_len_p)
 {
 	const char *query = span_context->query_text;
 	const JumbleState *jstate = span_context->jstate;
@@ -236,10 +235,10 @@ normalise_query_parameters(const SpanContext * span_context, Span * span,
 	YYLTYPE		yylloc;
 	int			bytes_written;
 	int			current_loc = 0;
-	bool		full_buffer = false;
+	bool		extract_parameters = span_context->max_parameter_size > 0;
 
-	if (parameters_buffer)
-		span->parameter_offset = parameters_buffer->len;
+	if (extract_parameters)
+		span->parameter_offset = span_context->parameters_buffer->len;
 
 	if (query_loc == -1)
 	{
@@ -312,7 +311,8 @@ normalise_query_parameters(const SpanContext * span_context, Span * span,
 				 * from foo where bar = -2" will have identical normalized
 				 * query strings.
 				 */
-				bytes_written = append_str_to_parameters_buffer("-", 1, false);
+				if (extract_parameters)
+					bytes_written = append_str_to_parameters_buffer("-", 1, false);
 				tok = core_yylex(&yylval, &yylloc, yyscanner);
 				if (tok == 0)
 					break;		/* out of inner for-loop */
@@ -324,7 +324,7 @@ normalise_query_parameters(const SpanContext * span_context, Span * span,
 			n_quer_loc += sprintf(norm_query + n_quer_loc, "$%d",
 								  current_loc + 1 + jstate->highest_extern_param_id);
 
-			if (parameters_buffer)
+			if (extract_parameters)
 			{
 				len_parameter = strlen(yyextra.scanbuf + yylloc);
 
