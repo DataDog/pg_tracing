@@ -1,0 +1,112 @@
+-- Simple query with extended protocol
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT $1, $2 \parse stmt1
+\bind_named stmt1 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+SELECT trace_id, span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+             trace_id             |  span_type   | span_operation | parameters | lvl 
+----------------------------------+--------------+----------------+------------+-----
+ 00000000000000000000000000000001 | Select query | SELECT $1, $2  |            |   1
+ 00000000000000000000000000000001 | Select query | SELECT $1, $2  | {1,2}      |   1
+ 00000000000000000000000000000001 | Planner      | Planner        |            |   2
+ 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun    |            |   2
+ 00000000000000000000000000000001 | Result       | Result         |            |   3
+(5 rows)
+
+BEGIN;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000001-01'*/ select $1 \parse ''
+\bind_named '' 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000001-01'*/ select $1, $2 \parse ''
+\bind_named '' 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000001-01'*/ select $1, $2, $3 \parse ''
+\bind_named '' 1 2 3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ 1        | 2        | 3
+(1 row)
+
+COMMIT;
+SELECT trace_id, span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+             trace_id             |    span_type     |  span_operation   | parameters | lvl 
+----------------------------------+------------------+-------------------+------------+-----
+ 00000000000000000000000000000001 | Select query     | SELECT $1, $2     |            |   1
+ 00000000000000000000000000000001 | Select query     | SELECT $1, $2     | {1,2}      |   1
+ 00000000000000000000000000000001 | Planner          | Planner           |            |   2
+ 00000000000000000000000000000001 | ExecutorRun      | ExecutorRun       |            |   2
+ 00000000000000000000000000000001 | Result           | Result            |            |   3
+ 00000000000000000000000000000002 | TransactionBlock | TransactionBlock  |            |   1
+ 00000000000000000000000000000002 | Select query     | select $1         | {1}        |   2
+ 00000000000000000000000000000002 | Planner          | Planner           |            |   3
+ 00000000000000000000000000000002 | ExecutorRun      | ExecutorRun       |            |   3
+ 00000000000000000000000000000002 | Result           | Result            |            |   4
+ 00000000000000000000000000000003 | Select query     | SELECT $1, $2     | {1,2}      |   2
+ 00000000000000000000000000000003 | Planner          | Planner           |            |   3
+ 00000000000000000000000000000003 | ExecutorRun      | ExecutorRun       |            |   3
+ 00000000000000000000000000000003 | Result           | Result            |            |   4
+ 00000000000000000000000000000004 | Select query     | select $1, $2, $3 | {1,2,3}    |   2
+ 00000000000000000000000000000004 | Planner          | Planner           |            |   3
+ 00000000000000000000000000000004 | ExecutorRun      | ExecutorRun       |            |   3
+ 00000000000000000000000000000004 | Result           | Result            |            |   4
+(18 rows)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000001-01'*/ BEGIN;
+select $1 \parse ''
+\bind_named '' 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+select $1, $2 \parse ''
+\bind_named '' 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+select $1, $2, $3 \parse ''
+\bind_named '' 1 2 3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ 1        | 2        | 3
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000005';
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   1
+ Utility query    | BEGIN;            |            |   2
+ ProcessUtility   | ProcessUtility    |            |   3
+ Select query     | select $1         | {1}        |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | SELECT $1, $2     | {1,2}      |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | select $1, $2, $3 | {1,2,3}    |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Utility query    | COMMIT;           |            |   2
+ ProcessUtility   | ProcessUtility    |            |   3
+(17 rows)
+
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();

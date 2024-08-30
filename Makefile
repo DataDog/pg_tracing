@@ -1,5 +1,5 @@
 # Supported PostgreSQL versions:
-PG_VERSIONS = 15 16 17
+PG_VERSIONS = 15 16 17 18
 
 # Default version:
 PG_VERSION ?= $(lastword $(PG_VERSIONS))
@@ -41,6 +41,11 @@ ifeq ($(shell test $(PG_VERSION) -lt 17; echo $$?),0)
 REGRESSCHECKS += planstate_projectset
 else
 REGRESSCHECKS += planstate_projectset_17
+endif
+
+# PG 18 contains additional psql metacommand to test extended protocol
+ifeq ($(shell test $(PG_VERSION) -ge 18; echo $$?),0)
+REGRESSCHECKS += psql_extended
 endif
 
 REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
