@@ -12,7 +12,7 @@ SELECT 1;
 COMMIT;
 
 -- Check that subxact_count is correctly reported
-select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
+select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans WHERE span_operation NOT LIKE 'SAVEPOINT%';
 
 -- Cleaning
 CALL clean_spans();

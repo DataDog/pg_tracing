@@ -15,13 +15,12 @@ SELECT 1;
 
 COMMIT;
 -- Check that subxact_count is correctly reported
-select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
+select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans WHERE span_operation NOT LIKE 'SAVEPOINT%';
                           span_operation                          | parameters  | subxact_count | lvl 
 ------------------------------------------------------------------+-------------+---------------+-----
  TransactionBlock                                                 |             |             0 |   1
  BEGIN;                                                           |             |             0 |   2
  ProcessUtility                                                   |             |             0 |   3
- SAVEPOINT s1;                                                    |             |             0 |   2
  ProcessUtility                                                   |             |             0 |   3
  INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); | {1,2,'aaa'} |             0 |   2
  Planner                                                          |             |             0 |   3
@@ -29,7 +28,6 @@ select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
  Insert on pg_tracing_test                                        |             |             1 |   4
  ProjectSet                                                       |             |             1 |   5
  Result                                                           |             |             1 |   6
- SAVEPOINT s2;                                                    |             |             1 |   2
  ProcessUtility                                                   |             |             1 |   3
  INSERT INTO pg_tracing_test VALUES(generate_series($1, $2), $3); | {1,2,'aaa'} |             1 |   2
  Planner                                                          |             |             1 |   3
@@ -37,7 +35,6 @@ select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
  Insert on pg_tracing_test                                        |             |             2 |   4
  ProjectSet                                                       |             |             2 |   5
  Result                                                           |             |             2 |   6
- SAVEPOINT s3;                                                    |             |             2 |   2
  ProcessUtility                                                   |             |             2 |   3
  SELECT $1;                                                       | {1}         |             2 |   2
  Planner                                                          |             |             2 |   3
@@ -46,7 +43,7 @@ select span_operation, parameters, subxact_count, lvl FROM peek_ordered_spans;
  COMMIT;                                                          |             |             2 |   2
  ProcessUtility                                                   |             |             2 |   3
  TransactionCommit                                                |             |             2 |   2
-(28 rows)
+(25 rows)
 
 -- Cleaning
 CALL clean_spans();

@@ -1,5 +1,5 @@
 # Supported PostgreSQL versions:
-PG_VERSIONS = 15 16
+PG_VERSIONS = 15 16 17
 
 # Default version:
 PG_VERSION ?= $(lastword $(PG_VERSIONS))
@@ -28,13 +28,23 @@ OBJS = \
 	src/version_compat.o
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction
+
 ifeq ($(PG_VERSION),15)
 REGRESSCHECKS += trigger_15
-else
+endif
+
+ifeq ($(shell test $(PG_VERSION) -ge 16; echo $$?),0)
 REGRESSCHECKS += extended trigger_16 parameters_16
 endif
+
+ifeq ($(shell test $(PG_VERSION) -lt 17; echo $$?),0)
+REGRESSCHECKS += planstate_projectset
+else
+REGRESSCHECKS += planstate_projectset_17
+endif
+
 REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
-				 planstate_projectset planstate_subplans planstate_union \
+				 planstate_subplans planstate_union \
 				 parallel subxact full_buffer \
 				 guc nested wal cleanup
 

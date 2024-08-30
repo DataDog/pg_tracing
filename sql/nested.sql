@@ -105,21 +105,21 @@ SELECT count(*) from pg_tracing_consume_spans where trace_id='000000000000000000
 SET pg_tracing.track TO DEFAULT;
 
 -- Create test procedure
-CREATE OR REPLACE PROCEDURE sum_one(i int) AS $$
+CREATE OR REPLACE PROCEDURE sum_one() AS $$
 DECLARE
   r int;
 BEGIN
-  SELECT (i + i)::int INTO r;
+  SELECT (10 + 10)::int INTO r;
 END; $$ LANGUAGE plpgsql;
 
 -- Test tracking of procedure with utility tracking enabled
 SET pg_tracing.track_utility=on;
-/*traceparent='00-00000000000000000000000000000054-0000000000000054-01'*/ CALL sum_one(3);
+/*traceparent='00-00000000000000000000000000000054-0000000000000054-01'*/ CALL sum_one();
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000054';
 
 -- Test again with utility tracking disabled
 SET pg_tracing.track_utility=off;
-/*traceparent='00-00000000000000000000000000000055-0000000000000055-01'*/ CALL sum_one(10);
+/*traceparent='00-00000000000000000000000000000055-0000000000000055-01'*/ CALL sum_one();
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000055';
 
 -- Create immutable function
