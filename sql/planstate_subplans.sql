@@ -39,7 +39,7 @@ SELECT span_id AS span_c_id,
         get_epoch(span_start) as span_c_start,
         get_epoch(span_end) as span_c_end
 		from pg_tracing_peek_spans
-        where parent_id =:'span_a_id' and span_operation='InitPlan 2 (returns $1)' \gset
+        where parent_id =:'span_a_id' and span_operation LIKE 'InitPlan 2%' \gset
 SELECT span_id AS span_d_id,
         get_epoch(span_start) as span_d_start,
         get_epoch(span_end) as span_d_end
