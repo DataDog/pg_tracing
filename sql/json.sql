@@ -21,6 +21,8 @@ CALL clean_spans();
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
 SAVEPOINT s1;
 INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
+SAVEPOINT s2;
+INSERT INTO pg_tracing_test VALUES(generate_series(1, 2), 'aaa');
 ROLLBACK;
 SELECT trace_id, name,
     subxact_count,
@@ -28,7 +30,8 @@ SELECT trace_id, name,
     wal_records > 0 as has_wal_records,
     wal_bytes > 0 as has_wal_bytes,
     startup > 0 as has_startup,
-    lvl FROM peek_ordered_json_spans;
+    lvl FROM peek_ordered_json_spans
+    WHERE name LIKE 'INSERT%';
 CALL clean_spans();
 
 -- Test parameters and deparse_info
