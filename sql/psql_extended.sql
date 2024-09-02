@@ -15,6 +15,7 @@ COMMIT;
 
 SELECT trace_id, span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
 
+-- Mix begin in simple protocol with extended protocol usage
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000001-01'*/ BEGIN;
 select $1 \parse ''
 \bind_named '' 1 \g
@@ -25,6 +26,15 @@ select $1, $2, $3 \parse ''
 COMMIT;
 
 SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000005';
+
+-- Test with extended protocol for tx utility
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000001-01'*/ BEGIN \parse begin_stmt
+\bind_named begin_stmt \g
+SELECT 1 \parse stmt_mix_1
+\bind_named stmt_mix_1 \g
+COMMIT \parse commit_stmt
+\bind_named commit_stmt \g
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000006';
 
 -- Cleanup
 CALL clean_spans();
