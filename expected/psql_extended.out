@@ -118,23 +118,151 @@ SELECT 1 \parse stmt_mix_1
         1
 (1 row)
 
+SELECT 1, 2 \parse stmt_mix_2
+\bind_named stmt_mix_2 \g
+ ?column? | ?column? 
+----------+----------
+        1 |        2
+(1 row)
+
 COMMIT \parse commit_stmt
 \bind_named commit_stmt \g
-SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000006';
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans
+    where trace_id='00000000000000000000000000000006'
+        AND lvl <= 2;
     span_type     |  span_operation  | parameters | lvl 
 ------------------+------------------+------------+-----
  Utility query    | BEGIN;           |            |   1
  TransactionBlock | TransactionBlock |            |   1
  Utility query    | BEGIN;           |            |   2
- ProcessUtility   | ProcessUtility   |            |   3
  Select query     | SELECT $1        | {1}        |   2
- Planner          | Planner          |            |   3
- ExecutorRun      | ExecutorRun      |            |   3
- Result           | Result           |            |   4
+ Select query     | SELECT $1, $2    | {1,2}      |   2
  Utility query    | COMMIT;          |            |   2
- ProcessUtility   | ProcessUtility   |            |   3
-(10 rows)
+(6 rows)
+
+SELECT get_epoch(span_end) as span_select_1_end
+	from pg_tracing_peek_spans where span_operation='SELECT $1' and trace_id='00000000000000000000000000000006' \gset
+SELECT get_epoch(span_start) as span_select_2_start,
+       get_epoch(span_end) as span_select_2_end
+	from pg_tracing_peek_spans where span_operation='SELECT $1, $2' and trace_id='00000000000000000000000000000006' \gset
+SELECT get_epoch(span_start) as span_commit_start
+	from pg_tracing_peek_spans where span_operation='COMMIT;' and trace_id='00000000000000000000000000000006' \gset
+SELECT :span_select_1_end <= :span_select_2_start,
+    :span_select_2_end <= :span_commit_start;
+ ?column? | ?column? 
+----------+----------
+ t        | t
+(1 row)
+
+CALL clean_spans();
+-- Test with extended protocol while reusing prepared stmts
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
+\bind_named stmt_mix_1 \g
+ ?column? 
+----------
+        1
+(1 row)
+
+\bind_named stmt_mix_2 \g
+ ?column? | ?column? 
+----------+----------
+        1 |        2
+(1 row)
+
+SELECT 1, 2, 3 \parse stmt_mix_3
+\bind_named stmt_mix_3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+        1 |        2 |        3
+(1 row)
+
+\bind_named commit_stmt \g
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   1
+ Utility query    | BEGIN;            |            |   2
+ ProcessUtility   | ProcessUtility    |            |   3
+ Select query     | SELECT 1          |            |   2
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | SELECT 1, 2       |            |   2
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Select query     | SELECT $1, $2, $3 | {1,2,3}    |   2
+ Planner          | Planner           |            |   3
+ ExecutorRun      | ExecutorRun       |            |   3
+ Result           | Result            |            |   4
+ Utility query    | COMMIT            |            |   2
+ ProcessUtility   | ProcessUtility    |            |   3
+(15 rows)
+
+SELECT get_epoch(span_end) as span_select_1_end
+	from pg_tracing_peek_spans where span_operation='SELECT 1' and trace_id='00000000000000000000000000000001' \gset
+SELECT get_epoch(span_start) as span_select_2_start,
+       get_epoch(span_end) as span_select_2_end
+	from pg_tracing_peek_spans where span_operation='SELECT 1, 2' and trace_id='00000000000000000000000000000001' \gset
+SELECT get_epoch(span_start) as span_select_3_start,
+       get_epoch(span_end) as span_select_3_end
+	from pg_tracing_peek_spans where span_operation='SELECT $1, $2, $3' and trace_id='00000000000000000000000000000001' \gset
+SELECT get_epoch(span_start) as span_commit_start
+	from pg_tracing_peek_spans where span_operation='COMMIT' and trace_id='00000000000000000000000000000001' \gset
+SELECT :span_select_1_end <= :span_select_2_start,
+    :span_select_2_end <= :span_select_3_start,
+    :span_select_3_end <= :span_commit_start;
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ t        | t        | t
+(1 row)
+
+DEALLOCATE ALL;
+CALL clean_spans();
+-- Test extended protocol while tracing everything
+SET pg_tracing.sample_rate = 1.0;
+BEGIN \parse begin_stmt
+\bind_named begin_stmt \g
+SELECT 1 \parse stmt_mix_1
+\bind_named stmt_mix_1 \g
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1, 2 \parse stmt_mix_2
+\bind_named stmt_mix_2 \g
+ ?column? | ?column? 
+----------+----------
+        1 |        2
+(1 row)
+
+COMMIT \parse commit_stmt
+\bind_named commit_stmt \g
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans
+    WHERE lvl <= 2;
+    span_type     |  span_operation  | parameters | lvl 
+------------------+------------------+------------+-----
+ Utility query    | BEGIN            |            |   1
+ TransactionBlock | TransactionBlock |            |   1
+ Utility query    | BEGIN            |            |   2
+ Select query     | SELECT $1        | {1}        |   2
+ Select query     | SELECT $1, $2    | {1,2}      |   2
+ Utility query    | COMMIT           |            |   2
+(6 rows)
+
+SELECT get_epoch(span_end) as span_select_1_end
+	from pg_tracing_peek_spans where span_operation='SELECT $1' \gset
+SELECT get_epoch(span_start) as span_select_2_start,
+       get_epoch(span_end) as span_select_2_end
+	from pg_tracing_peek_spans where span_operation='SELECT $1, $2' \gset
+SELECT get_epoch(span_start) as span_commit_start
+	from pg_tracing_peek_spans where span_operation='COMMIT' \gset
+SELECT :span_select_1_end <= :span_select_2_start,
+    :span_select_2_end <= :span_commit_start;
+ ?column? | ?column? 
+----------+----------
+ t        | t
+(1 row)
 
 -- Cleanup
-CALL clean_spans();
 CALL reset_settings();
+CALL clean_spans();

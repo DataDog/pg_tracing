@@ -169,15 +169,17 @@ LANGUAGE sql IMMUTABLE;
 (1 row)
 
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000056';
-             span_operation              | lvl 
------------------------------------------+-----
- select test_immutable_function($1);     |   1
- Planner                                 |   2
- SELECT oid from pg_class where oid = a; |   3
- Planner                                 |   4
- ExecutorRun                             |   2
- Result                                  |   3
-(6 rows)
+                   span_operation                   | lvl 
+----------------------------------------------------+-----
+ select test_immutable_function($1);                |   1
+ Planner                                            |   2
+ SELECT oid from pg_class where oid = a;            |   3
+ Planner                                            |   4
+ ExecutorRun                                        |   4
+ IndexOnlyScan using pg_class_oid_index on pg_class |   5
+ ExecutorRun                                        |   2
+ Result                                             |   3
+(8 rows)
 
 -- Create function with generate series
 CREATE OR REPLACE FUNCTION test_generate_series(IN anyarray, OUT x anyelement)
