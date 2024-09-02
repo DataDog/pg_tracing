@@ -50,6 +50,7 @@ typedef struct PlanCounters
 typedef enum HookPhase
 {
 	HOOK_PARSE,
+	HOOK_UTILITY,
 	HOOK_PLANNER,
 	HOOK_EXECUTOR,
 }			HookPhase;
