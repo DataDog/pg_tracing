@@ -62,6 +62,7 @@ SELECT trace_id, span_type, span_operation, parameters, lvl FROM peek_ordered_sp
  00000000000000000000000000000004 | Result           | Result            |            |   4
 (18 rows)
 
+-- Mix begin in simple protocol with extended protocol usage
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000001-01'*/ BEGIN;
 select $1 \parse ''
 \bind_named '' 1 \g
@@ -106,6 +107,33 @@ SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans where 
  Utility query    | COMMIT;           |            |   2
  ProcessUtility   | ProcessUtility    |            |   3
 (17 rows)
+
+-- Test with extended protocol for tx utility
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000001-01'*/ BEGIN \parse begin_stmt
+\bind_named begin_stmt \g
+SELECT 1 \parse stmt_mix_1
+\bind_named stmt_mix_1 \g
+ ?column? 
+----------
+        1
+(1 row)
+
+COMMIT \parse commit_stmt
+\bind_named commit_stmt \g
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000006';
+    span_type     |  span_operation  | parameters | lvl 
+------------------+------------------+------------+-----
+ Utility query    | BEGIN;           |            |   1
+ TransactionBlock | TransactionBlock |            |   1
+ Utility query    | BEGIN;           |            |   2
+ ProcessUtility   | ProcessUtility   |            |   3
+ Select query     | SELECT $1        | {1}        |   2
+ Planner          | Planner          |            |   3
+ ExecutorRun      | ExecutorRun      |            |   3
+ Result           | Result           |            |   4
+ Utility query    | COMMIT;          |            |   2
+ ProcessUtility   | ProcessUtility   |            |   3
+(10 rows)
 
 -- Cleanup
 CALL clean_spans();

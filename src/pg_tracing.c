@@ -1418,6 +1418,7 @@ end_nested_level(const TimestampTz *input_span_end_time)
 			InstrEndLoop(traced_planstate->planstate->instrument);
 			span_end_time = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
 		}
+
 		pop_active_span(&span_end_time);
 		span = peek_active_span();
 	}
@@ -1477,14 +1478,14 @@ initialise_span_context(SpanContext * span_context,
 }
 
 static bool
-should_start_tx_block(const Node *utilityStmt)
+should_start_tx_block(const Node *utilityStmt, HookPhase hook_phase)
 {
 	TransactionStmt *stmt;
 
-	if (GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
+	if (hook_phase == HOOK_PARSE && GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
 		/* There's an ongoing tx block, we can create the matching span */
 		return true;
-	if (utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt)
+	if (hook_phase == HOOK_UTILITY && utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt)
 	{
 		stmt = (TransactionStmt *) utilityStmt;
 		/* If we have an explicit BEGIN statement, start a tx block */
@@ -1497,7 +1498,7 @@ should_start_tx_block(const Node *utilityStmt)
  * Start a tx_block span if we have an explicit BEGIN utility statement
  */
 static void
-start_tx_block_span(const Node *utilityStmt, SpanContext * span_context)
+start_tx_block_span(const Node *utilityStmt, SpanContext * span_context, HookPhase hook_phase)
 {
 	if (nested_level > 0)
 		return;
@@ -1506,7 +1507,7 @@ start_tx_block_span(const Node *utilityStmt, SpanContext * span_context)
 		/* We already have an ongoing tx_block span */
 		return;
 
-	if (!should_start_tx_block(utilityStmt))
+	if (!should_start_tx_block(utilityStmt, hook_phase))
 		/* Not a candidate to start tx block */
 		return;
 
@@ -1603,7 +1604,7 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 	 * With queries using simple protocol, post parse is a good place to start
 	 * tx_block span
 	 */
-	start_tx_block_span(query->utilityStmt, &span_context);
+	start_tx_block_span(query->utilityStmt, &span_context, HOOK_PARSE);
 
 	push_active_span(pg_tracing_mem_ctx, &span_context, command_type_to_span_type(query->commandType),
 					 HOOK_PARSE);
@@ -2117,7 +2118,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	initialize_trace_level();
 	initialise_span_context(&span_context, traceparent,
 							pstmt, NULL, NULL, queryString);
-	start_tx_block_span(pstmt->utilityStmt, &span_context);
+	start_tx_block_span(pstmt->utilityStmt, &span_context, HOOK_UTILITY);
 
 	if (track_utility)
 	{
@@ -2175,7 +2176,20 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 
 	/* End ProcessUtility span and store it */
 	pop_active_span(&span_end_time);
+
 	/* Also end and store parent active span */
+	if (nested_level == 0 && tx_block_span.span_id > 0)
+	{
+		/*
+		 * Parent span may have been created during post parse and tx block
+		 * started during process utility. Link the parent span to the tx
+		 * block here
+		 */
+		Span	   *parent_span = peek_active_span();
+
+		Assert(parent_span->nested_level == 0);
+		parent_span->parent_id = tx_block_span.span_id;
+	}
 	pop_active_span(&span_end_time);
 
 	/*
