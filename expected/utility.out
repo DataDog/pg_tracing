@@ -69,7 +69,13 @@ CREATE VIEW peek_spans_with_level AS
     ) SELECT * FROM list_trace_spans;
 -- Create utility view to keep order stable
 CREATE VIEW peek_ordered_spans AS
-  SELECT * FROM peek_spans_with_level order by span_start, lvl, span_end, deparse_info;
+    WITH oldest_start AS (
+        SELECT min(span_start) as min_start
+        FROM pg_tracing_peek_spans
+    ) select *,
+        extract(MICROSECONDS FROM age(span_start, oldest_start.min_start)) as us_start,
+        extract(MICROSECONDS FROM age(span_end, oldest_start.min_start)) as us_end
+        FROM peek_spans_with_level, oldest_start order by span_start, lvl, span_end, deparse_info;
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int, status jsonb);
 CREATE VIEW peek_json_spans AS
