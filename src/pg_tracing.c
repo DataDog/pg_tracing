@@ -1351,7 +1351,7 @@ handle_pg_error(const Traceparent * traceparent,
 		/* Assign the error code to the latest top span */
 		span->sql_error_code = sql_error_code;
 		/* End and store the span */
-		pop_active_span(&span_end_time);
+		pop_and_store_active_span(span_end_time);
 		/* Get the next span in the stack */
 		span = peek_active_span();
 	};
@@ -1431,7 +1431,7 @@ end_nested_level(const TimestampTz *input_span_end_time)
 			span_end_time = get_span_end_from_planstate(traced_planstate->planstate, traced_planstate->node_start, span_end_time);
 		}
 
-		pop_active_span(&span_end_time);
+		pop_and_store_active_span(span_end_time);
 		span = peek_active_span();
 	}
 }
@@ -1692,7 +1692,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	nested_level--;
 
 	/* End planner span */
-	pop_active_span(&span_end_time);
+	pop_and_store_active_span(span_end_time);
 
 	/* If we have a prepared statement, add bound parameters to the top span */
 	if (pg_tracing_max_parameter_size &&
@@ -1912,7 +1912,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	end_nested_level(&span_end_time);
 	nested_level--;
 	/* End ExecutorRun span and store it */
-	pop_active_span(&span_end_time);
+	pop_and_store_active_span(span_end_time);
 	per_level_infos[nested_level].executor_end = span_end_time;
 }
 
@@ -2011,10 +2011,10 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	{
 		span_end_time = GetCurrentTimestamp();
 		end_nested_level(&span_end_time);
-		pop_active_span(&span_end_time);
+		pop_and_store_active_span(span_end_time);
 	}
 	else
-		pop_active_span(NULL);
+		pop_active_span();
 	nested_level--;
 }
 
@@ -2057,8 +2057,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 		span_end_time = top_span_end_candidate;
 	else
 		span_end_time = GetCurrentTimestamp();
-
-	pop_active_span(&span_end_time);
+	pop_and_store_active_span(span_end_time);
 }
 
 /*
@@ -2200,7 +2199,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	}
 
 	/* End ProcessUtility span and store it */
-	pop_active_span(&span_end_time);
+	pop_and_store_active_span(span_end_time);
 
 	if (nested_level == 0 && tx_block_span.span_id > 0)
 	{
@@ -2215,7 +2214,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		parent_span->parent_id = tx_block_span.span_id;
 	}
 	/* Also end and store parent active span */
-	pop_active_span(&span_end_time);
+	pop_and_store_active_span(span_end_time);
 
 	/*
 	 * If we're in an aborted transaction, xact callback won't be called so we
