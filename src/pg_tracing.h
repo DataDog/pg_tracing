@@ -411,7 +411,8 @@ extern const char *span_type_to_str(SpanType span_type);
 extern pgTracingStats get_empty_pg_tracing_stats(void);
 
 /* pg_tracing_active_spans.c */
-extern Span * pop_active_span(const TimestampTz *end_time);
+extern Span * pop_and_store_active_span(const TimestampTz end_time);
+extern Span * pop_active_span(void);
 extern Span * peek_active_span(void);
 extern Span * push_active_span(MemoryContext context, const SpanContext * span_context,
 							   SpanType span_type, HookPhase hook_phase);
@@ -419,6 +420,7 @@ extern Span * push_child_active_span(MemoryContext context, const SpanContext * 
 									 SpanType span_type);
 
 extern void cleanup_active_spans(void);
+extern int	num_active_spans(void);
 
 /* pg_tracing.c */
 extern pgTracingSharedState * pg_tracing_shared_state;

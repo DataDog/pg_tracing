@@ -31,6 +31,15 @@ cleanup_active_spans(void)
 }
 
 /*
+ * Return the number of active spans currently in the stack
+ */
+int
+num_active_spans(void)
+{
+	return active_spans->end;
+}
+
+/*
  * Push a new active span to the active_spans stack
  */
 static Span *
@@ -89,12 +98,26 @@ static Span * peek_active_span_for_current_level(void)
 }
 
 /*
- * Pop the latest active span
- *
- * If end_time is provided, the span is ended and stored.
+ * Store and return the latest active span
  */
 Span *
-pop_active_span(const TimestampTz *end_time)
+pop_and_store_active_span(const TimestampTz end_time)
+{
+	Span	   *span = pop_active_span();
+
+	if (span == NULL)
+		return NULL;
+
+	end_span(span, &end_time);
+	store_span(span);
+	return span;
+}
+
+/*
+ * Pop the latest active span
+ */
+Span *
+pop_active_span(void)
 {
 	Span	   *span;
 
@@ -102,11 +125,6 @@ pop_active_span(const TimestampTz *end_time)
 		return NULL;
 
 	span = &active_spans->spans[--active_spans->end];
-	if (end_time != NULL)
-	{
-		end_span(span, end_time);
-		store_span(span);
-	}
 	return span;
 }
 
