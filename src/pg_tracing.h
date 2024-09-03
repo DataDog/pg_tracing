@@ -47,13 +47,13 @@ typedef struct PlanCounters
 /*
  * Hook currently called
  */
-typedef enum HookPhase
+typedef enum HookType
 {
 	HOOK_PARSE,
 	HOOK_UTILITY,
 	HOOK_PLANNER,
 	HOOK_EXECUTOR,
-}			HookPhase;
+}			HookType;
 
 /*
  * Error code when parsing traceparent field
@@ -415,7 +415,7 @@ extern Span * pop_and_store_active_span(const TimestampTz end_time);
 extern Span * pop_active_span(void);
 extern Span * peek_active_span(void);
 extern Span * push_active_span(MemoryContext context, const SpanContext * span_context,
-							   SpanType span_type, HookPhase hook_phase);
+							   SpanType span_type, HookType hook_type);
 extern Span * push_child_active_span(MemoryContext context, const SpanContext * span_context,
 									 SpanType span_type);
 

@@ -249,7 +249,7 @@ push_child_active_span(MemoryContext context, const SpanContext * span_context,
  */
 Span *
 push_active_span(MemoryContext context, const SpanContext * span_context, SpanType span_type,
-				 HookPhase hook_phase)
+				 HookType hook_type)
 {
 	Span	   *span = peek_active_span_for_current_level();
 	Span	   *parent_span = peek_active_span();
@@ -271,7 +271,7 @@ push_active_span(MemoryContext context, const SpanContext * span_context, SpanTy
 	}
 	else
 	{
-		if (hook_phase != HOOK_PARSE || nested_level > 0)
+		if (hook_type != HOOK_PARSE || nested_level > 0)
 			return span;
 
 		/*
