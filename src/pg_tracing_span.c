@@ -88,6 +88,7 @@ end_span(Span * span, const TimestampTz *end_time_input)
 	else
 		span->end = *end_time_input;
 
+	Assert(span->end >= span->start);
 
 	if (span->type == SPAN_PLANNER || span->type == SPAN_PROCESS_UTILITY)
 	{

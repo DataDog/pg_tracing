@@ -232,6 +232,9 @@ static Span commit_span;
 /* Tx block span used to represent explicit transaction block */
 static Span tx_block_span;
 
+/* Candidate span end time for top span */
+static TimestampTz top_span_end_candidate;
+
 /*
  * query id at level 0 of the current tracing.
  * Used to assign queryId to the commit span
@@ -1203,8 +1206,8 @@ extract_trace_context(Traceparent * traceparent, ParseState *pstate,
 	 * try to apply sample rate and exit.
 	 */
 	statement_start_ts = GetCurrentStatementStartTimestamp();
-	if (traceparent->sampled == 0
-		&& last_statement_check_for_sampling == statement_start_ts)
+	if (!traceparent->sampled &&
+		last_statement_check_for_sampling == statement_start_ts)
 		goto cleanup;
 	/* First time we see this statement, save the time */
 	last_statement_check_for_sampling = statement_start_ts;
@@ -1226,6 +1229,14 @@ extract_trace_context(Traceparent * traceparent, ParseState *pstate,
 		reset_traceparent(traceparent);
 
 cleanup:
+	/* Check if the current transaction is sampled use it if it's the case */
+	if (!traceparent->sampled && tx_traceparent.sampled)
+	{
+		/* We have a sampled transaction, use the tx's traceparent */
+		Assert(!traceid_zero(tx_traceparent.trace_id));
+		*traceparent = tx_traceparent;
+	}
+
 	/* No matter what happens, we want to update the latest_lxid seen */
 	update_latest_lxid();
 }
@@ -1260,6 +1271,7 @@ cleanup_tracing(void)
 	within_declare_cursor = false;
 	current_trace_spans = NULL;
 	per_level_infos = NULL;
+	top_span_end_candidate = 0;
 	cleanup_planstarts();
 	cleanup_active_spans();
 }
@@ -1541,7 +1553,6 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 {
 	bool		new_lxid = is_new_lxid();
 	bool		is_root_level = nested_level == 0;
-	bool		new_local_transaction_statement;
 	Traceparent *traceparent = &parse_traceparent;
 	SpanContext span_context;
 
@@ -1579,17 +1590,16 @@ pg_tracing_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jst
 
 	/* Evaluate if query is sampled or not */
 	extract_trace_context(traceparent, pstate, query->queryId);
-	new_local_transaction_statement = is_root_level && !new_lxid;
 
-	if (!traceparent->sampled && (new_local_transaction_statement && tx_traceparent.sampled))
-	{
-		/*
-		 * We're in the same traced local transaction, use the trace context
-		 * extracted at the start of this transaction
-		 */
-		Assert(!traceid_zero(tx_traceparent.trace_id));
-		*traceparent = tx_traceparent;
-	}
+	/*
+	 * Keep track of the start of the last parse at root level. When explicit
+	 * tx is used with extended protocol, the end of the previous command
+	 * happens when the next command is bound, creating overlapping spans. To
+	 * avoid this, we want to end the previous command as soon as the new
+	 * command is parsed or bound
+	 */
+	if (nested_level == 0)
+		top_span_end_candidate = GetCurrentStatementStartTimestamp();
 
 	if (!traceparent->sampled)
 		/* Query is not sampled, nothing to do. */
@@ -1716,6 +1726,13 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		/* We're at the root level, copy parse traceparent */
 		*traceparent = parse_traceparent;
 		reset_traceparent(&parse_traceparent);
+
+		/*
+		 * Reset top span end candidate, either a new parse will set a new
+		 * value if extended protocol is used or we will just use the current
+		 * ts in ExecutorEnd
+		 */
+		top_span_end_candidate = 0;
 	}
 
 	/*
@@ -2036,7 +2053,11 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	else
 		standard_ExecutorEnd(queryDesc);
 
-	span_end_time = GetCurrentTimestamp();
+	if (nested_level == 0 && top_span_end_candidate > 0)
+		span_end_time = top_span_end_candidate;
+	else
+		span_end_time = GetCurrentTimestamp();
+
 	pop_active_span(&span_end_time);
 }
 
@@ -2067,10 +2088,14 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		/* We're at root level, copy the parse traceparent */
 		*traceparent = parse_traceparent;
 		reset_traceparent(&parse_traceparent);
+
+		/* Update tracked query_id */
+		current_query_id = pstmt->queryId;
 	}
 
-	if (nested_level == 0)
-		current_query_id = pstmt->queryId;
+	/* Use tx_traceparent if the whole tx is traced */
+	if (!traceparent->sampled && tx_traceparent.sampled)
+		*traceparent = tx_traceparent;
 
 	if (!pg_tracing_enabled(traceparent, nested_level))
 	{
@@ -2177,7 +2202,6 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 	/* End ProcessUtility span and store it */
 	pop_active_span(&span_end_time);
 
-	/* Also end and store parent active span */
 	if (nested_level == 0 && tx_block_span.span_id > 0)
 	{
 		/*
@@ -2190,6 +2214,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		Assert(parent_span->nested_level == 0);
 		parent_span->parent_id = tx_block_span.span_id;
 	}
+	/* Also end and store parent active span */
 	pop_active_span(&span_end_time);
 
 	/*
