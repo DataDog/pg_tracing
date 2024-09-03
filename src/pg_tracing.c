@@ -1490,14 +1490,14 @@ initialise_span_context(SpanContext * span_context,
 }
 
 static bool
-should_start_tx_block(const Node *utilityStmt, HookPhase hook_phase)
+should_start_tx_block(const Node *utilityStmt, HookType hook_type)
 {
 	TransactionStmt *stmt;
 
-	if (hook_phase == HOOK_PARSE && GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
+	if (hook_type == HOOK_PARSE && GetCurrentTransactionStartTimestamp() != GetCurrentStatementStartTimestamp())
 		/* There's an ongoing tx block, we can create the matching span */
 		return true;
-	if (hook_phase == HOOK_UTILITY && utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt)
+	if (hook_type == HOOK_UTILITY && utilityStmt != NULL && nodeTag(utilityStmt) == T_TransactionStmt)
 	{
 		stmt = (TransactionStmt *) utilityStmt;
 		/* If we have an explicit BEGIN statement, start a tx block */
@@ -1510,7 +1510,7 @@ should_start_tx_block(const Node *utilityStmt, HookPhase hook_phase)
  * Start a tx_block span if we have an explicit BEGIN utility statement
  */
 static void
-start_tx_block_span(const Node *utilityStmt, SpanContext * span_context, HookPhase hook_phase)
+start_tx_block_span(const Node *utilityStmt, SpanContext * span_context, HookType hook_type)
 {
 	if (nested_level > 0)
 		return;
@@ -1519,7 +1519,7 @@ start_tx_block_span(const Node *utilityStmt, SpanContext * span_context, HookPha
 		/* We already have an ongoing tx_block span */
 		return;
 
-	if (!should_start_tx_block(utilityStmt, hook_phase))
+	if (!should_start_tx_block(utilityStmt, hook_type))
 		/* Not a candidate to start tx block */
 		return;
 
