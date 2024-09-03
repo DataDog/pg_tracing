@@ -45,7 +45,7 @@ endif
 
 # PG 18 contains additional psql metacommand to test extended protocol
 ifeq ($(shell test $(PG_VERSION) -ge 18; echo $$?),0)
-REGRESSCHECKS += psql_extended
+REGRESSCHECKS += psql_extended psql_extended_tx
 endif
 
 REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
