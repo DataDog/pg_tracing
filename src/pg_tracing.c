@@ -1431,19 +1431,13 @@ initialize_trace_level(void)
  * End all spans for the current nested level
  */
 static void
-end_nested_level(const TimestampTz *input_span_end_time)
+end_nested_level(TimestampTz span_end_time)
 {
 	Span	   *span;
-	TimestampTz span_end_time;
 
 	span = peek_active_span();
 	if (span == NULL || span->nested_level < nested_level)
 		return;
-
-	if (input_span_end_time != NULL)
-		span_end_time = *input_span_end_time;
-	else
-		span_end_time = GetCurrentTimestamp();
 
 	while (span != NULL && span->nested_level == nested_level)
 	{
@@ -1714,7 +1708,7 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
 	}
 	PG_END_TRY();
 	span_end_time = GetCurrentTimestamp();
-	end_nested_level(&span_end_time);
+	end_nested_level(span_end_time);
 	nested_level--;
 
 	/* End planner span */
@@ -1917,7 +1911,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		if (current_trace_spans != NULL)
 		{
 			span_end_time = GetCurrentTimestamp();
-			end_nested_level(&span_end_time);
+			end_nested_level(span_end_time);
 			nested_level--;
 			handle_pg_error(traceparent, queryDesc, span_end_time);
 		}
@@ -1943,7 +1937,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 
 	/* End nested level */
 	span_end_time = GetCurrentTimestamp();
-	end_nested_level(&span_end_time);
+	end_nested_level(span_end_time);
 	nested_level--;
 	/* End ExecutorRun span and store it */
 	pop_and_store_active_span(span_end_time);
@@ -2022,7 +2016,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 		else
 		{
 			span_end_time = GetCurrentTimestamp();
-			end_nested_level(&span_end_time);
+			end_nested_level(span_end_time);
 			nested_level--;
 			handle_pg_error(traceparent, queryDesc, span_end_time);
 		}
@@ -2044,7 +2038,7 @@ pg_tracing_ExecutorFinish(QueryDesc *queryDesc)
 	if (current_trace_spans->end > num_stored_spans)
 	{
 		span_end_time = GetCurrentTimestamp();
-		end_nested_level(&span_end_time);
+		end_nested_level(span_end_time);
 		pop_and_store_active_span(span_end_time);
 	}
 	else
@@ -2204,7 +2198,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		if (current_trace_spans != NULL)
 		{
 			span_end_time = GetCurrentTimestamp();
-			end_nested_level(&span_end_time);
+			end_nested_level(span_end_time);
 			nested_level--;
 			handle_pg_error(traceparent, NULL, span_end_time);
 		}
@@ -2221,7 +2215,7 @@ pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		return;
 	}
 	span_end_time = GetCurrentTimestamp();
-	end_nested_level(&span_end_time);
+	end_nested_level(span_end_time);
 	nested_level--;
 
 	/* Update process utility span with number of processed rows */
@@ -2299,7 +2293,7 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_COMMIT:
 			current_ts = GetCurrentTimestamp();
-			end_nested_level(&current_ts);
+			end_nested_level(current_ts);
 			if (commit_span.span_id > 0)
 			{
 				end_span(&commit_span, &current_ts);
@@ -2321,7 +2315,8 @@ pg_tracing_xact_callback(XactEvent event, void *arg)
 			reset_span(&tx_block_span);
 			break;
 		case XACT_EVENT_PARALLEL_COMMIT:
-			end_nested_level(NULL);
+			current_ts = GetCurrentTimestamp();
+			end_nested_level(current_ts);
 			end_tracing();
 			break;
 		default:
