@@ -1023,7 +1023,7 @@ add_span_to_shared_buffer_locked(const Span * span)
  */
 static void
 process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
-				   int sql_error_code, TimestampTz parent_end)
+				   int sql_error_code, bool deparse_plan, TimestampTz parent_end)
 {
 	NodeCounters *node_counters = &peek_active_span()->node_counters;
 
@@ -1050,7 +1050,7 @@ process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
 		uint64		query_id = queryDesc->plannedstmt->queryId;
 
 		process_planstate(traceparent, queryDesc, sql_error_code,
-						  pg_tracing_deparse_plan, parent_id, query_id,
+						  deparse_plan, parent_id, query_id,
 						  parent_start, parent_end,
 						  parameters_buffer, plan_name_buffer);
 	}
@@ -1344,7 +1344,13 @@ handle_pg_error(const Traceparent * traceparent,
 	sql_error_code = geterrcode();
 
 	if (queryDesc != NULL)
-		process_query_desc(traceparent, queryDesc, sql_error_code, span_end_time);
+
+		/*
+		 * Within error, we need to avoid any possible allocation as this
+		 * could be an out of memory error. deparse plan relies on allocation
+		 * through lcons so we explicitely disable it.
+		 */
+		process_query_desc(traceparent, queryDesc, sql_error_code, false, span_end_time);
 	span = peek_active_span();
 	while (span != NULL)
 	{
@@ -2045,7 +2051,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	 * the planstate if needed
 	 */
 	parent_end = per_level_infos[nested_level].executor_end;
-	process_query_desc(traceparent, queryDesc, 0, parent_end);
+	process_query_desc(traceparent, queryDesc, 0, pg_tracing_deparse_plan, parent_end);
 
 	/* No need to increment nested level here */
 	if (prev_ExecutorEnd)
