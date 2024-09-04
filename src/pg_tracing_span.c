@@ -323,20 +323,6 @@ get_operation_name(const Span * span)
 }
 
 /*
- * Adjust span's offsets with the provided file offset
- */
-void
-adjust_file_offset(Span * span, Size file_position)
-{
-	if (span->operation_name_offset != -1)
-		span->operation_name_offset += file_position;
-	if (span->parameter_offset != -1)
-		span->parameter_offset += file_position;
-	if (span->deparse_info_offset != -1)
-		span->deparse_info_offset += file_position;
-}
-
-/*
 * Returns true if TraceId is zero
 */
 bool
