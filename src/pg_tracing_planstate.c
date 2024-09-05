@@ -539,7 +539,6 @@ create_span_node(PlanState *planstate, const planstateTraceContext * planstateTr
 		span.parallel_aware = plan->parallel_aware;
 		span.async_capable = plan->async_capable;
 
-		span_type = plan_to_span_type(plan);
 		operation_name = plan_to_rel_name(planstateTraceContext, planstate);
 		len_operation_name = strlen(operation_name);
 		if (len_operation_name > 0)
