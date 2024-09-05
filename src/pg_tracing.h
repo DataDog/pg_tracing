@@ -401,7 +401,6 @@ extern void begin_span(TraceId trace_id, Span * span, SpanType type,
 					   TimestampTz start_span);
 extern void end_span(Span * span, const TimestampTz *end_time);
 extern void reset_span(Span * span);
-extern const char *get_span_type(const Span * span);
 extern const char *get_operation_name(const Span * span);
 extern bool traceid_zero(TraceId trace_id);
 extern bool traceid_equal(TraceId trace_id_1, TraceId trace_id_2);
@@ -421,7 +420,6 @@ extern Span * push_child_active_span(MemoryContext context, const SpanContext * 
 									 SpanType span_type);
 
 extern void cleanup_active_spans(void);
-extern int	num_active_spans(void);
 
 /* pg_tracing.c */
 extern pgTracingSharedState * pg_tracing_shared_state;
