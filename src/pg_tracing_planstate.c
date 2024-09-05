@@ -31,7 +31,6 @@ static int	index_planstart = 0;
 /* Maximum elements allocated in the traced_planstates array */
 static int	max_planstart = 0;
 
-static void override_ExecProcNode(PlanState *planstate);
 static Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
 				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType node_type,
@@ -201,96 +200,17 @@ exit:
 }
 
 /*
- * Override ExecProcNode on all planstate members
- */
-static void
-override_member_nodes(PlanState **planstates, int nplans)
-{
-	int			j;
-
-	for (j = 0; j < nplans; j++)
-		override_ExecProcNode(planstates[j]);
-}
-
-/*
- * Override ExecProcNode on all planstate of a custom scan
- */
-static void
-override_custom_scan(CustomScanState *css)
-{
-	ListCell   *cell;
-
-	foreach(cell, css->custom_ps)
-		override_ExecProcNode((PlanState *) lfirst(cell));
-}
-
-/*
  * Walk the planstate and override all executor pointer
  */
-static void
-override_ExecProcNode(PlanState *planstate)
+static bool
+override_ExecProcNode(struct PlanState *planstate, void *context)
 {
-	ListCell   *l;
-
 	if (planstate->instrument == NULL)
 		/* No instrumentation set, do nothing */
-		return;
-
-	/* Walk the outerplan */
-	if (outerPlanState(planstate))
-		override_ExecProcNode(outerPlanState(planstate));
-	/* Walk the innerplan */
-	if (innerPlanState(planstate))
-		override_ExecProcNode(innerPlanState(planstate));
-
-	/* Handle init plans */
-	foreach(l, planstate->initPlan)
-	{
-		SubPlanState *sstate = (SubPlanState *) lfirst(l);
-		PlanState  *splan = sstate->planstate;
-
-		override_ExecProcNode(splan);
-	}
-
-	/* Handle sub plans */
-	foreach(l, planstate->subPlan)
-	{
-		SubPlanState *sstate = (SubPlanState *) lfirst(l);
-		PlanState  *splan = sstate->planstate;
-
-		override_ExecProcNode(splan);
-	}
-
-	/* Handle special nodes with children nodes */
-	switch (nodeTag(planstate->plan))
-	{
-		case T_Append:
-			override_member_nodes(((AppendState *) planstate)->appendplans,
-								  ((AppendState *) planstate)->as_nplans);
-			break;
-		case T_MergeAppend:
-			override_member_nodes(((MergeAppendState *) planstate)->mergeplans,
-								  ((MergeAppendState *) planstate)->ms_nplans);
-			break;
-		case T_BitmapAnd:
-			override_member_nodes(((BitmapAndState *) planstate)->bitmapplans,
-								  ((BitmapAndState *) planstate)->nplans);
-			break;
-		case T_BitmapOr:
-			override_member_nodes(((BitmapOrState *) planstate)->bitmapplans,
-								  ((BitmapOrState *) planstate)->nplans);
-			break;
-		case T_SubqueryScan:
-			override_ExecProcNode(((SubqueryScanState *) planstate)->subplan);
-			break;
-		case T_CustomScan:
-			override_custom_scan((CustomScanState *) planstate);
-			break;
-		default:
-			break;
-	}
+		return false;
 
 	planstate->ExecProcNode = ExecProcNodeFirstPgTracing;
+	return planstate_tree_walker(planstate, override_ExecProcNode, context);
 }
 
 /*
@@ -308,7 +228,8 @@ setup_ExecProcNode_override(MemoryContext context, QueryDesc *queryDesc)
 	Assert(queryDesc->planstate->instrument);
 	/* Pointer should target ExecProcNodeFirst. Save it to restore it later. */
 	previous_ExecProcNode = queryDesc->planstate->ExecProcNode;
-	override_ExecProcNode(queryDesc->planstate);
+	queryDesc->planstate->ExecProcNode = ExecProcNodeFirstPgTracing;
+	planstate_tree_walker(queryDesc->planstate, override_ExecProcNode, NULL);
 }
 
 /*
