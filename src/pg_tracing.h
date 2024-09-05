@@ -384,6 +384,8 @@ extern int
 			get_parent_traced_planstate_index(int nested_level);
 extern TimestampTz
 			get_span_end_from_planstate(PlanState *planstate, TimestampTz plan_start, TimestampTz root_end);
+extern int
+			number_nodes_from_planstate(PlanState *planstate);
 
 /* pg_tracing_query_process.c */
 extern const char *normalise_query_parameters(const SpanContext * span_context, Span * span,
