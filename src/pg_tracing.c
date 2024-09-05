@@ -919,6 +919,24 @@ is_new_lxid()
 }
 
 /*
+ * Preallocate space in the shared current_trace_spans to have at least slots_needed slots
+ */
+static void
+preallocate_spans(int slots_needed)
+{
+	int			target_size = current_trace_spans->end + slots_needed;
+
+	Assert(slots_needed > 0);
+
+	if (target_size > current_trace_spans->max)
+	{
+		current_trace_spans->max = target_size;
+		current_trace_spans = repalloc(current_trace_spans, sizeof(pgTracingSpans) +
+									   current_trace_spans->max * sizeof(Span));
+	}
+}
+
+/*
  * Store a span in the current_trace_spans buffer
  */
 void
@@ -1340,6 +1358,7 @@ handle_pg_error(const Traceparent * traceparent,
 {
 	int			sql_error_code;
 	Span	   *span;
+	int			max_trace_spans = current_trace_spans->max;
 
 	sql_error_code = geterrcode();
 
@@ -1361,6 +1380,7 @@ handle_pg_error(const Traceparent * traceparent,
 		/* Get the next span in the stack */
 		span = peek_active_span();
 	};
+	Assert(current_trace_spans->max == max_trace_spans);
 }
 
 /*
@@ -1817,6 +1837,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	TimestampTz span_end_time;
 	Span	   *executor_run_span;
 	Traceparent *traceparent = &executor_traceparent;
+	int			num_nodes;
 
 	if (!pg_tracing_enabled(traceparent, nested_level) || queryDesc->totaltime == NULL)
 	{
@@ -1870,6 +1891,13 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	 */
 	if (pg_tracing_planstate_spans && queryDesc->planstate->instrument)
 		setup_ExecProcNode_override(pg_tracing_mem_ctx, queryDesc);
+
+	/*
+	 * Preallocate enough space in the current_trace_spans to process the
+	 * queryDesc in the error handler without doing new allocations
+	 */
+	num_nodes = number_nodes_from_planstate(queryDesc->planstate);
+	preallocate_spans(num_nodes);
 
 	nested_level++;
 	PG_TRY();

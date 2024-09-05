@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "common/pg_prng.h"
+#include "nodes/nodeFuncs.h"
 #include "pg_tracing.h"
 #include "utils/ruleutils.h"
 #include "utils/timestamp.h"
@@ -691,4 +692,27 @@ process_planstate(const Traceparent * traceparent, const QueryDesc *queryDesc,
 
 	/* We can get rid of all the traced planstate for this level */
 	drop_traced_planstates();
+}
+
+static bool
+number_nodes_walker(PlanState *planstate, void *context)
+{
+	int		   *num_nodes = context;
+
+	if (planstate == NULL)
+		return false;
+	*num_nodes += 1;
+	return planstate_tree_walker(planstate, number_nodes_walker, num_nodes);
+}
+
+/*
+ * Give the number of nodes for the provided planstate
+ */
+int
+number_nodes_from_planstate(PlanState *planstate)
+{
+	int			num_nodes = 1;
+
+	planstate_tree_walker(planstate, number_nodes_walker, &num_nodes);
+	return num_nodes;
 }
