@@ -31,15 +31,6 @@ cleanup_active_spans(void)
 }
 
 /*
- * Return the number of active spans currently in the stack
- */
-int
-num_active_spans(void)
-{
-	return active_spans->end;
-}
-
-/*
  * Push a new active span to the active_spans stack
  */
 static Span *
