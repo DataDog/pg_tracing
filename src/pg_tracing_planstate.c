@@ -376,7 +376,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 		(IsA(planstate, CustomScanState) &&
 		 ((CustomScanState *) planstate)->custom_ps != NIL) ||
 		planstate->subPlan;
-	if (haschildren)
+	if (haschildren && planstateTraceContext->deparse_ctx)
 		planstateTraceContext->ancestors = lcons(planstate->plan, planstateTraceContext->ancestors);
 
 	/* Walk the outerplan */
@@ -444,7 +444,8 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 		 * Push subplan as an ancestor so that we can resolve referent of
 		 * subplan parameters.
 		 */
-		planstateTraceContext->ancestors = lcons(sp, planstateTraceContext->ancestors);
+		if (planstateTraceContext->deparse_ctx)
+			planstateTraceContext->ancestors = lcons(sp, planstateTraceContext->ancestors);
 
 		subplan_span = create_span_node(splan, planstateTraceContext,
 										&subplan_span_id, span_id, query_id,
@@ -453,7 +454,8 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 		child_end = create_spans_from_planstate(splan, planstateTraceContext, subplan_span.span_id, query_id, subplan_traced_planstate->node_start,
 												root_end, latest_end);
 
-		planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
+		if (planstateTraceContext->deparse_ctx)
+			planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
 	}
 
 	/* Handle special nodes with children nodes */
@@ -484,7 +486,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 		default:
 			break;
 	}
-	if (haschildren)
+	if (haschildren && planstateTraceContext->deparse_ctx)
 		planstateTraceContext->ancestors = list_delete_first(planstateTraceContext->ancestors);
 
 	/* If node had no duration, use the latest end of its child */
