@@ -19,6 +19,10 @@ AS $$
     SET pg_tracing.caller_sample_rate TO DEFAULT;
     SET pg_tracing.track_utility TO DEFAULT;
     SET pg_tracing.max_parameter_size TO DEFAULT;
+    SET parallel_setup_cost TO DEFAULT;
+    SET parallel_tuple_cost TO DEFAULT;
+    SET min_parallel_table_scan_size TO DEFAULT;
+    SET max_parallel_workers_per_gather TO DEFAULT;
 $$;
 
 CREATE OR REPLACE PROCEDURE reset_pg_tracing_test_table() AS $$

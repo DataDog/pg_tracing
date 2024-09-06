@@ -30,6 +30,17 @@ SELECT trace_id from pg_tracing_peek_spans group by trace_id;
 
 -- Check number of executor spans
 SELECT count(*) from pg_tracing_consume_spans where span_operation='ExecutorRun';
+CALL clean_spans();
+
+-- Test leaderless parallel query
+set parallel_setup_cost=0;
+set parallel_tuple_cost=0;
+set min_parallel_table_scan_size=0;
+set max_parallel_workers_per_gather=2;
+set parallel_leader_participation=false;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ select 1 from pg_class limit 1;
+
+SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000001' ORDER BY lvl, span_operation;
 
 -- Cleanup
 CALL clean_spans();
