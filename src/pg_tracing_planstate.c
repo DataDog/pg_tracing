@@ -31,6 +31,9 @@ static int	index_planstart = 0;
 /* Maximum elements allocated in the traced_planstates array */
 static int	max_planstart = 0;
 
+/* Span id of parallel worker's parent */
+static uint64 parallel_workers_parent_id = 0;
+
 static Span
 create_span_node(PlanState *planstate, const planstateTraceContext * planstateTraceContext,
 				 uint64 *span_id, uint64 parent_id, uint64 query_id, SpanType node_type,
@@ -49,6 +52,16 @@ cleanup_planstarts(void)
 	traced_planstates = NULL;
 	max_planstart = 0;
 	index_planstart = 0;
+}
+
+/*
+ * Generate a new span id that will be used for worker's parent
+ */
+uint64
+generate_parallel_workers_parent_id(void)
+{
+	parallel_workers_parent_id = pg_prng_int64(&pg_global_prng_state);
+	return parallel_workers_parent_id;
 }
 
 /*
@@ -166,6 +179,8 @@ drop_traced_planstates(void)
 static TupleTableSlot *
 ExecProcNodeFirstPgTracing(PlanState *node)
 {
+	uint64		span_id;
+
 	if (max_planstart == 0)
 
 		/*
@@ -186,10 +201,26 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 									  max_planstart * sizeof(TracedPlanstate));
 	}
 
+	switch (nodeTag(node))
+	{
+		case T_GatherState:
+		case T_GatherMergeState:
+
+			/*
+			 * This is the parent node for the parallel workers, use the
+			 * corrent span_id
+			 */
+			span_id = parallel_workers_parent_id;
+			break;
+		default:
+			/* Normal node, generate a random span_id */
+			span_id = pg_prng_uint64(&pg_global_prng_state);
+	}
+
 	/* Register planstate start */
 	traced_planstates[index_planstart].planstate = node;
 	traced_planstates[index_planstart].node_start = GetCurrentTimestamp();
-	traced_planstates[index_planstart].span_id = pg_prng_uint64(&pg_global_prng_state);
+	traced_planstates[index_planstart].span_id = span_id;
 	traced_planstates[index_planstart].nested_level = nested_level;
 	index_planstart++;
 
@@ -410,7 +441,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 	if (haschildren && planstateTraceContext->deparse_ctx)
 		planstateTraceContext->ancestors = lcons(planstate->plan, planstateTraceContext->ancestors);
 
-    /* We only need to walk the subplans if they are executed */
+	/* We only need to walk the subplans if they are executed */
 	subplan_executed = is_subplan_executed(planstate);
 	/* Walk the outerplan */
 	if (outerPlanState(planstate) && subplan_executed)
