@@ -280,6 +280,36 @@ create_spans_from_custom_scan(CustomScanState *css, planstateTraceContext * plan
 }
 
 /*
+ * Check if the subplan will run or not
+ *
+ * With parallel queries, if leader participation is disabled, the leader won't execute the subplans
+ */
+static bool
+is_subplan_executed(PlanState *planstate)
+{
+	if (planstate == NULL)
+		return false;
+
+	switch (nodeTag(planstate))
+	{
+		case T_GatherState:
+			{
+				GatherState *splanstate = (GatherState *) planstate;
+
+				return splanstate->need_to_scan_locally;
+			}
+		case T_GatherMerge:
+			{
+				GatherMergeState *splanstate = (GatherMergeState *) planstate;
+
+				return splanstate->need_to_scan_locally;
+			}
+		default:
+			return true;
+	}
+}
+
+/*
  * Walk through the planstate tree generating a node span for each node.
  */
 static TimestampTz
@@ -295,6 +325,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 	TimestampTz span_end;
 	TimestampTz child_end = 0;
 	bool		haschildren = false;
+	bool		subplan_executed = true;
 
 	/* The node was never executed, skip it */
 	if (planstate->instrument == NULL)
@@ -379,11 +410,13 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 	if (haschildren && planstateTraceContext->deparse_ctx)
 		planstateTraceContext->ancestors = lcons(planstate->plan, planstateTraceContext->ancestors);
 
+    /* We only need to walk the subplans if they are executed */
+	subplan_executed = is_subplan_executed(planstate);
 	/* Walk the outerplan */
-	if (outerPlanState(planstate))
+	if (outerPlanState(planstate) && subplan_executed)
 		create_spans_from_planstate(outerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 	/* Walk the innerplan */
-	if (innerPlanState(planstate))
+	if (innerPlanState(planstate) && subplan_executed)
 		create_spans_from_planstate(innerPlanState(planstate), planstateTraceContext, span_id, query_id, span_start, root_end, latest_end);
 
 	/* Handle init plans */
