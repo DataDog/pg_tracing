@@ -305,6 +305,20 @@ CREATE OR REPLACE FUNCTION function_with_error(IN anyarray, OUT x anyelement, OU
     LANGUAGE sql STRICT IMMUTABLE PARALLEL SAFE
     AS 'select s from pg_catalog.generate_series(1, 1, 1) as g(s)';
 
+CREATE FUNCTION eval_expr(expr text)
+RETURNS text AS
+$$
+DECLARE
+  result text;
+BEGIN
+  EXECUTE 'select '||expr INTO result;
+  RETURN result;
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLERRM;
+END
+$$
+LANGUAGE plpgsql;
+
 -- Check that tracing a function call with the wrong number of arguments is managed correctly
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ select function_with_error('{1,2,3}'::int[]);
 

@@ -40,7 +40,7 @@ endif
 ifeq ($(shell test $(PG_VERSION) -lt 17; echo $$?),0)
 REGRESSCHECKS += planstate_projectset
 else
-REGRESSCHECKS += planstate_projectset_17
+REGRESSCHECKS += planstate_projectset_17 nested_17
 endif
 
 # PG 18 contains additional psql metacommand to test extended protocol
