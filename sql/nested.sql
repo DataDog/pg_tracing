@@ -191,6 +191,7 @@ SELECT count(distinct query_id)=2 from pg_tracing_consume_spans where trace_id='
 -- Trace a statement with multiple nested levels
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000059-0000000000000059-01'*/ select * FROM test_2_nested_levels(1);
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000059';
+CALL clean_spans();
 
 -- Cleanup
 CALL clean_spans();

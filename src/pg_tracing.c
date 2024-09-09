@@ -1382,7 +1382,7 @@ handle_pg_error(const Traceparent * traceparent,
 		process_query_desc(traceparent, queryDesc, sql_error_code, false, span_end_time);
 	}
 	span = peek_active_span();
-	while (span != NULL)
+	while (span != NULL && span->nested_level == nested_level)
 	{
 		/* Assign the error code to the latest top span */
 		span->sql_error_code = sql_error_code;

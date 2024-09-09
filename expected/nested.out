@@ -295,5 +295,6 @@ select span_operation, lvl FROM peek_ordered_spans where trace_id='0000000000000
  IndexOnlyScan using pg_class_oid_index on pg_class |   7
 (12 rows)
 
+CALL clean_spans();
 -- Cleanup
 CALL clean_spans();
