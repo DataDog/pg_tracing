@@ -160,3 +160,15 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 
 -- Check count of query_id
 SELECT count(distinct query_id) from pg_tracing_consume_spans;
+
+-- Test foreign key failure
+CREATE TYPE rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+CREATE TABLE enumtest_parent (id rainbow PRIMARY KEY);
+CREATE TABLE enumtest_child (parent rainbow REFERENCES enumtest_parent);
+INSERT INTO enumtest_parent VALUES ('red');
+/*traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ INSERT INTO enumtest_child VALUES ('blue');
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
+
+-- Cleanup
+CALL reset_settings();
+CALL clean_spans();

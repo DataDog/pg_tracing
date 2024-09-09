@@ -246,3 +246,30 @@ SELECT count(distinct query_id) from pg_tracing_consume_spans;
      4
 (1 row)
 
+-- Test foreign key failure
+CREATE TYPE rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+CREATE TABLE enumtest_parent (id rainbow PRIMARY KEY);
+CREATE TABLE enumtest_child (parent rainbow REFERENCES enumtest_parent);
+INSERT INTO enumtest_parent VALUES ('red');
+/*traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ INSERT INTO enumtest_child VALUES ('blue');
+ERROR:  insert or update on table "enumtest_child" violates foreign key constraint "enumtest_child_parent_fkey"
+DETAIL:  Key (parent)=(blue) is not present in table "enumtest_parent".
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
+             trace_id             |   span_type    |                                                                  span_operation                                                                  | lvl 
+----------------------------------+----------------+--------------------------------------------------------------------------------------------------------------------------------------------------+-----
+ 00000000000000000000000000000004 | Insert query   | INSERT INTO enumtest_child VALUES ($1);                                                                                                          |   1
+ 00000000000000000000000000000004 | Planner        | Planner                                                                                                                                          |   2
+ 00000000000000000000000000000004 | ExecutorRun    | ExecutorRun                                                                                                                                      |   2
+ 00000000000000000000000000000004 | Insert         | Insert on enumtest_child                                                                                                                         |   3
+ 00000000000000000000000000000004 | Result         | Result                                                                                                                                           |   4
+ 00000000000000000000000000000004 | ExecutorFinish | ExecutorFinish                                                                                                                                   |   2
+ 00000000000000000000000000000004 | Select query   | SELECT $2 FROM ONLY "public"."enumtest_parent" x WHERE "id"::pg_catalog.anyenum OPERATOR(pg_catalog.=) $1::pg_catalog.anyenum FOR KEY SHARE OF x |   3
+ 00000000000000000000000000000004 | Planner        | Planner                                                                                                                                          |   4
+ 00000000000000000000000000000004 | ExecutorRun    | ExecutorRun                                                                                                                                      |   4
+ 00000000000000000000000000000004 | LockRows       | LockRows                                                                                                                                         |   5
+ 00000000000000000000000000000004 | IndexScan      | IndexScan using enumtest_parent_pkey on enumtest_parent x                                                                                        |   6
+(11 rows)
+
+-- Cleanup
+CALL reset_settings();
+CALL clean_spans();

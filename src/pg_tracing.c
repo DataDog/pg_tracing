@@ -1045,6 +1045,9 @@ process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
 {
 	NodeCounters *node_counters = &peek_active_span()->node_counters;
 
+    if (!queryDesc->totaltime->running)
+        return;
+
 	/* Process total counters */
 	if (queryDesc->totaltime)
 	{
@@ -1363,6 +1366,13 @@ handle_pg_error(const Traceparent * traceparent,
 	sql_error_code = geterrcode();
 
 	if (queryDesc != NULL)
+	{
+		/*
+		 * On error, instrumentation may have been left running, stop it to
+		 * avoid error thrown by InstrEndLoop
+		 */
+		if (!INSTR_TIME_IS_ZERO(queryDesc->totaltime->starttime))
+			InstrStopNode(queryDesc->totaltime, 0);
 
 		/*
 		 * Within error, we need to avoid any possible allocation as this
@@ -1370,6 +1380,7 @@ handle_pg_error(const Traceparent * traceparent,
 		 * through lcons so we explicitely disable it.
 		 */
 		process_query_desc(traceparent, queryDesc, sql_error_code, false, span_end_time);
+	}
 	span = peek_active_span();
 	while (span != NULL)
 	{
