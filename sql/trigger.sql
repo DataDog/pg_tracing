@@ -169,6 +169,21 @@ INSERT INTO enumtest_parent VALUES ('red');
 /*traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ INSERT INTO enumtest_child VALUES ('blue');
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
 
+-- Test before trigger with copy dml
+create table copydml_test (id serial, t text);
+create function qqq_trig() returns trigger as $$
+begin
+if tg_op in ('INSERT', 'UPDATE') then
+    return new;
+end if;
+end
+$$ language plpgsql;
+create trigger qqqbef before insert or update or delete on copydml_test
+    for each row execute procedure qqq_trig();
+/*traceparent='00-00000000000000000000000000000005-0000000000000005-01'*/ copy (insert into copydml_test (t) values ('f') returning id) to stdout;
+
+SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000005';
+
 -- Cleanup
 CALL reset_settings();
 CALL clean_spans();

@@ -153,18 +153,24 @@ begin_active_span(const SpanContext * span_context, Span * span,
 
 		/*
 		 * Both planstate and previous top span can be the parent for the new
-		 * top span, we use the most recent as a parent
+		 * top span, we use the most recent as a parent. planstate must be
+		 * currently active to be a parent candidate.
 		 */
-		if (parent_traced_planstate != NULL && parent_traced_planstate->node_start >= parent_span->start)
+		if (parent_traced_planstate != NULL
+			&& parent_traced_planstate->node_start >= parent_span->start
+			&& !INSTR_TIME_IS_ZERO(parent_traced_planstate->planstate->instrument->starttime))
 			parent_id = parent_traced_planstate->span_id;
 		else
+		{
 			parent_id = parent_span->span_id;
+			parent_planstate_index = -1;
+		}
 	}
 
-	begin_span(span_context->traceparent->trace_id, span, span_type,
-			   NULL, parent_id, span_context->query_id, span_context->start_time);
 	/* Keep track of the parent planstate index */
 	span->parent_planstate_index = parent_planstate_index;
+	begin_span(span_context->traceparent->trace_id, span, span_type,
+			   NULL, parent_id, span_context->query_id, span_context->start_time);
 
 	if (IsParallelWorker())
 	{
