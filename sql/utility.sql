@@ -67,8 +67,8 @@ SET pg_tracing.sample_rate = 0.0;
 
 -- View displaying spans with their nested level
 CREATE VIEW peek_spans_with_level AS
-    WITH RECURSIVE list_trace_spans(trace_id, parent_id, span_id, query_id, span_type, span_operation, span_start, span_end, sql_error_code, userid, dbid, pid, subxact_count, plan_startup_cost, plan_total_cost, plan_rows, plan_width, rows, nloops, shared_blks_hit, shared_blks_read, shared_blks_dirtied, shared_blks_written, local_blks_hit, local_blks_read, local_blks_dirtied, local_blks_written, blk_read_time, blk_write_time, temp_blks_read, temp_blks_written, temp_blk_read_time, temp_blk_write_time, wal_records, wal_fpi, wal_bytes, jit_functions, jit_generation_time, jit_inlining_time, jit_optimization_time, jit_emission_time, startup, parameters, deparse_info, lvl) AS (
-        SELECT p.*, 1
+    WITH RECURSIVE list_trace_spans AS (
+        SELECT p.*, 1 as lvl
         FROM pg_tracing_peek_spans p where not parent_id=ANY(SELECT span_id from pg_tracing_peek_spans)
       UNION ALL
         SELECT s.*, lvl + 1
