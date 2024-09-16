@@ -95,8 +95,8 @@ typedef struct PerLevelInfos
 										 * level. Executor run is used as
 										 * parent for spans generated from
 										 * planstate */
-	TimestampTz executor_start;
-	TimestampTz executor_end;
+	TimestampTz executor_run_start;
+	TimestampTz executor_run_end;
 }			PerLevelInfos;
 
 /* GUC variables */
@@ -1067,7 +1067,7 @@ process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
 	if (pg_tracing_planstate_spans)
 	{
 		uint64		parent_id = per_level_infos[nested_level].executor_run_span_id;
-		TimestampTz parent_start = per_level_infos[nested_level].executor_start;
+		TimestampTz parent_start = per_level_infos[nested_level].executor_run_start;
 		uint64		query_id = queryDesc->plannedstmt->queryId;
 
 		process_planstate(traceparent, queryDesc, sql_error_code,
@@ -1881,7 +1881,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	executor_run_span = push_child_active_span(pg_tracing_mem_ctx, &span_context, SPAN_EXECUTOR_RUN);
 
 	per_level_infos[nested_level].executor_run_span_id = executor_run_span->span_id;
-	per_level_infos[nested_level].executor_start = executor_run_span->start;
+	per_level_infos[nested_level].executor_run_start = executor_run_span->start;
 
 	/*
 	 * If this query starts parallel worker, push the trace context for the
@@ -1956,7 +1956,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	nested_level--;
 	/* End ExecutorRun span and store it */
 	pop_and_store_active_span(span_end_time);
-	per_level_infos[nested_level].executor_end = span_end_time;
+	per_level_infos[nested_level].executor_run_end = span_end_time;
 }
 
 /*
@@ -2087,7 +2087,7 @@ pg_tracing_ExecutorEnd(QueryDesc *queryDesc)
 	 * We're at the end of the Executor for this level, generate spans from
 	 * the planstate if needed
 	 */
-	parent_end = per_level_infos[nested_level].executor_end;
+	parent_end = per_level_infos[nested_level].executor_run_end;
 	process_query_desc(traceparent, queryDesc, 0, pg_tracing_deparse_plan, parent_end);
 
 	/* No need to increment nested level here */
