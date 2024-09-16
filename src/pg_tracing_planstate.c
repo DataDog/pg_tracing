@@ -177,7 +177,7 @@ drop_traced_planstates(void)
  * It will track the time of the first node call needed to place the planstate span.
  */
 static TupleTableSlot *
-ExecProcNodeFirstPgTracing(PlanState *node)
+ExecProcNodeFirstPgTracing(PlanState *planstate)
 {
 	uint64		span_id;
 
@@ -201,7 +201,7 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 									  max_planstart * sizeof(TracedPlanstate));
 	}
 
-	switch (nodeTag(node))
+	switch (nodeTag(planstate))
 	{
 		case T_GatherState:
 		case T_GatherMergeState:
@@ -218,7 +218,7 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 	}
 
 	/* Register planstate start */
-	traced_planstates[index_planstart].planstate = node;
+	traced_planstates[index_planstart].planstate = planstate;
 	traced_planstates[index_planstart].node_start = GetCurrentTimestamp();
 	traced_planstates[index_planstart].span_id = span_id;
 	traced_planstates[index_planstart].nested_level = nested_level;
@@ -226,8 +226,8 @@ ExecProcNodeFirstPgTracing(PlanState *node)
 
 exit:
 	/* Restore previous exec proc */
-	node->ExecProcNode = previous_ExecProcNode;
-	return node->ExecProcNode(node);
+	planstate->ExecProcNode = previous_ExecProcNode;
+	return planstate->ExecProcNode(planstate);
 }
 
 /*
