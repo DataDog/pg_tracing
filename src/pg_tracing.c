@@ -1361,7 +1361,7 @@ handle_pg_error(const Traceparent * traceparent,
 {
 	int			sql_error_code;
 	Span	   *span;
-	int			max_trace_spans = current_trace_spans->max;
+	int			max_trace_spans PG_USED_FOR_ASSERTS_ONLY = current_trace_spans->max;
 
 	sql_error_code = geterrcode();
 
