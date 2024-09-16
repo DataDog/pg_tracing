@@ -41,8 +41,6 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	else
 		span->span_id = pg_prng_uint64(&pg_global_prng_state);
 
-	span->parallel_aware = false;
-	span->async_capable = false;
 	span->worker_id = -1;
 	span->operation_name_offset = -1;
 	span->num_parameters = 0;
