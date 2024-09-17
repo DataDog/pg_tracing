@@ -13,6 +13,7 @@
 #include "pg_tracing.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "storage/latch.h"
 #include "storage/procsignal.h"
@@ -28,10 +29,7 @@ typedef struct OtelContext
 	pgTracingSpans *spans;		/* A copy of spans to send */
 	char	   *spans_str;		/* A copy of span text */
 
-	const char *endpoint;		/* Target otel collector */
-	int			naptime;		/* Duration between upload ot spans to the
-								 * otel collector */
-	int			connect_timeout_ms; /* Connection timeout in ms */
+	bool		config_changed;
 }			OtelContext;
 
 /* State and configuration of the otel exporter */
@@ -106,8 +104,13 @@ send_json_trace(OtelContext * octx, const char *json_span)
 			return CURLE_FAILED_INIT;
 		}
 		curl_easy_setopt(octx->curl, CURLOPT_HTTPHEADER, octx->headers);
-		curl_easy_setopt(octx->curl, CURLOPT_URL, octx->endpoint);
-		curl_easy_setopt(octx->curl, CURLOPT_CONNECTTIMEOUT_MS, octx->connect_timeout_ms);
+		octx->config_changed = true;
+	}
+	if (octx->config_changed)
+	{
+		curl_easy_setopt(octx->curl, CURLOPT_URL, pg_tracing_otel_endpoint);
+		curl_easy_setopt(octx->curl, CURLOPT_CONNECTTIMEOUT_MS, pg_tracing_otel_connect_timeout_ms);
+		octx->config_changed = false;
 	}
 	curl_easy_setopt(octx->curl, CURLOPT_POSTFIELDS, json_span);
 	curl_easy_setopt(octx->curl, CURLOPT_POSTFIELDSIZE, (long) strlen(json_span));
@@ -137,7 +140,7 @@ send_json_to_otel_collector(OtelContext * octx, JsonContext * json_ctx)
 {
 	CURLcode	ret;
 
-	elog(INFO, "Sending %d spans to %s", json_ctx->num_spans, octx->endpoint);
+	elog(INFO, "Sending %d spans to %s", json_ctx->num_spans, pg_tracing_otel_endpoint);
 	ret = send_json_trace(octx, json_ctx->str->data);
 	if (ret == CURLE_OK)
 	{
@@ -222,7 +225,7 @@ send_spans_to_otel_collector(OtelContext * octx, JsonContext * json_ctx)
  * Register otel exporter background worker
  */
 void
-pg_tracing_start_worker(const char *endpoint, int naptime, int connect_timeout_ms)
+pg_tracing_start_worker(void)
 {
 	BackgroundWorker worker;
 	BackgroundWorkerHandle *handle;
@@ -236,13 +239,6 @@ pg_tracing_start_worker(const char *endpoint, int naptime, int connect_timeout_m
 	strcpy(worker.bgw_function_name, "pg_tracing_otel_exporter");
 	strcpy(worker.bgw_name, "pg_tracing otel exporter");
 	strcpy(worker.bgw_type, "pg_tracing otel exporter");
-
-	/* Initialize the otel context struct */
-	otel_context.headers = NULL;
-	otel_context.curl = NULL;
-	otel_context.endpoint = endpoint;
-	otel_context.naptime = naptime;
-	otel_context.connect_timeout_ms = connect_timeout_ms;
 
 	if (process_shared_preload_libraries_in_progress)
 	{
@@ -276,6 +272,10 @@ pg_tracing_otel_exporter(Datum main_arg)
 	JsonContext json_ctx;
 
 	json_ctx.str = NULL;
+
+	/* Initialize the otel context struct */
+	otel_context.headers = NULL;
+	otel_context.curl = NULL;
 
 	/* Establish signal handlers; once that's done, unblock signals. */
 	pqsignal(SIGTERM, SignalHandlerForShutdownRequest);
@@ -321,12 +321,26 @@ pg_tracing_otel_exporter(Datum main_arg)
 	while (!ShutdownRequestPending)
 	{
 		int			rc;
+		int			wakeEvents;
 
 		/* Clean the latch and wait for the next event */
 		ResetLatch(MyLatch);
-		rc = WaitLatch(MyLatch,
-					   WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-					   otel_context.naptime,
+
+		if (ConfigReloadPending)
+		{
+			ConfigReloadPending = false;
+			ProcessConfigFile(PGC_SIGHUP);
+		}
+
+		/*
+		 * If disabled by setting endpoint to empty, sleep until woken up by
+		 * another configuration change.
+		 */
+		wakeEvents = WL_LATCH_SET | WL_EXIT_ON_PM_DEATH;
+		if (pg_tracing_otel_endpoint != NULL && pg_tracing_otel_endpoint[0] != '\0')
+			wakeEvents |= WL_TIMEOUT;
+
+		rc = WaitLatch(MyLatch, wakeEvents, pg_tracing_otel_naptime,
 					   PG_WAIT_EXTENSION);
 
 		/* Send spans if we have any */
@@ -343,4 +357,21 @@ pg_tracing_otel_exporter(Datum main_arg)
 		otel_context.curl = NULL;
 	}
 	curl_global_cleanup();
+}
+
+/*
+ * Assign hooks to notice changes to GUCs that need to be also set on the Curl
+ * handle. (We don't dare to make the changes to the Curl handle here directly,
+ * in case there's an error.)
+ */
+void
+otel_config_int_assign_hook(int newval, void *extra)
+{
+	otel_context.config_changed = true;
+}
+
+void
+otel_config_string_assign_hook(const char *newval, void *extra)
+{
+	otel_context.config_changed = true;
 }

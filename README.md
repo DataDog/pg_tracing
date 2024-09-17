@@ -155,3 +155,5 @@ pg_tracing.otel_naptime = 2000
 ```
 
 If an otel endpoint is defined, a background worker will be started and will send spans every $naptime using the OTLP HTTP/JSON protocol.
+The endpoint can be changed while the server is running, but if it was not set when the server was started, changing it to non-empty value
+requires a restart.

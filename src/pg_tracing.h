@@ -426,6 +426,9 @@ extern pgTracingSpans * shared_spans;
 extern char *shared_str;
 extern int	nested_level;
 extern char *pg_tracing_otel_service_name;
+extern char *pg_tracing_otel_endpoint;
+extern int	pg_tracing_otel_naptime;
+extern int	pg_tracing_otel_connect_timeout_ms;
 
 extern void
 			store_span(const Span * span);
@@ -464,6 +467,12 @@ extern Size
 
 /* pg_tracing_otel.c */
 extern void
-			pg_tracing_start_worker(const char *endpoint, int naptime, int connect_timeout_ms);
+			pg_tracing_start_worker(void);
+
+extern void
+			otel_config_int_assign_hook(int newval, void *extra);
+
+extern void
+			otel_config_string_assign_hook(const char *newval, void *extra);
 
 #endif
