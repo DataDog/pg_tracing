@@ -123,13 +123,13 @@ static int	pg_tracing_buffer_mode = PG_TRACING_KEEP_ON_FULL;	/* behaviour on ful
 																 * buffer */
 static char *pg_tracing_filter_query_ids = NULL;	/* only sample query
 													 * matching query ids */
-static char *pg_tracing_otel_endpoint = NULL;	/* Otel collector to send
+char	   *pg_tracing_otel_endpoint = NULL;	/* Otel collector to send
 												 * spans to */
 char	   *pg_tracing_otel_service_name = NULL;	/* Service name set in
 													 * otel traces */
-static int	pg_tracing_otel_naptime;	/* Delay between upload of spans to
+int			pg_tracing_otel_naptime;	/* Delay between upload of spans to
 										 * otel collector */
-static int	pg_tracing_otel_connect_timeout_ms; /* Connect timeout to the otel
+int			pg_tracing_otel_connect_timeout_ms; /* Connect timeout to the otel
 												 * collector */
 static char *guc_tracecontext_str = NULL;	/* Trace context string propagated
 											 * through GUC variable */
@@ -448,7 +448,7 @@ _PG_init(void)
 							10000,
 							1000,
 							500000,
-							PGC_POSTMASTER,
+							PGC_SIGHUP,
 							0,
 							NULL,
 							NULL,
@@ -461,10 +461,10 @@ _PG_init(void)
 							1000,
 							100,
 							600000,
-							PGC_POSTMASTER,
+							PGC_SIGHUP,
 							0,
 							NULL,
-							NULL,
+							&otel_config_int_assign_hook,
 							NULL);
 
 	DefineCustomStringVariable("pg_tracing.otel_endpoint",
@@ -472,10 +472,10 @@ _PG_init(void)
 							   "If unset, no background worker to export to otel is created.",
 							   &pg_tracing_otel_endpoint,
 							   NULL,
-							   PGC_POSTMASTER,
+							   PGC_SIGHUP,
 							   0,
 							   NULL,
-							   NULL,
+							   &otel_config_string_assign_hook,
 							   NULL);
 
 	DefineCustomStringVariable("pg_tracing.otel_service_name",
@@ -483,7 +483,7 @@ _PG_init(void)
 							   NULL,
 							   &pg_tracing_otel_service_name,
 							   "PostgreSQL_Server",
-							   PGC_POSTMASTER,
+							   PGC_SIGHUP,
 							   0,
 							   NULL,
 							   NULL,
@@ -536,8 +536,7 @@ _PG_init(void)
 	if (pg_tracing_otel_endpoint != NULL)
 	{
 		elog(INFO, "Starting otel exporter worker on endpoint %s", pg_tracing_otel_endpoint);
-		pg_tracing_start_worker(pg_tracing_otel_endpoint, pg_tracing_otel_naptime,
-								pg_tracing_otel_connect_timeout_ms);
+		pg_tracing_start_worker();
 	}
 }
 
