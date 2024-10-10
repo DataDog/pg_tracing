@@ -237,6 +237,7 @@ select count(*) = 0 from pg_tracing_consume_spans;
 
 -- Force a query to start from ExecutorRun
 SET plan_cache_mode='force_generic_plan';
+CALL clean_spans();
 EXECUTE test_prepared_one_param(200);
 SET plan_cache_mode TO DEFAULT;
 
@@ -276,6 +277,7 @@ CALL clean_spans();
 
 -- Test prepared statement with generic plan
 SET plan_cache_mode='force_generic_plan';
+CALL clean_spans();
 EXECUTE test_prepared_one_param(200);
 SET plan_cache_mode TO DEFAULT;
 
