@@ -232,6 +232,7 @@ select count(*) = 0 from pg_tracing_consume_spans;
 
 -- Force a query to start from ExecutorRun
 SET plan_cache_mode='force_generic_plan';
+CALL clean_spans();
 EXECUTE test_prepared_one_param(200);
  ?column? 
 ----------
@@ -324,6 +325,7 @@ SELECT query_id = :query_id from pg_tracing_peek_spans where trace_id='000000000
 CALL clean_spans();
 -- Test prepared statement with generic plan
 SET plan_cache_mode='force_generic_plan';
+CALL clean_spans();
 EXECUTE test_prepared_one_param(200);
  ?column? 
 ----------
@@ -335,15 +337,13 @@ SET plan_cache_mode TO DEFAULT;
 select count(distinct(trace_id)) from pg_tracing_peek_spans;
  count 
 -------
-     3
+     2
 (1 row)
 
 -- Check spans of test_prepared_one_param execution
 select span_operation, parameters, lvl from peek_ordered_spans;
                      span_operation                      | parameters | lvl 
 ---------------------------------------------------------+------------+-----
- SET plan_cache_mode='force_generic_plan';               |            |   1
- ProcessUtility                                          |            |   2
  EXECUTE test_prepared_one_param(200);                   |            |   1
  ProcessUtility                                          |            |   2
  PREPARE test_prepared_one_param (integer) AS SELECT $1; |            |   3
@@ -351,16 +351,15 @@ select span_operation, parameters, lvl from peek_ordered_spans;
  Result                                                  |            |   5
  SET plan_cache_mode TO DEFAULT;                         |            |   1
  ProcessUtility                                          |            |   2
-(9 rows)
+(7 rows)
 
 -- Check the top span (standalone top span has trace_id=parent_id)
 select span_operation, parameters, lvl from peek_ordered_spans where right(trace_id, 16) = parent_id;
-              span_operation               | parameters | lvl 
--------------------------------------------+------------+-----
- SET plan_cache_mode='force_generic_plan'; |            |   1
- EXECUTE test_prepared_one_param(200);     |            |   1
- SET plan_cache_mode TO DEFAULT;           |            |   1
-(3 rows)
+            span_operation             | parameters | lvl 
+---------------------------------------+------------+-----
+ EXECUTE test_prepared_one_param(200); |            |   1
+ SET plan_cache_mode TO DEFAULT;       |            |   1
+(2 rows)
 
 CALL clean_spans();
 -- Second create extension should generate an error that is captured by span
