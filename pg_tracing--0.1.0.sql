@@ -100,7 +100,7 @@ CREATE VIEW pg_tracing_peek_spans AS
 -- Spans with their level
 CREATE VIEW pg_tracing_peek_spans_with_level AS
     WITH RECURSIVE list_trace_spans AS (
-        SELECT p.*, 1 as lvl
+        SELECT p.*, 0 as lvl
         FROM pg_tracing_peek_spans p where not parent_id=ANY(SELECT span_id from pg_tracing_peek_spans)
       UNION ALL
         SELECT s.*, lvl + 1

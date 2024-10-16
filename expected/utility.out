@@ -262,23 +262,23 @@ select count(distinct(trace_id)) from pg_tracing_peek_spans;
 select span_operation, parameters, lvl from peek_ordered_spans;
                       span_operation                       | parameters | lvl 
 -----------------------------------------------------------+------------+-----
- PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   1
- ProcessUtility                                            |            |   2
- PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   3
- EXECUTE test_prepared_one_param_2(100);                   |            |   1
- ProcessUtility                                            |            |   2
- PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; | {100}      |   3
- Planner                                                   |            |   4
- ExecutorRun                                               |            |   4
- Result                                                    |            |   5
+ PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   0
+ ProcessUtility                                            |            |   1
+ PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   2
+ EXECUTE test_prepared_one_param_2(100);                   |            |   0
+ ProcessUtility                                            |            |   1
+ PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; | {100}      |   2
+ Planner                                                   |            |   3
+ ExecutorRun                                               |            |   3
+ Result                                                    |            |   4
 (9 rows)
 
 -- Check the top span (standalone top span has trace_id=parent_id)
 select span_operation, parameters, lvl from peek_ordered_spans where right(trace_id, 16) = parent_id;
                       span_operation                       | parameters | lvl 
 -----------------------------------------------------------+------------+-----
- PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   1
- EXECUTE test_prepared_one_param_2(100);                   |            |   1
+ PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   0
+ EXECUTE test_prepared_one_param_2(100);                   |            |   0
 (2 rows)
 
 CALL clean_spans();
@@ -289,14 +289,14 @@ PREPARE test_insert (integer, text) AS INSERT INTO pg_tracing_test(a, b) VALUES 
 select trace_id, span_operation, parameters, lvl from peek_ordered_spans WHERE trace_id='00000000000000000000000000000001';
              trace_id             |                                      span_operation                                       | parameters | lvl 
 ----------------------------------+-------------------------------------------------------------------------------------------+------------+-----
- 00000000000000000000000000000001 | EXECUTE test_insert(100, '2');                                                            |            |   1
- 00000000000000000000000000000001 | ProcessUtility                                                                            |            |   2
- 00000000000000000000000000000001 | PREPARE test_insert (integer, text) AS INSERT INTO pg_tracing_test(a, b) VALUES ($1, $2); | {100,2}    |   3
- 00000000000000000000000000000001 | Planner                                                                                   |            |   4
- 00000000000000000000000000000001 | ExecutorRun                                                                               |            |   4
- 00000000000000000000000000000001 | Insert on pg_tracing_test                                                                 |            |   5
- 00000000000000000000000000000001 | Result                                                                                    |            |   6
- 00000000000000000000000000000001 | TransactionCommit                                                                         |            |   1
+ 00000000000000000000000000000001 | EXECUTE test_insert(100, '2');                                                            |            |   0
+ 00000000000000000000000000000001 | ProcessUtility                                                                            |            |   1
+ 00000000000000000000000000000001 | PREPARE test_insert (integer, text) AS INSERT INTO pg_tracing_test(a, b) VALUES ($1, $2); | {100,2}    |   2
+ 00000000000000000000000000000001 | Planner                                                                                   |            |   3
+ 00000000000000000000000000000001 | ExecutorRun                                                                               |            |   3
+ 00000000000000000000000000000001 | Insert on pg_tracing_test                                                                 |            |   4
+ 00000000000000000000000000000001 | Result                                                                                    |            |   5
+ 00000000000000000000000000000001 | TransactionCommit                                                                         |            |   0
 (8 rows)
 
 -- We should have only two query_ids
@@ -334,21 +334,21 @@ select count(distinct(trace_id)) from pg_tracing_peek_spans;
 select span_operation, parameters, lvl from peek_ordered_spans;
                      span_operation                      | parameters | lvl 
 ---------------------------------------------------------+------------+-----
- EXECUTE test_prepared_one_param(200);                   |            |   1
- ProcessUtility                                          |            |   2
- PREPARE test_prepared_one_param (integer) AS SELECT $1; |            |   3
- ExecutorRun                                             |            |   4
- Result                                                  |            |   5
- SET plan_cache_mode TO DEFAULT;                         |            |   1
- ProcessUtility                                          |            |   2
+ EXECUTE test_prepared_one_param(200);                   |            |   0
+ ProcessUtility                                          |            |   1
+ PREPARE test_prepared_one_param (integer) AS SELECT $1; |            |   2
+ ExecutorRun                                             |            |   3
+ Result                                                  |            |   4
+ SET plan_cache_mode TO DEFAULT;                         |            |   0
+ ProcessUtility                                          |            |   1
 (7 rows)
 
 -- Check the top span (standalone top span has trace_id=parent_id)
 select span_operation, parameters, lvl from peek_ordered_spans where right(trace_id, 16) = parent_id;
             span_operation             | parameters | lvl 
 ---------------------------------------+------------+-----
- EXECUTE test_prepared_one_param(200); |            |   1
- SET plan_cache_mode TO DEFAULT;       |            |   1
+ EXECUTE test_prepared_one_param(200); |            |   0
+ SET plan_cache_mode TO DEFAULT;       |            |   0
 (2 rows)
 
 CALL clean_spans();
@@ -358,8 +358,8 @@ ERROR:  extension "pg_tracing" already exists
 select span_operation, parameters, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
         span_operation        | parameters | sql_error_code | lvl 
 ------------------------------+------------+----------------+-----
- CREATE EXTENSION pg_tracing; |            | 42710          |   1
- ProcessUtility               |            | 42710          |   2
+ CREATE EXTENSION pg_tracing; |            | 42710          |   0
+ ProcessUtility               |            | 42710          |   1
 (2 rows)
 
 -- Create test table
@@ -368,9 +368,9 @@ select span_operation, parameters, sql_error_code, lvl from peek_ordered_spans w
 select trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
              trace_id             |     span_type     |                   span_operation                    | lvl 
 ----------------------------------+-------------------+-----------------------------------------------------+-----
- 00000000000000000000000000000002 | Utility query     | CREATE TABLE test_create_table (a int, b char(20)); |   1
- 00000000000000000000000000000002 | ProcessUtility    | ProcessUtility                                      |   2
- 00000000000000000000000000000002 | TransactionCommit | TransactionCommit                                   |   1
+ 00000000000000000000000000000002 | Utility query     | CREATE TABLE test_create_table (a int, b char(20)); |   0
+ 00000000000000000000000000000002 | ProcessUtility    | ProcessUtility                                      |   1
+ 00000000000000000000000000000002 | TransactionCommit | TransactionCommit                                   |   0
 (3 rows)
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ CREATE INDEX test_create_table_index ON test_create_table (a);
@@ -378,9 +378,9 @@ select trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 select trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
              trace_id             |     span_type     |                         span_operation                         | lvl 
 ----------------------------------+-------------------+----------------------------------------------------------------+-----
- 00000000000000000000000000000003 | Utility query     | CREATE INDEX test_create_table_index ON test_create_table (a); |   1
- 00000000000000000000000000000003 | ProcessUtility    | ProcessUtility                                                 |   2
- 00000000000000000000000000000003 | TransactionCommit | TransactionCommit                                              |   1
+ 00000000000000000000000000000003 | Utility query     | CREATE INDEX test_create_table_index ON test_create_table (a); |   0
+ 00000000000000000000000000000003 | ProcessUtility    | ProcessUtility                                                 |   1
+ 00000000000000000000000000000003 | TransactionCommit | TransactionCommit                                              |   0
 (3 rows)
 
 CREATE OR REPLACE FUNCTION function_with_error(IN anyarray, OUT x anyelement, OUT n int)
@@ -409,29 +409,29 @@ CONTEXT:  SQL function "function_with_error" during startup
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
              trace_id             |  span_type   |                        span_operation                        | sql_error_code | lvl 
 ----------------------------------+--------------+--------------------------------------------------------------+----------------+-----
- 00000000000000000000000000000004 | Select query | select function_with_error($1::int[]);                       | 42P13          |   1
- 00000000000000000000000000000004 | Planner      | Planner                                                      | 00000          |   2
- 00000000000000000000000000000004 | ExecutorRun  | ExecutorRun                                                  | 42P13          |   2
- 00000000000000000000000000000004 | ProjectSet   | ProjectSet                                                   | 42P13          |   3
- 00000000000000000000000000000004 | Result       | Result                                                       | 42P13          |   4
- 00000000000000000000000000000004 | Select query | select s from pg_catalog.generate_series($1, $2, $3) as g(s) | 00000          |   4
+ 00000000000000000000000000000004 | Select query | select function_with_error($1::int[]);                       | 42P13          |   0
+ 00000000000000000000000000000004 | Planner      | Planner                                                      | 00000          |   1
+ 00000000000000000000000000000004 | ExecutorRun  | ExecutorRun                                                  | 42P13          |   1
+ 00000000000000000000000000000004 | ProjectSet   | ProjectSet                                                   | 42P13          |   2
+ 00000000000000000000000000000004 | Result       | Result                                                       | 42P13          |   3
+ 00000000000000000000000000000004 | Select query | select s from pg_catalog.generate_series($1, $2, $3) as g(s) | 00000          |   3
 (6 rows)
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000005-0000000000000005-01'*/ ANALYZE test_create_table;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000005';
              trace_id             |   span_type    |       span_operation       | sql_error_code | lvl 
 ----------------------------------+----------------+----------------------------+----------------+-----
- 00000000000000000000000000000005 | Utility query  | ANALYZE test_create_table; | 00000          |   1
- 00000000000000000000000000000005 | ProcessUtility | ProcessUtility             | 00000          |   2
+ 00000000000000000000000000000005 | Utility query  | ANALYZE test_create_table; | 00000          |   0
+ 00000000000000000000000000000005 | ProcessUtility | ProcessUtility             | 00000          |   1
 (2 rows)
 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000006-0000000000000006-01'*/ DROP TABLE test_create_table;
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000006';
              trace_id             |     span_type     |        span_operation         | sql_error_code | lvl 
 ----------------------------------+-------------------+-------------------------------+----------------+-----
- 00000000000000000000000000000006 | Utility query     | DROP TABLE test_create_table; | 00000          |   1
- 00000000000000000000000000000006 | ProcessUtility    | ProcessUtility                | 00000          |   2
- 00000000000000000000000000000006 | TransactionCommit | TransactionCommit             | 00000          |   1
+ 00000000000000000000000000000006 | Utility query     | DROP TABLE test_create_table; | 00000          |   0
+ 00000000000000000000000000000006 | ProcessUtility    | ProcessUtility                | 00000          |   1
+ 00000000000000000000000000000006 | TransactionCommit | TransactionCommit             | 00000          |   0
 (3 rows)
 
 -- Check VACUUM ANALYZE call
@@ -439,9 +439,9 @@ select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordere
 select trace_id, span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000007';
              trace_id             |     span_type     |         span_operation          | sql_error_code | lvl 
 ----------------------------------+-------------------+---------------------------------+----------------+-----
- 00000000000000000000000000000007 | Utility query     | VACUUM ANALYZE pg_tracing_test; | 00000          |   1
- 00000000000000000000000000000007 | ProcessUtility    | ProcessUtility                  | 00000          |   2
- 00000000000000000000000000000007 | TransactionCommit | TransactionCommit               | 00000          |   1
+ 00000000000000000000000000000007 | Utility query     | VACUUM ANALYZE pg_tracing_test; | 00000          |   0
+ 00000000000000000000000000000007 | ProcessUtility    | ProcessUtility                  | 00000          |   1
+ 00000000000000000000000000000007 | TransactionCommit | TransactionCommit               | 00000          |   0
 (3 rows)
 
 -- Cleanup

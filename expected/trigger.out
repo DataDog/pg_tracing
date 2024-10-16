@@ -134,23 +134,23 @@ SELECT :span_o_start >= :span_i_end  as second_trigger_starts_after_first,
 SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
      span_type     |                                                   span_operation                                                    | lvl 
 -------------------+---------------------------------------------------------------------------------------------------------------------+-----
- Insert query      | INSERT INTO Employee VALUES($1,$2);                                                                                 |   1
- Planner           | Planner                                                                                                             |   2
- ExecutorRun       | ExecutorRun                                                                                                         |   2
- Insert            | Insert on employee                                                                                                  |   3
- Result            | Result                                                                                                              |   4
- ExecutorFinish    | ExecutorFinish                                                                                                      |   2
- Insert query      | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
- Planner           | Planner                                                                                                             |   4
- ExecutorRun       | ExecutorRun                                                                                                         |   4
- Insert            | Insert on employee_audit                                                                                            |   5
- Result            | Result                                                                                                              |   6
- Insert query      | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   3
- Planner           | Planner                                                                                                             |   4
- ExecutorRun       | ExecutorRun                                                                                                         |   4
- Insert            | Insert on employee_audit                                                                                            |   5
- Result            | Result                                                                                                              |   6
- TransactionCommit | TransactionCommit                                                                                                   |   1
+ Insert query      | INSERT INTO Employee VALUES($1,$2);                                                                                 |   0
+ Planner           | Planner                                                                                                             |   1
+ ExecutorRun       | ExecutorRun                                                                                                         |   1
+ Insert            | Insert on employee                                                                                                  |   2
+ Result            | Result                                                                                                              |   3
+ ExecutorFinish    | ExecutorFinish                                                                                                      |   1
+ Insert query      | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   2
+ Planner           | Planner                                                                                                             |   3
+ ExecutorRun       | ExecutorRun                                                                                                         |   3
+ Insert            | Insert on employee_audit                                                                                            |   4
+ Result            | Result                                                                                                              |   5
+ Insert query      | INSERT INTO Employee_Audit (EmployeeId, LastName, EmpAdditionTime) VALUES(NEW.EmployeeId,NEW.LastName,current_date) |   2
+ Planner           | Planner                                                                                                             |   3
+ ExecutorRun       | ExecutorRun                                                                                                         |   3
+ Insert            | Insert on employee_audit                                                                                            |   4
+ Result            | Result                                                                                                              |   5
+ TransactionCommit | TransactionCommit                                                                                                   |   0
 (17 rows)
 
 -- Check count of query_id
@@ -183,20 +183,20 @@ CREATE TRIGGER employee_delete_trigger
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
              trace_id             |     span_type     |                         span_operation                          | lvl 
 ----------------------------------+-------------------+-----------------------------------------------------------------+-----
- 00000000000000000000000000000001 | Insert query      | INSERT INTO before_trigger_table SELECT generate_series($1,$2); |   1
- 00000000000000000000000000000001 | Planner           | Planner                                                         |   2
- 00000000000000000000000000000001 | ExecutorRun       | ExecutorRun                                                     |   2
- 00000000000000000000000000000001 | Insert            | Insert on before_trigger_table                                  |   3
- 00000000000000000000000000000001 | ProjectSet        | ProjectSet                                                      |   4
- 00000000000000000000000000000001 | Result            | Result                                                          |   5
- 00000000000000000000000000000001 | Select query      | SELECT $1                                                       |   3
- 00000000000000000000000000000001 | Planner           | Planner                                                         |   4
- 00000000000000000000000000000001 | ExecutorRun       | ExecutorRun                                                     |   4
- 00000000000000000000000000000001 | Result            | Result                                                          |   5
- 00000000000000000000000000000001 | Select query      | SELECT $1                                                       |   3
- 00000000000000000000000000000001 | ExecutorRun       | ExecutorRun                                                     |   4
- 00000000000000000000000000000001 | Result            | Result                                                          |   5
- 00000000000000000000000000000001 | TransactionCommit | TransactionCommit                                               |   1
+ 00000000000000000000000000000001 | Insert query      | INSERT INTO before_trigger_table SELECT generate_series($1,$2); |   0
+ 00000000000000000000000000000001 | Planner           | Planner                                                         |   1
+ 00000000000000000000000000000001 | ExecutorRun       | ExecutorRun                                                     |   1
+ 00000000000000000000000000000001 | Insert            | Insert on before_trigger_table                                  |   2
+ 00000000000000000000000000000001 | ProjectSet        | ProjectSet                                                      |   3
+ 00000000000000000000000000000001 | Result            | Result                                                          |   4
+ 00000000000000000000000000000001 | Select query      | SELECT $1                                                       |   2
+ 00000000000000000000000000000001 | Planner           | Planner                                                         |   3
+ 00000000000000000000000000000001 | ExecutorRun       | ExecutorRun                                                     |   3
+ 00000000000000000000000000000001 | Result            | Result                                                          |   4
+ 00000000000000000000000000000001 | Select query      | SELECT $1                                                       |   2
+ 00000000000000000000000000000001 | ExecutorRun       | ExecutorRun                                                     |   3
+ 00000000000000000000000000000001 | Result            | Result                                                          |   4
+ 00000000000000000000000000000001 | TransactionCommit | TransactionCommit                                               |   0
 (14 rows)
 
 -- Call before trigger update
@@ -204,19 +204,19 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
              trace_id             |     span_type     |            span_operation             | lvl 
 ----------------------------------+-------------------+---------------------------------------+-----
- 00000000000000000000000000000002 | Update query      | UPDATE before_trigger_table set a=$1; |   1
- 00000000000000000000000000000002 | Planner           | Planner                               |   2
- 00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                           |   2
- 00000000000000000000000000000002 | Update            | Update on before_trigger_table        |   3
- 00000000000000000000000000000002 | SeqScan           | SeqScan on before_trigger_table       |   4
- 00000000000000000000000000000002 | Select query      | SELECT $1                             |   3
- 00000000000000000000000000000002 | Planner           | Planner                               |   4
- 00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                           |   4
- 00000000000000000000000000000002 | Result            | Result                                |   5
- 00000000000000000000000000000002 | Select query      | SELECT $1                             |   3
- 00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                           |   4
- 00000000000000000000000000000002 | Result            | Result                                |   5
- 00000000000000000000000000000002 | TransactionCommit | TransactionCommit                     |   1
+ 00000000000000000000000000000002 | Update query      | UPDATE before_trigger_table set a=$1; |   0
+ 00000000000000000000000000000002 | Planner           | Planner                               |   1
+ 00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                           |   1
+ 00000000000000000000000000000002 | Update            | Update on before_trigger_table        |   2
+ 00000000000000000000000000000002 | SeqScan           | SeqScan on before_trigger_table       |   3
+ 00000000000000000000000000000002 | Select query      | SELECT $1                             |   2
+ 00000000000000000000000000000002 | Planner           | Planner                               |   3
+ 00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                           |   3
+ 00000000000000000000000000000002 | Result            | Result                                |   4
+ 00000000000000000000000000000002 | Select query      | SELECT $1                             |   2
+ 00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                           |   3
+ 00000000000000000000000000000002 | Result            | Result                                |   4
+ 00000000000000000000000000000002 | TransactionCommit | TransactionCommit                     |   0
 (13 rows)
 
 -- Call before trigger delete
@@ -224,19 +224,19 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
              trace_id             |     span_type     |                span_operation                | lvl 
 ----------------------------------+-------------------+----------------------------------------------+-----
- 00000000000000000000000000000003 | Delete query      | DELETE FROM before_trigger_table where a=$1; |   1
- 00000000000000000000000000000003 | Planner           | Planner                                      |   2
- 00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                  |   2
- 00000000000000000000000000000003 | Delete            | Delete on before_trigger_table               |   3
- 00000000000000000000000000000003 | SeqScan           | SeqScan on before_trigger_table              |   4
- 00000000000000000000000000000003 | Select query      | SELECT $1                                    |   3
- 00000000000000000000000000000003 | Planner           | Planner                                      |   4
- 00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                  |   4
- 00000000000000000000000000000003 | Result            | Result                                       |   5
- 00000000000000000000000000000003 | Select query      | SELECT $1                                    |   3
- 00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                  |   4
- 00000000000000000000000000000003 | Result            | Result                                       |   5
- 00000000000000000000000000000003 | TransactionCommit | TransactionCommit                            |   1
+ 00000000000000000000000000000003 | Delete query      | DELETE FROM before_trigger_table where a=$1; |   0
+ 00000000000000000000000000000003 | Planner           | Planner                                      |   1
+ 00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                  |   1
+ 00000000000000000000000000000003 | Delete            | Delete on before_trigger_table               |   2
+ 00000000000000000000000000000003 | SeqScan           | SeqScan on before_trigger_table              |   3
+ 00000000000000000000000000000003 | Select query      | SELECT $1                                    |   2
+ 00000000000000000000000000000003 | Planner           | Planner                                      |   3
+ 00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                  |   3
+ 00000000000000000000000000000003 | Result            | Result                                       |   4
+ 00000000000000000000000000000003 | Select query      | SELECT $1                                    |   2
+ 00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                  |   3
+ 00000000000000000000000000000003 | Result            | Result                                       |   4
+ 00000000000000000000000000000003 | TransactionCommit | TransactionCommit                            |   0
 (13 rows)
 
 -- Check count of query_id
@@ -257,17 +257,17 @@ DETAIL:  Key (parent)=(blue) is not present in table "enumtest_parent".
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
              trace_id             |   span_type    |                                                                  span_operation                                                                  | lvl 
 ----------------------------------+----------------+--------------------------------------------------------------------------------------------------------------------------------------------------+-----
- 00000000000000000000000000000004 | Insert query   | INSERT INTO enumtest_child VALUES ($1);                                                                                                          |   1
- 00000000000000000000000000000004 | Planner        | Planner                                                                                                                                          |   2
- 00000000000000000000000000000004 | ExecutorRun    | ExecutorRun                                                                                                                                      |   2
- 00000000000000000000000000000004 | Insert         | Insert on enumtest_child                                                                                                                         |   3
- 00000000000000000000000000000004 | Result         | Result                                                                                                                                           |   4
- 00000000000000000000000000000004 | ExecutorFinish | ExecutorFinish                                                                                                                                   |   2
- 00000000000000000000000000000004 | Select query   | SELECT $2 FROM ONLY "public"."enumtest_parent" x WHERE "id"::pg_catalog.anyenum OPERATOR(pg_catalog.=) $1::pg_catalog.anyenum FOR KEY SHARE OF x |   3
- 00000000000000000000000000000004 | Planner        | Planner                                                                                                                                          |   4
- 00000000000000000000000000000004 | ExecutorRun    | ExecutorRun                                                                                                                                      |   4
- 00000000000000000000000000000004 | LockRows       | LockRows                                                                                                                                         |   5
- 00000000000000000000000000000004 | IndexScan      | IndexScan using enumtest_parent_pkey on enumtest_parent x                                                                                        |   6
+ 00000000000000000000000000000004 | Insert query   | INSERT INTO enumtest_child VALUES ($1);                                                                                                          |   0
+ 00000000000000000000000000000004 | Planner        | Planner                                                                                                                                          |   1
+ 00000000000000000000000000000004 | ExecutorRun    | ExecutorRun                                                                                                                                      |   1
+ 00000000000000000000000000000004 | Insert         | Insert on enumtest_child                                                                                                                         |   2
+ 00000000000000000000000000000004 | Result         | Result                                                                                                                                           |   3
+ 00000000000000000000000000000004 | ExecutorFinish | ExecutorFinish                                                                                                                                   |   1
+ 00000000000000000000000000000004 | Select query   | SELECT $2 FROM ONLY "public"."enumtest_parent" x WHERE "id"::pg_catalog.anyenum OPERATOR(pg_catalog.=) $1::pg_catalog.anyenum FOR KEY SHARE OF x |   2
+ 00000000000000000000000000000004 | Planner        | Planner                                                                                                                                          |   3
+ 00000000000000000000000000000004 | ExecutorRun    | ExecutorRun                                                                                                                                      |   3
+ 00000000000000000000000000000004 | LockRows       | LockRows                                                                                                                                         |   4
+ 00000000000000000000000000000004 | IndexScan      | IndexScan using enumtest_parent_pkey on enumtest_parent x                                                                                        |   5
 (11 rows)
 
 -- Test before trigger with copy dml
@@ -286,16 +286,16 @@ create trigger qqqbef before insert or update or delete on copydml_test
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000005';
              trace_id             |     span_type     |                              span_operation                              | lvl 
 ----------------------------------+-------------------+--------------------------------------------------------------------------+-----
- 00000000000000000000000000000005 | Utility query     | copy (insert into copydml_test (t) values ('f') returning id) to stdout; |   1
- 00000000000000000000000000000005 | ProcessUtility    | ProcessUtility                                                           |   2
- 00000000000000000000000000000005 | Insert query      | copy (insert into copydml_test (t) values ($1) returning id) to stdout;  |   3
- 00000000000000000000000000000005 | Planner           | Planner                                                                  |   4
- 00000000000000000000000000000005 | ExecutorRun       | ExecutorRun                                                              |   4
- 00000000000000000000000000000005 | Insert            | Insert on copydml_test                                                   |   5
- 00000000000000000000000000000005 | Result            | Result                                                                   |   6
- 00000000000000000000000000000005 | Select query      | tg_op in ($7, $8)                                                        |   5
- 00000000000000000000000000000005 | Planner           | Planner                                                                  |   6
- 00000000000000000000000000000005 | TransactionCommit | TransactionCommit                                                        |   1
+ 00000000000000000000000000000005 | Utility query     | copy (insert into copydml_test (t) values ('f') returning id) to stdout; |   0
+ 00000000000000000000000000000005 | ProcessUtility    | ProcessUtility                                                           |   1
+ 00000000000000000000000000000005 | Insert query      | copy (insert into copydml_test (t) values ($1) returning id) to stdout;  |   2
+ 00000000000000000000000000000005 | Planner           | Planner                                                                  |   3
+ 00000000000000000000000000000005 | ExecutorRun       | ExecutorRun                                                              |   3
+ 00000000000000000000000000000005 | Insert            | Insert on copydml_test                                                   |   4
+ 00000000000000000000000000000005 | Result            | Result                                                                   |   5
+ 00000000000000000000000000000005 | Select query      | tg_op in ($7, $8)                                                        |   4
+ 00000000000000000000000000000005 | Planner           | Planner                                                                  |   5
+ 00000000000000000000000000000005 | TransactionCommit | TransactionCommit                                                        |   0
 (10 rows)
 
 -- Cleanup

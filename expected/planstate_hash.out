@@ -7,14 +7,14 @@
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
                               span_operation                              |    deparse_info    | parameters | lvl 
 --------------------------------------------------------------------------+--------------------+------------+-----
- select count(*) from pg_tracing_test r join pg_tracing_test s using (a); |                    |            |   1
- Planner                                                                  |                    |            |   2
- ExecutorRun                                                              |                    |            |   2
- Aggregate                                                                |                    |            |   3
- Hash Join                                                                | Hash Cond: (a = a) |            |   4
- SeqScan on pg_tracing_test r                                             |                    |            |   5
- Hash                                                                     |                    |            |   5
- SeqScan on pg_tracing_test s                                             |                    |            |   6
+ select count(*) from pg_tracing_test r join pg_tracing_test s using (a); |                    |            |   0
+ Planner                                                                  |                    |            |   1
+ ExecutorRun                                                              |                    |            |   1
+ Aggregate                                                                |                    |            |   2
+ Hash Join                                                                | Hash Cond: (a = a) |            |   3
+ SeqScan on pg_tracing_test r                                             |                    |            |   4
+ Hash                                                                     |                    |            |   4
+ SeqScan on pg_tracing_test s                                             |                    |            |   5
 (8 rows)
 
 -- +-----------------------------------------+

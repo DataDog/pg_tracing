@@ -9,11 +9,11 @@
 SELECT trace_id, span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
              trace_id             |  span_type   | span_operation | parameters | lvl 
 ----------------------------------+--------------+----------------+------------+-----
- 00000000000000000000000000000001 | Select query | SELECT $1, $2  |            |   1
- 00000000000000000000000000000001 | Select query | SELECT $1, $2  | {1,2}      |   1
- 00000000000000000000000000000001 | Planner      | Planner        |            |   2
- 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun    |            |   2
- 00000000000000000000000000000001 | Result       | Result         |            |   3
+ 00000000000000000000000000000001 | Select query | SELECT $1, $2  |            |   0
+ 00000000000000000000000000000001 | Select query | SELECT $1, $2  | {1,2}      |   0
+ 00000000000000000000000000000001 | Planner      | Planner        |            |   1
+ 00000000000000000000000000000001 | ExecutorRun  | ExecutorRun    |            |   1
+ 00000000000000000000000000000001 | Result       | Result         |            |   2
 (5 rows)
 
 WITH max_end AS (select max(span_end) from pg_tracing_peek_spans)

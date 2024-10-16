@@ -80,17 +80,17 @@ set parallel_leader_participation=false;
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000001' ORDER BY lvl, span_operation;
   span_type   |          span_operation           | lvl 
 --------------+-----------------------------------+-----
- Select query | select $1 from pg_class limit $2; |   1
- ExecutorRun  | ExecutorRun                       |   2
- Planner      | Planner                           |   2
- Limit        | Limit                             |   3
- Gather       | Gather                            |   4
- Select query | Worker 0                          |   5
- Select query | Worker 1                          |   5
- ExecutorRun  | ExecutorRun                       |   6
- ExecutorRun  | ExecutorRun                       |   6
- SeqScan      | SeqScan on pg_class               |   7
- SeqScan      | SeqScan on pg_class               |   7
+ Select query | select $1 from pg_class limit $2; |   0
+ ExecutorRun  | ExecutorRun                       |   1
+ Planner      | Planner                           |   1
+ Limit        | Limit                             |   2
+ Gather       | Gather                            |   3
+ Select query | Worker 0                          |   4
+ Select query | Worker 1                          |   4
+ ExecutorRun  | ExecutorRun                       |   5
+ ExecutorRun  | ExecutorRun                       |   5
+ SeqScan      | SeqScan on pg_class               |   6
+ SeqScan      | SeqScan on pg_class               |   6
 (11 rows)
 
 -- Cleanup

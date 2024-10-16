@@ -9,14 +9,14 @@
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
                       span_operation                       |                 deparse_info                  | parameters | lvl 
 -----------------------------------------------------------+-----------------------------------------------+------------+-----
- SELECT * from pg_tracing_test where a=$1 OR a=$2 OR a=$3; |                                               | {1,2,3}    |   1
- Planner                                                   |                                               |            |   2
- ExecutorRun                                               |                                               |            |   2
- BitmapHeapScan on pg_tracing_test                         | Recheck Cond: ((a = 1) OR (a = 2) OR (a = 3)) |            |   3
- BitmapOr                                                  |                                               |            |   4
- BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 1)                           |            |   5
- BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 2)                           |            |   5
- BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 3)                           |            |   5
+ SELECT * from pg_tracing_test where a=$1 OR a=$2 OR a=$3; |                                               | {1,2,3}    |   0
+ Planner                                                   |                                               |            |   1
+ ExecutorRun                                               |                                               |            |   1
+ BitmapHeapScan on pg_tracing_test                         | Recheck Cond: ((a = 1) OR (a = 2) OR (a = 3)) |            |   2
+ BitmapOr                                                  |                                               |            |   3
+ BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 1)                           |            |   4
+ BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 2)                           |            |   4
+ BitmapIndexScan on pg_tracing_index                       | Index Cond: (a = 3)                           |            |   4
 (8 rows)
 
 --

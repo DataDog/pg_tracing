@@ -142,26 +142,26 @@ SELECT :span_d_start >= :span_c_start as nested_declare_starts_after_parent,
 SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
     span_type     |                   span_operation                    | lvl 
 ------------------+-----------------------------------------------------+-----
- TransactionBlock | TransactionBlock                                    |   1
- Utility query    | BEGIN;                                              |   2
- ProcessUtility   | ProcessUtility                                      |   3
- Utility query    | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   2
- ProcessUtility   | ProcessUtility                                      |   3
- Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
- Planner          | Planner                                             |   5
- Utility query    | FETCH FORWARD 20 from c                             |   2
- ProcessUtility   | ProcessUtility                                      |   3
- Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
- ExecutorRun      | ExecutorRun                                         |   5
- Utility query    | FETCH BACKWARD 10 from c                            |   2
- ProcessUtility   | ProcessUtility                                      |   3
- Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
- ExecutorRun      | ExecutorRun                                         |   5
- Utility query    | CLOSE c;                                            |   2
- ProcessUtility   | ProcessUtility                                      |   3
- Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   4
- Utility query    | COMMIT;                                             |   2
- ProcessUtility   | ProcessUtility                                      |   3
+ TransactionBlock | TransactionBlock                                    |   0
+ Utility query    | BEGIN;                                              |   1
+ ProcessUtility   | ProcessUtility                                      |   2
+ Utility query    | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   1
+ ProcessUtility   | ProcessUtility                                      |   2
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
+ Planner          | Planner                                             |   4
+ Utility query    | FETCH FORWARD 20 from c                             |   1
+ ProcessUtility   | ProcessUtility                                      |   2
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
+ ExecutorRun      | ExecutorRun                                         |   4
+ Utility query    | FETCH BACKWARD 10 from c                            |   1
+ ProcessUtility   | ProcessUtility                                      |   2
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
+ ExecutorRun      | ExecutorRun                                         |   4
+ Utility query    | CLOSE c;                                            |   1
+ ProcessUtility   | ProcessUtility                                      |   2
+ Select query     | DECLARE c CURSOR FOR SELECT * from pg_tracing_test; |   3
+ Utility query    | COMMIT;                                             |   1
+ ProcessUtility   | ProcessUtility                                      |   2
 (20 rows)
 
 -- Clean created spans
