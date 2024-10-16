@@ -97,6 +97,17 @@ CREATE VIEW pg_tracing_info AS
 CREATE VIEW pg_tracing_peek_spans AS
   SELECT * FROM pg_tracing_spans(false);
 
+-- Spans with their level
+CREATE VIEW pg_tracing_peek_spans_with_level AS
+    WITH RECURSIVE list_trace_spans AS (
+        SELECT p.*, 1 as lvl
+        FROM pg_tracing_peek_spans p where not parent_id=ANY(SELECT span_id from pg_tracing_peek_spans)
+      UNION ALL
+        SELECT s.*, lvl + 1
+        FROM pg_tracing_peek_spans s, list_trace_spans st
+        WHERE s.parent_id = st.span_id
+    ) SELECT * FROM list_trace_spans;
+
 CREATE VIEW pg_tracing_consume_spans AS
   SELECT * FROM pg_tracing_spans(true);
 
