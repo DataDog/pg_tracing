@@ -65,17 +65,6 @@ DROP EXTENSION pg_tracing;
 CREATE EXTENSION pg_tracing;
 SET pg_tracing.sample_rate = 0.0;
 
--- View displaying spans with their nested level
-CREATE VIEW peek_spans_with_level AS
-    WITH RECURSIVE list_trace_spans AS (
-        SELECT p.*, 1 as lvl
-        FROM pg_tracing_peek_spans p where not parent_id=ANY(SELECT span_id from pg_tracing_peek_spans)
-      UNION ALL
-        SELECT s.*, lvl + 1
-        FROM pg_tracing_peek_spans s, list_trace_spans st
-        WHERE s.parent_id = st.span_id
-    ) SELECT * FROM list_trace_spans;
-
 -- Create utility view to keep order stable
 CREATE VIEW peek_ordered_spans AS
     WITH oldest_start AS (
@@ -84,7 +73,7 @@ CREATE VIEW peek_ordered_spans AS
     ) select *,
         extract(MICROSECONDS FROM age(span_start, oldest_start.min_start)) as us_start,
         extract(MICROSECONDS FROM age(span_end, oldest_start.min_start)) as us_end
-        FROM peek_spans_with_level, oldest_start order by span_start, lvl, span_end, deparse_info;
+        FROM pg_tracing_peek_spans_with_level, oldest_start order by span_start, lvl, span_end, deparse_info;
 
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int, status jsonb);
