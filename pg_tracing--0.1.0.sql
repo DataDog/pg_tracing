@@ -108,6 +108,11 @@ CREATE VIEW pg_tracing_peek_spans_with_level AS
         WHERE s.parent_id = st.span_id
     ) SELECT * FROM list_trace_spans;
 
+CREATE VIEW pg_tracing_peek_spans_tree AS
+  SELECT trace_id, lpad(span_operation, length(span_operation) + lvl * 2, '_'), span_id, parent_id, span_start, span_end, lvl
+  FROM pg_tracing_peek_spans_with_level s
+  ORDER BY trace_id, span_start;
+
 CREATE VIEW pg_tracing_consume_spans AS
   SELECT * FROM pg_tracing_spans(true);
 
