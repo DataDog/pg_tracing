@@ -5,11 +5,11 @@ SET pg_tracing.caller_sample_rate = 1.0;
 SELECT span_type, span_operation, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
      span_type     |                                                          span_operation                                                           | lvl 
 -------------------+-----------------------------------------------------------------------------------------------------------------------------------+-----
- Utility query     | CREATE TABLE IF NOT EXISTS pg_tracing_test_table_with_constraint (a int, b char(20), CONSTRAINT PK_tracing_test PRIMARY KEY (a)); |   1
- ProcessUtility    | ProcessUtility                                                                                                                    |   2
- Utility query     | CREATE TABLE IF NOT EXISTS pg_tracing_test_table_with_constraint (a int, b char(20), CONSTRAINT PK_tracing_test PRIMARY KEY (a)); |   3
- ProcessUtility    | ProcessUtility                                                                                                                    |   4
- TransactionCommit | TransactionCommit                                                                                                                 |   1
+ Utility query     | CREATE TABLE IF NOT EXISTS pg_tracing_test_table_with_constraint (a int, b char(20), CONSTRAINT PK_tracing_test PRIMARY KEY (a)); |   0
+ ProcessUtility    | ProcessUtility                                                                                                                    |   1
+ Utility query     | CREATE TABLE IF NOT EXISTS pg_tracing_test_table_with_constraint (a int, b char(20), CONSTRAINT PK_tracing_test PRIMARY KEY (a)); |   2
+ ProcessUtility    | ProcessUtility                                                                                                                    |   3
+ TransactionCommit | TransactionCommit                                                                                                                 |   0
 (5 rows)
 
 -- Simple insertion
@@ -32,11 +32,11 @@ DETAIL:  Key (a)=(1) already exists.
 SELECT span_type, span_operation, sql_error_code, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
   span_type   |                          span_operation                           | sql_error_code | lvl 
 --------------+-------------------------------------------------------------------+----------------+-----
- Insert query | INSERT INTO pg_tracing_test_table_with_constraint VALUES($1, $2); | 23505          |   1
- Planner      | Planner                                                           | 00000          |   2
- ExecutorRun  | ExecutorRun                                                       | 23505          |   2
- Insert       | Insert on pg_tracing_test_table_with_constraint                   | 23505          |   3
- Result       | Result                                                            | 23505          |   4
+ Insert query | INSERT INTO pg_tracing_test_table_with_constraint VALUES($1, $2); | 23505          |   0
+ Planner      | Planner                                                           | 00000          |   1
+ ExecutorRun  | ExecutorRun                                                       | 23505          |   1
+ Insert       | Insert on pg_tracing_test_table_with_constraint                   | 23505          |   2
+ Result       | Result                                                            | 23505          |   3
 (5 rows)
 
 -- Trigger an error while calling pg_tracing_peek_spans which resets tracing, nothing should be generated

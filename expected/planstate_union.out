@@ -12,16 +12,16 @@ SELECT count(*) FROM pg_tracing_test WHERE a + 0 < 10000;
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
                      span_operation                      |        deparse_info        |   parameters   | lvl 
 ---------------------------------------------------------+----------------------------+----------------+-----
- SELECT count(*) FROM pg_tracing_test WHERE a + $1 < $2 +|                            | {0,10,0,10000} |   1
+ SELECT count(*) FROM pg_tracing_test WHERE a + $1 < $2 +|                            | {0,10,0,10000} |   0
  UNION ALL                                              +|                            |                | 
  SELECT count(*) FROM pg_tracing_test WHERE a + $3 < $4; |                            |                | 
- Planner                                                 |                            |                |   2
- ExecutorRun                                             |                            |                |   2
- Append                                                  |                            |                |   3
- Aggregate                                               |                            |                |   4
- SeqScan on pg_tracing_test                              | Filter : ((a + 0) < 10)    |                |   5
- Aggregate                                               |                            |                |   4
- SeqScan on pg_tracing_test pg_tracing_test_1            | Filter : ((a + 0) < 10000) |                |   5
+ Planner                                                 |                            |                |   1
+ ExecutorRun                                             |                            |                |   1
+ Append                                                  |                            |                |   2
+ Aggregate                                               |                            |                |   3
+ SeqScan on pg_tracing_test                              | Filter : ((a + 0) < 10)    |                |   4
+ Aggregate                                               |                            |                |   3
+ SeqScan on pg_tracing_test pg_tracing_test_1            | Filter : ((a + 0) < 10000) |                |   4
 (8 rows)
 
 -- +------------------------------------------+

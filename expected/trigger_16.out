@@ -10,10 +10,10 @@
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='fed00000000000000000000000000001';
              trace_id             |   span_type    |                    span_operation                    | lvl 
 ----------------------------------+----------------+------------------------------------------------------+-----
- fed00000000000000000000000000001 | Utility query  | explain INSERT INTO before_trigger_table VALUES($1); |   1
- fed00000000000000000000000000001 | ProcessUtility | ProcessUtility                                       |   2
- fed00000000000000000000000000001 | Insert query   | explain INSERT INTO before_trigger_table VALUES($1); |   3
- fed00000000000000000000000000001 | Planner        | Planner                                              |   4
+ fed00000000000000000000000000001 | Utility query  | explain INSERT INTO before_trigger_table VALUES($1); |   0
+ fed00000000000000000000000000001 | ProcessUtility | ProcessUtility                                       |   1
+ fed00000000000000000000000000001 | Insert query   | explain INSERT INTO before_trigger_table VALUES($1); |   2
+ fed00000000000000000000000000001 | Planner        | Planner                                              |   3
 (4 rows)
 
 CALL clean_spans();

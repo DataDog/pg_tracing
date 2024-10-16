@@ -44,10 +44,10 @@ SET pg_tracing.deparse_plan=false;
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
                    span_operation                    | deparse_info | parameters | lvl 
 -----------------------------------------------------+--------------+------------+-----
- SELECT * from pg_tracing_test where a=$1;           |              | {1}        |   1
- Planner                                             |              |            |   2
- ExecutorRun                                         |              |            |   2
- IndexScan using pg_tracing_index on pg_tracing_test |              |            |   3
+ SELECT * from pg_tracing_test where a=$1;           |              | {1}        |   0
+ Planner                                             |              |            |   1
+ ExecutorRun                                         |              |            |   1
+ IndexScan using pg_tracing_index on pg_tracing_test |              |            |   2
 (4 rows)
 
 -- Check generated spans when deparse is enabled
@@ -61,10 +61,10 @@ SET pg_tracing.deparse_plan=true;
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
                    span_operation                    |    deparse_info     | parameters | lvl 
 -----------------------------------------------------+---------------------+------------+-----
- SELECT * from pg_tracing_test where a=$1;           |                     | {1}        |   1
- Planner                                             |                     |            |   2
- ExecutorRun                                         |                     |            |   2
- IndexScan using pg_tracing_index on pg_tracing_test | Index Cond: (a = 1) |            |   3
+ SELECT * from pg_tracing_test where a=$1;           |                     | {1}        |   0
+ Planner                                             |                     |            |   1
+ ExecutorRun                                         |                     |            |   1
+ IndexScan using pg_tracing_index on pg_tracing_test | Index Cond: (a = 1) |            |   2
 (4 rows)
 
 -- Clean created spans

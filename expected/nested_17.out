@@ -10,17 +10,17 @@
 select span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000001';
                             span_operation                            | lvl 
 ----------------------------------------------------------------------+-----
- SELECT eval_expr(format($1, $2, $3)), eval_expr(format($4, $5, $6)); |   1
- Planner                                                              |   2
- ExecutorRun                                                          |   2
- Result                                                               |   3
- $2||expr                                                             |   4
- Planner                                                              |   5
- Planner                                                              |   5
- select date $1 - interval $2                                         |   4
- Planner                                                              |   5
- ExecutorRun                                                          |   5
- Result                                                               |   6
+ SELECT eval_expr(format($1, $2, $3)), eval_expr(format($4, $5, $6)); |   0
+ Planner                                                              |   1
+ ExecutorRun                                                          |   1
+ Result                                                               |   2
+ $2||expr                                                             |   3
+ Planner                                                              |   4
+ Planner                                                              |   4
+ select date $1 - interval $2                                         |   3
+ Planner                                                              |   4
+ ExecutorRun                                                          |   4
+ Result                                                               |   5
 (11 rows)
 
 -- Cleanup

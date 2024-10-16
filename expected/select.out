@@ -68,11 +68,11 @@ SELECT processed_traces from pg_tracing_info \gset
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000003';
   span_type   |              span_operation              | lvl 
 --------------+------------------------------------------+-----
- Select query | SELECT count(*) from current_database(); |   1
- Planner      | Planner                                  |   2
- ExecutorRun  | ExecutorRun                              |   2
- Aggregate    | Aggregate                                |   3
- FunctionScan | FunctionScan on current_database         |   4
+ Select query | SELECT count(*) from current_database(); |   0
+ Planner      | Planner                                  |   1
+ ExecutorRun  | ExecutorRun                              |   1
+ Aggregate    | Aggregate                                |   2
+ FunctionScan | FunctionScan on current_database         |   3
 (5 rows)
 
 -- Check expected reported number of trace
@@ -92,13 +92,13 @@ FROM (SELECT
 SELECT span_type, span_operation, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000004';
   span_type   |                                                       span_operation                                                       | lvl 
 --------------+----------------------------------------------------------------------------------------------------------------------------+-----
- Select query | SELECT s.relation_size + s.index_size as relation_size                                                                    +|   1
+ Select query | SELECT s.relation_size + s.index_size as relation_size                                                                    +|   0
               | FROM (SELECT pg_relation_size(C.oid) as relation_size, pg_indexes_size(C.oid) as index_size FROM pg_class C) as s limit $1 | 
- Planner      | Planner                                                                                                                    |   2
- ExecutorRun  | ExecutorRun                                                                                                                |   2
- Limit        | Limit                                                                                                                      |   3
- SubqueryScan | SubqueryScan on s                                                                                                          |   4
- SeqScan      | SeqScan on pg_class c                                                                                                      |   5
+ Planner      | Planner                                                                                                                    |   1
+ ExecutorRun  | ExecutorRun                                                                                                                |   1
+ Limit        | Limit                                                                                                                      |   2
+ SubqueryScan | SubqueryScan on s                                                                                                          |   3
+ SeqScan      | SeqScan on pg_class c                                                                                                      |   4
 (6 rows)
 
 -- Check that we're in a correct state after a timeout
@@ -109,10 +109,10 @@ ERROR:  canceling statement due to statement timeout
 SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000007';
   span_type   |       span_operation        | sql_error_code | lvl 
 --------------+-----------------------------+----------------+-----
- Select query | select * from pg_sleep($1); | 57014          |   1
- Planner      | Planner                     | 00000          |   2
- ExecutorRun  | ExecutorRun                 | 57014          |   2
- FunctionScan | FunctionScan on pg_sleep    | 57014          |   3
+ Select query | select * from pg_sleep($1); | 57014          |   0
+ Planner      | Planner                     | 00000          |   1
+ ExecutorRun  | ExecutorRun                 | 57014          |   1
+ FunctionScan | FunctionScan on pg_sleep    | 57014          |   2
 (4 rows)
 
 -- Cleanup statement setting
@@ -128,10 +128,10 @@ set statement_timeout=0;
 SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000008';
   span_type   | span_operation | sql_error_code | lvl 
 --------------+----------------+----------------+-----
- Select query | select $1;     | 00000          |   1
- Planner      | Planner        | 00000          |   2
- ExecutorRun  | ExecutorRun    | 00000          |   2
- Result       | Result         | 00000          |   3
+ Select query | select $1;     | 00000          |   0
+ Planner      | Planner        | 00000          |   1
+ ExecutorRun  | ExecutorRun    | 00000          |   1
+ Result       | Result         | 00000          |   2
 (4 rows)
 
 -- Cleanup
@@ -145,10 +145,10 @@ SET plan_cache_mode='auto';
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000b';
    span_operation    | parameters | lvl 
 ---------------------+------------+-----
- select $1 limit $2; | {1,0}      |   1
- Planner             |            |   2
- ExecutorRun         |            |   2
- Limit               |            |   3
+ select $1 limit $2; | {1,0}      |   0
+ Planner             |            |   1
+ ExecutorRun         |            |   1
+ Limit               |            |   2
 (4 rows)
 
 -- Test multiple statements in a single query
@@ -166,10 +166,10 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000c';
  span_operation | parameters | lvl 
 ----------------+------------+-----
- select $1;     | {1}        |   1
- Planner        |            |   2
- ExecutorRun    |            |   2
- Result         |            |   3
+ select $1;     | {1}        |   0
+ Planner        |            |   1
+ ExecutorRun    |            |   1
+ Result         |            |   2
 (4 rows)
 
 -- Check multi statement query
@@ -190,14 +190,14 @@ SELECT 1\; SELECT 1, 2;
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
   span_type   | span_operation | parameters | lvl 
 --------------+----------------+------------+-----
- Select query | SELECT $1;     | {1}        |   1
- Planner      | Planner        |            |   2
- ExecutorRun  | ExecutorRun    |            |   2
- Result       | Result         |            |   3
- Select query | SELECT $1, $2; | {1,2}      |   1
- Planner      | Planner        |            |   2
- ExecutorRun  | ExecutorRun    |            |   2
- Result       | Result         |            |   3
+ Select query | SELECT $1;     | {1}        |   0
+ Planner      | Planner        |            |   1
+ ExecutorRun  | ExecutorRun    |            |   1
+ Result       | Result         |            |   2
+ Select query | SELECT $1, $2; | {1,2}      |   0
+ Planner      | Planner        |            |   1
+ ExecutorRun  | ExecutorRun    |            |   1
+ Result       | Result         |            |   2
 (8 rows)
 
 CALL clean_spans();
@@ -225,8 +225,8 @@ ERROR:  invalid input syntax for type integer: "\xdeadbeef"
 SELECT span_type, span_operation, parameters, sql_error_code, lvl from peek_ordered_spans;
   span_type   |        span_operation        |    parameters     | sql_error_code | lvl 
 --------------+------------------------------+-------------------+----------------+-----
- Select query | SELECT $1::bytea::text::int; | {"'\\xDEADBEEF'"} | 22P02          |   1
- Planner      | Planner                      |                   | 22P02          |   2
+ Select query | SELECT $1::bytea::text::int; | {"'\\xDEADBEEF'"} | 22P02          |   0
+ Planner      | Planner                      |                   | 22P02          |   1
 (2 rows)
 
 CALL clean_spans();
@@ -247,16 +247,16 @@ SELECT lazy_function('{1,2,3,4}'::int[]) FROM (VALUES (1,2)) as t;
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
      span_type     |                                                                                             span_operation                                                                                              |     parameters      | lvl 
 -------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------+-----
- Utility query     | CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement) RETURNS SETOF anyelement LANGUAGE sql AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)'; |                     |   1
- ProcessUtility    | ProcessUtility                                                                                                                                                                                          |                     |   2
- TransactionCommit | TransactionCommit                                                                                                                                                                                       |                     |   1
- Select query      | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3)) as t;                                                                                                                                             | {"'{1,2,3,4}'",1,2} |   1
- Planner           | Planner                                                                                                                                                                                                 |                     |   2
- ExecutorRun       | ExecutorRun                                                                                                                                                                                             |                     |   2
- ProjectSet        | ProjectSet                                                                                                                                                                                              |                     |   3
- Result            | Result                                                                                                                                                                                                  |                     |   4
- Select query      | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | {1,1,1}             |   4
- Planner           | Planner                                                                                                                                                                                                 |                     |   5
+ Utility query     | CREATE OR REPLACE FUNCTION lazy_function(IN anyarray, OUT x anyelement) RETURNS SETOF anyelement LANGUAGE sql AS 'select * from pg_catalog.generate_series(array_lower($1, 1), array_upper($1, 1), 1)'; |                     |   0
+ ProcessUtility    | ProcessUtility                                                                                                                                                                                          |                     |   1
+ TransactionCommit | TransactionCommit                                                                                                                                                                                       |                     |   0
+ Select query      | SELECT lazy_function($1::int[]) FROM (VALUES ($2,$3)) as t;                                                                                                                                             | {"'{1,2,3,4}'",1,2} |   0
+ Planner           | Planner                                                                                                                                                                                                 |                     |   1
+ ExecutorRun       | ExecutorRun                                                                                                                                                                                             |                     |   1
+ ProjectSet        | ProjectSet                                                                                                                                                                                              |                     |   2
+ Result            | Result                                                                                                                                                                                                  |                     |   3
+ Select query      | select * from pg_catalog.generate_series(array_lower($1, $2), array_upper($1, $3), $4)                                                                                                                  | {1,1,1}             |   3
+ Planner           | Planner                                                                                                                                                                                                 |                     |   4
 (10 rows)
 
 CALL clean_spans();
@@ -270,18 +270,18 @@ SELECT information_schema._pg_truetypid(a, t) FROM pg_attribute a, pg_type t lim
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
   span_type   |                                     span_operation                                     | parameters | lvl 
 --------------+----------------------------------------------------------------------------------------+------------+-----
- Select query | SELECT information_schema._pg_truetypid(a, t) FROM pg_attribute a, pg_type t limit $1; | {1}        |   1
- Planner      | Planner                                                                                |            |   2
- ExecutorRun  | ExecutorRun                                                                            |            |   2
- Limit        | Limit                                                                                  |            |   3
- NestedLoop   | NestedLoop                                                                             |            |   4
- SeqScan      | SeqScan on pg_attribute a                                                              |            |   5
- Materialize  | Materialize                                                                            |            |   5
- SeqScan      | SeqScan on pg_type t                                                                   |            |   6
- Select query | Select query                                                                           |            |   3
- Planner      | Planner                                                                                |            |   4
- ExecutorRun  | ExecutorRun                                                                            |            |   4
- Result       | Result                                                                                 |            |   5
+ Select query | SELECT information_schema._pg_truetypid(a, t) FROM pg_attribute a, pg_type t limit $1; | {1}        |   0
+ Planner      | Planner                                                                                |            |   1
+ ExecutorRun  | ExecutorRun                                                                            |            |   1
+ Limit        | Limit                                                                                  |            |   2
+ NestedLoop   | NestedLoop                                                                             |            |   3
+ SeqScan      | SeqScan on pg_attribute a                                                              |            |   4
+ Materialize  | Materialize                                                                            |            |   4
+ SeqScan      | SeqScan on pg_type t                                                                   |            |   5
+ Select query | Select query                                                                           |            |   2
+ Planner      | Planner                                                                                |            |   3
+ ExecutorRun  | ExecutorRun                                                                            |            |   3
+ Result       | Result                                                                                 |            |   4
 (12 rows)
 
 -- Cleanup

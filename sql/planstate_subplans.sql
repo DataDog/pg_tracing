@@ -5,7 +5,7 @@ WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHER
 WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
 
 -- Check generated spans for init plan
-SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001' AND lvl < 4;
+SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001' AND lvl < 3;
 
 -- +----------------------------------------------------------+
 -- | A: Merge on m                                            |

@@ -9,10 +9,10 @@ SET pg_tracing.max_parameter_size=0;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
    span_operation   | parameters | lvl 
 --------------------+------------+-----
- select $1, $2, $3; |            |   1
- Planner            |            |   2
- ExecutorRun        |            |   2
- Result             |            |   3
+ select $1, $2, $3; |            |   0
+ Planner            |            |   1
+ ExecutorRun        |            |   1
+ Result             |            |   2
 (4 rows)
 
 -- Saturate the parameter buffer
@@ -26,10 +26,10 @@ SET pg_tracing.max_parameter_size=1;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
    span_operation   | parameters  | lvl 
 --------------------+-------------+-----
- select $1, $2, $3; | {1,...,...} |   1
- Planner            |             |   2
- ExecutorRun        |             |   2
- Result             |             |   3
+ select $1, $2, $3; | {1,...,...} |   0
+ Planner            |             |   1
+ ExecutorRun        |             |   1
+ Result             |             |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=2;
@@ -42,10 +42,10 @@ SET pg_tracing.max_parameter_size=2;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
    span_operation   | parameters  | lvl 
 --------------------+-------------+-----
- select $1, $2, $3; | {1,...,...} |   1
- Planner            |             |   2
- ExecutorRun        |             |   2
- Result             |             |   3
+ select $1, $2, $3; | {1,...,...} |   0
+ Planner            |             |   1
+ ExecutorRun        |             |   1
+ Result             |             |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=3;
@@ -58,10 +58,10 @@ SET pg_tracing.max_parameter_size=3;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
    span_operation   | parameters | lvl 
 --------------------+------------+-----
- select $1, $2, $3; | {1,2,...}  |   1
- Planner            |            |   2
- ExecutorRun        |            |   2
- Result             |            |   3
+ select $1, $2, $3; | {1,2,...}  |   0
+ Planner            |            |   1
+ ExecutorRun        |            |   1
+ Result             |            |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=4;
@@ -74,10 +74,10 @@ SET pg_tracing.max_parameter_size=4;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000005';
    span_operation   | parameters | lvl 
 --------------------+------------+-----
- select $1, $2, $3; | {1,2,...}  |   1
- Planner            |            |   2
- ExecutorRun        |            |   2
- Result             |            |   3
+ select $1, $2, $3; | {1,2,...}  |   0
+ Planner            |            |   1
+ ExecutorRun        |            |   1
+ Result             |            |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=5;
@@ -90,10 +90,10 @@ SET pg_tracing.max_parameter_size=5;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000006';
    span_operation   | parameters | lvl 
 --------------------+------------+-----
- select $1, $2, $3; | {1,2,3}    |   1
- Planner            |            |   2
- ExecutorRun        |            |   2
- Result             |            |   3
+ select $1, $2, $3; | {1,2,3}    |   0
+ Planner            |            |   1
+ ExecutorRun        |            |   1
+ Result             |            |   2
 (4 rows)
 
 CALL clean_spans();
@@ -108,10 +108,10 @@ SET pg_tracing.max_parameter_size=2;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
  span_operation | parameters | lvl 
 ----------------+------------+-----
- select $1;     | {'t...}    |   1
- Planner        |            |   2
- ExecutorRun    |            |   2
- Result         |            |   3
+ select $1;     | {'t...}    |   0
+ Planner        |            |   1
+ ExecutorRun    |            |   1
+ Result         |            |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=19;
@@ -124,10 +124,10 @@ SET pg_tracing.max_parameter_size=19;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000002';
  span_operation |        parameters        | lvl 
 ----------------+--------------------------+-----
- select $1;     | {'testtruncatedstrin...} |   1
- Planner        |                          |   2
- ExecutorRun    |                          |   2
- Result         |                          |   3
+ select $1;     | {'testtruncatedstrin...} |   0
+ Planner        |                          |   1
+ ExecutorRun    |                          |   1
+ Result         |                          |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=20;
@@ -140,10 +140,10 @@ SET pg_tracing.max_parameter_size=20;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000003';
  span_operation |        parameters         | lvl 
 ----------------+---------------------------+-----
- select $1;     | {'testtruncatedstring...} |   1
- Planner        |                           |   2
- ExecutorRun    |                           |   2
- Result         |                           |   3
+ select $1;     | {'testtruncatedstring...} |   0
+ Planner        |                           |   1
+ ExecutorRun    |                           |   1
+ Result         |                           |   2
 (4 rows)
 
 SET pg_tracing.max_parameter_size=21;
@@ -156,10 +156,10 @@ SET pg_tracing.max_parameter_size=21;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000004';
  span_operation |       parameters        | lvl 
 ----------------+-------------------------+-----
- select $1;     | {'testtruncatedstring'} |   1
- Planner        |                         |   2
- ExecutorRun    |                         |   2
- Result         |                         |   3
+ select $1;     | {'testtruncatedstring'} |   0
+ Planner        |                         |   1
+ ExecutorRun    |                         |   1
+ Result         |                         |   2
 (4 rows)
 
 -- Cleanup
