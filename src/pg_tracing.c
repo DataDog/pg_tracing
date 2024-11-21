@@ -1044,7 +1044,7 @@ process_query_desc(const Traceparent * traceparent, const QueryDesc *queryDesc,
 {
 	NodeCounters *node_counters = &peek_active_span()->node_counters;
 
-	if (!queryDesc->totaltime->running)
+	if (!queryDesc->totaltime->running && queryDesc->totaltime->total == 0)
 		return;
 
 	/* Process total counters */
