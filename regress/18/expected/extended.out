@@ -1,0 +1,315 @@
+-- Trace everything
+SET pg_tracing.sample_rate = 1.0;
+-- Simple query with extended protocol
+SELECT $1, $2 \bind 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+  span_type   | span_operation | parameters | lvl 
+--------------+----------------+------------+-----
+ Select query | SELECT $1, $2  | {1,2}      |   0
+ Planner      | Planner        |            |   1
+ ExecutorRun  | ExecutorRun    |            |   1
+ Result       | Result         |            |   2
+(4 rows)
+
+CALL clean_spans();
+-- Trigger an error due to mismatching number of parameters
+BEGIN; select $1 \bind \g
+ERROR:  bind message supplies 0 parameters, but prepared statement "" requires 1
+ROLLBACK;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+    span_type     |  span_operation  | parameters | lvl 
+------------------+------------------+------------+-----
+ TransactionBlock | TransactionBlock |            |   0
+ Utility query    | BEGIN;           |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+ Select query     | select $1        |            |   1
+ Utility query    | ROLLBACK;        |            |   0
+ ProcessUtility   | ProcessUtility   |            |   1
+(6 rows)
+
+CALL clean_spans();
+-- Execute queries with extended protocol within an explicit transaction
+BEGIN;
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+SELECT $1, $2 \bind 2 3 \g
+ ?column? | ?column? 
+----------+----------
+ 2        | 3
+(1 row)
+
+COMMIT;
+-- Send begin through extended protocol
+BEGIN \bind \g
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+COMMIT;
+-- Spans within the same transaction should have been generated with the same trace_id
+SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+    span_type     |  span_operation  | parameters | lvl 
+------------------+------------------+------------+-----
+ TransactionBlock | TransactionBlock |            |   0
+ Utility query    | BEGIN;           |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+ Select query     | SELECT $1        | {1}        |   1
+ Planner          | Planner          |            |   2
+ ExecutorRun      | ExecutorRun      |            |   2
+ Result           | Result           |            |   3
+ Select query     | SELECT $1, $2    | {2,3}      |   1
+ Planner          | Planner          |            |   2
+ ExecutorRun      | ExecutorRun      |            |   2
+ Result           | Result           |            |   3
+ Utility query    | COMMIT;          |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+ TransactionBlock | TransactionBlock |            |   0
+ Utility query    | BEGIN;           |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+ Select query     | SELECT $1        | {1}        |   1
+ Planner          | Planner          |            |   2
+ ExecutorRun      | ExecutorRun      |            |   2
+ Result           | Result           |            |   3
+ Utility query    | COMMIT;          |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+(22 rows)
+
+CALL clean_spans();
+-- Mix extended protocol and simple protocol
+BEGIN;
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+SELECT 5, 6, 7;
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+        5 |        6 |        7
+(1 row)
+
+SELECT $1, $2 \bind 2 3 \g
+ ?column? | ?column? 
+----------+----------
+ 2        | 3
+(1 row)
+
+COMMIT;
+-- Spans within the same transaction should have been generated with the same trace_id
+SELECT count(distinct(trace_id)) = 1 FROM pg_tracing_peek_spans;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   0
+ Utility query    | BEGIN;            |            |   1
+ ProcessUtility   | ProcessUtility    |            |   2
+ Select query     | SELECT $1         | {1}        |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2, $3 | {5,6,7}    |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2     | {2,3}      |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Utility query    | COMMIT;           |            |   1
+ ProcessUtility   | ProcessUtility    |            |   2
+(17 rows)
+
+CALL clean_spans();
+-- gdesc calls a single parse command then execute a query. Make sure we handle this case
+SELECT 1 \gdesc
+  Column  |  Type   
+----------+---------
+ ?column? | integer
+(1 row)
+
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans;
+  span_type   |                           span_operation                           |      parameters      | lvl 
+--------------+--------------------------------------------------------------------+----------------------+-----
+ Select query | SELECT $1                                                          | {1}                  |   0
+ Select query | SELECT name AS "Column", pg_catalog.format_type(tp, tpm) AS "Type"+| {'?column?','23',-1} |   0
+              | FROM (VALUES ($1, $2::pg_catalog.oid, $3)) s(name, tp, tpm)        |                      | 
+ Planner      | Planner                                                            |                      |   1
+ ExecutorRun  | ExecutorRun                                                        |                      |   1
+ Result       | Result                                                             |                      |   2
+(5 rows)
+
+CALL clean_spans();
+-- Trace only sampled statements
+SET pg_tracing.sample_rate = 0.0;
+-- Test tracing the whole transaction with extended protocol
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ BEGIN;
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+SELECT $1, $2 \bind 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+SELECT $1, $2, $3 \bind 1 2 3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ 1        | 2        | 3
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000001';
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   0
+ Utility query    | BEGIN;            |            |   1
+ ProcessUtility   | ProcessUtility    |            |   2
+ Select query     | SELECT $1         | {1}        |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2     | {1,2}      |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2, $3 | {1,2,3}    |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Utility query    | COMMIT;           |            |   1
+ ProcessUtility   | ProcessUtility    |            |   2
+(17 rows)
+
+-- Test tracing only individual statements with extended protocol
+BEGIN;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000001-01'*/ SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000002-01'*/ SELECT $1, $2 \bind 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000002-0000000000000003-01'*/ SELECT $1, $2, $3 \bind 1 2 3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ 1        | 2        | 3
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000002';
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   0
+ Select query     | SELECT $1         | {1}        |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2     | {1,2}      |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2, $3 | {1,2,3}    |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+(13 rows)
+
+-- Test tracing only subset of individual statements with extended protocol
+BEGIN;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000001-01'*/ SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+SELECT $1, $2 \bind 1 2 \g
+ ?column? | ?column? 
+----------+----------
+ 1        | 2
+(1 row)
+
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000003-0000000000000003-01'*/ SELECT $1, $2, $3 \bind 1 2 3 \g
+ ?column? | ?column? | ?column? 
+----------+----------+----------
+ 1        | 2        | 3
+(1 row)
+
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000003';
+    span_type     |  span_operation   | parameters | lvl 
+------------------+-------------------+------------+-----
+ TransactionBlock | TransactionBlock  |            |   0
+ Select query     | SELECT $1         | {1}        |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+ Select query     | SELECT $1, $2, $3 | {1,2,3}    |   1
+ Planner          | Planner           |            |   2
+ ExecutorRun      | ExecutorRun       |            |   2
+ Result           | Result            |            |   3
+(9 rows)
+
+-- Test tracing the whole transaction with extended protocol with BEGIN sent through extended protocol
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000004-0000000000000004-01'*/ BEGIN \bind \g
+SELECT $1 \bind 1 \g
+ ?column? 
+----------
+ 1
+(1 row)
+
+COMMIT;
+SELECT span_type, span_operation, parameters, lvl FROM peek_ordered_spans WHERE trace_id='00000000000000000000000000000004';
+    span_type     |  span_operation  | parameters | lvl 
+------------------+------------------+------------+-----
+ TransactionBlock | TransactionBlock |            |   0
+ Utility query    | BEGIN;           |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+ Select query     | SELECT $1        | {1}        |   1
+ Planner          | Planner          |            |   2
+ ExecutorRun      | ExecutorRun      |            |   2
+ Result           | Result           |            |   3
+ Utility query    | COMMIT;          |            |   1
+ ProcessUtility   | ProcessUtility   |            |   2
+(9 rows)
+
+-- Cleanup
+CALL clean_spans();
+CALL reset_settings();

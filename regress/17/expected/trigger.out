@@ -310,7 +310,7 @@ SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where tr
 SELECT trace_id, span_type, span_operation, lvl from peek_ordered_spans where trace_id='fed00000000000000000000000000006';
              trace_id             |   span_type    |                    span_operation                    | lvl 
 ----------------------------------+----------------+------------------------------------------------------+-----
- fed00000000000000000000000000006 | Utility query  | explain INSERT INTO before_trigger_table VALUES(10); |   0
+ fed00000000000000000000000000006 | Utility query  | explain INSERT INTO before_trigger_table VALUES($1)  |   0
  fed00000000000000000000000000006 | ProcessUtility | ProcessUtility                                       |   1
  fed00000000000000000000000000006 | Insert query   | explain INSERT INTO before_trigger_table VALUES($1); |   2
  fed00000000000000000000000000006 | Planner        | Planner                                              |   3

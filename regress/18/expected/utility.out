@@ -264,10 +264,10 @@ select span_operation, parameters, lvl from peek_ordered_spans;
 -----------------------------------------------------------+------------+-----
  PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   0
  ProcessUtility                                            |            |   1
- PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; |            |   2
+ SELECT $1;                                                |            |   2
  EXECUTE test_prepared_one_param_2(100);                   |            |   0
  ProcessUtility                                            |            |   1
- PREPARE test_prepared_one_param_2 (integer) AS SELECT $1; | {100}      |   2
+ SELECT $1;                                                | {100}      |   2
  Planner                                                   |            |   3
  ExecutorRun                                               |            |   3
  Result                                                    |            |   4
@@ -287,16 +287,16 @@ PREPARE test_insert (integer, text) AS INSERT INTO pg_tracing_test(a, b) VALUES 
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ EXECUTE test_insert(100, '2');
 -- Check spans of test_insert execution
 select trace_id, span_operation, parameters, lvl from peek_ordered_spans WHERE trace_id='00000000000000000000000000000001';
-             trace_id             |                                      span_operation                                       | parameters | lvl 
-----------------------------------+-------------------------------------------------------------------------------------------+------------+-----
- 00000000000000000000000000000001 | EXECUTE test_insert(100, '2');                                                            |            |   0
- 00000000000000000000000000000001 | ProcessUtility                                                                            |            |   1
- 00000000000000000000000000000001 | PREPARE test_insert (integer, text) AS INSERT INTO pg_tracing_test(a, b) VALUES ($1, $2); | {100,2}    |   2
- 00000000000000000000000000000001 | Planner                                                                                   |            |   3
- 00000000000000000000000000000001 | ExecutorRun                                                                               |            |   3
- 00000000000000000000000000000001 | Insert on pg_tracing_test                                                                 |            |   4
- 00000000000000000000000000000001 | Result                                                                                    |            |   5
- 00000000000000000000000000000001 | TransactionCommit                                                                         |            |   0
+             trace_id             |                   span_operation                   | parameters | lvl 
+----------------------------------+----------------------------------------------------+------------+-----
+ 00000000000000000000000000000001 | EXECUTE test_insert(100, '2');                     |            |   0
+ 00000000000000000000000000000001 | ProcessUtility                                     |            |   1
+ 00000000000000000000000000000001 | INSERT INTO pg_tracing_test(a, b) VALUES ($1, $2); | {100,2}    |   2
+ 00000000000000000000000000000001 | Planner                                            |            |   3
+ 00000000000000000000000000000001 | ExecutorRun                                        |            |   3
+ 00000000000000000000000000000001 | Insert on pg_tracing_test                          |            |   4
+ 00000000000000000000000000000001 | Result                                             |            |   5
+ 00000000000000000000000000000001 | TransactionCommit                                  |            |   0
 (8 rows)
 
 -- We should have only two query_ids
@@ -332,15 +332,15 @@ select count(distinct(trace_id)) from pg_tracing_peek_spans;
 
 -- Check spans of test_prepared_one_param execution
 select span_operation, parameters, lvl from peek_ordered_spans;
-                     span_operation                      | parameters | lvl 
----------------------------------------------------------+------------+-----
- EXECUTE test_prepared_one_param(200);                   |            |   0
- ProcessUtility                                          |            |   1
- PREPARE test_prepared_one_param (integer) AS SELECT $1; |            |   2
- ExecutorRun                                             |            |   3
- Result                                                  |            |   4
- SET plan_cache_mode TO DEFAULT;                         |            |   0
- ProcessUtility                                          |            |   1
+            span_operation             | parameters | lvl 
+---------------------------------------+------------+-----
+ EXECUTE test_prepared_one_param(200); |            |   0
+ ProcessUtility                        |            |   1
+ SELECT $1;                            |            |   2
+ ExecutorRun                           |            |   3
+ Result                                |            |   4
+ SET plan_cache_mode TO DEFAULT;       |            |   0
+ ProcessUtility                        |            |   1
 (7 rows)
 
 -- Check the top span (standalone top span has trace_id=parent_id)
