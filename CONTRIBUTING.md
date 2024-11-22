@@ -70,7 +70,7 @@ Once the docker image is built, you can launch it with:
 docker run --rm --name pg_tracing_test -ti pg_tracing_test:pg16 bash
 
 # Within the docker image
-make PG_VERSION=16 regresscheck_noinstall
+make regresscheck_noinstall
 ```
 
 To launch test in the docker image:

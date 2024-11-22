@@ -1,9 +1,6 @@
 # Supported PostgreSQL versions:
 PG_VERSIONS = 15 16 17 18
 
-# Default version:
-PG_VERSION ?= $(lastword $(PG_VERSIONS))
-
 MODULE_big = pg_tracing
 EXTENSION  = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
@@ -26,6 +23,9 @@ OBJS = \
 	src/pg_tracing_sql_functions.o \
 	src/pg_tracing_strinfo.o \
 	src/version_compat.o
+
+# Default version:
+PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | tr -d 'devel')
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction
 
