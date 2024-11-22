@@ -388,7 +388,7 @@ extern uint64
 
 /* pg_tracing_query_process.c */
 extern const char *normalise_query_parameters(const SpanContext * span_context, Span * span,
-											  int query_loc, int *query_len_p);
+											  int *query_len_p);
 extern void extract_trace_context_from_query(Traceparent * traceparent, const char *query);
 extern ParseTraceparentErr parse_trace_context(Traceparent * traceparent, const char *trace_context_str, int trace_context_len);
 extern char *parse_code_to_err(ParseTraceparentErr err);
