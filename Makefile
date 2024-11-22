@@ -27,33 +27,31 @@ OBJS = \
 # Default version:
 PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | tr -d 'devel')
 
-REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction
+REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction planstate_projectset
 
-ifeq ($(PG_VERSION),15)
-REGRESSCHECKS += trigger_15
-endif
+REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 
+# \bind is only available starting PG 16
 ifeq ($(shell test $(PG_VERSION) -ge 16; echo $$?),0)
-REGRESSCHECKS += extended trigger_16 parameters_16
+REGRESSCHECKS += extended parameters_extended
+# expecteddir is not supported by PG15, expected at the project root will only be used for PG 15 expected outputs
+REGRESSCHECKS_OPTS += --expecteddir=regress/$(PG_VERSION)
 endif
 
-ifeq ($(shell test $(PG_VERSION) -lt 17; echo $$?),0)
-REGRESSCHECKS += planstate_projectset
-else
-REGRESSCHECKS += planstate_projectset_17 nested_17
+# infinity interval is only available starting PG 17
+ifeq ($(shell test $(PG_VERSION) -ge 17; echo $$?),0)
+REGRESSCHECKS += nested_17
 endif
 
 # PG 18 contains additional psql metacommand to test extended protocol
 ifeq ($(shell test $(PG_VERSION) -ge 18; echo $$?),0)
-REGRESSCHECKS += psql_extended psql_extended_tx
+REGRESSCHECKS += psql_extended_18 psql_extended_tx_18
 endif
 
 REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
 				 planstate_subplans planstate_union \
 				 parallel subxact full_buffer \
 				 guc nested wal cleanup
-
-REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 
@@ -86,6 +84,7 @@ build-test-image: build-test-pg$(PG_VERSION) ;
 .PHONY: $(BUILD_TEST_TARGETS)
 $(BUILD_TEST_TARGETS):
 	docker build \
+	  $(DOCKER_BUILD_OPTS) \
 	  --build-arg PG_VERSION=$(PG_VERSION)	 \
 	  -t $(TEST_CONTAINER_NAME):$(subst build-test-,,$@) .
 
@@ -93,5 +92,15 @@ $(BUILD_TEST_TARGETS):
 run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
+		$(DOCKER_RUN_OPTS)						\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
-		bash -c "PG_VERSION=$(PG_VERSION) make regresscheck_noinstall && make installcheck"
+		bash -c "make regresscheck_noinstall && make installcheck"
+
+.PHONY: update-regress-output
+update-regress-output: DOCKER_RUN_OPTS = -v./results:/usr/src/pg_tracing/results
+update-regress-output: run-test
+	@if [ $(PG_VERSION) = "15" ]; then \
+		cp results/*.out expected/;	\
+	else \
+		cp results/*.out regress/$(PG_VERSION)/expected; \
+	fi

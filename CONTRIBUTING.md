@@ -62,6 +62,8 @@ You can build a docker image with pg_tracing for a specific version.
 
 ```bash
 make PG_VERSION=16 build-test-image
+# Clean build
+make DOCKER_BUILD_OPTS=--no-cache PG_VERSION=17 build-test-image
 ```
 
 Once the docker image is built, you can launch it with:
@@ -87,6 +89,6 @@ If you have added additional tests, the expected outputs needs to be updated. If
 # From local results
 cp results/*out expected/
 
-# From a running docker test container
-docker cp 'pg_tracing_test:/usr/src/pg_tracing/results/.' expected
+# Run tests in a docker container and update expected output locally
+make PG_VERSION=15 update-regress-output
 ```

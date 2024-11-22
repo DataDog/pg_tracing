@@ -44,7 +44,12 @@ COPY --chown=postgres pg_tracing.conf ./pg_tracing.conf
 # Tests
 COPY --chown=postgres ./sql/ ./sql
 COPY --chown=postgres ./t/ ./t
+COPY --chown=postgres ./regress/ ./regress
 COPY --chown=postgres ./expected/ ./expected
+
+# Create empty results for mount bind
+RUN mkdir results
+RUN chown postgres:postgres results
 
 RUN make -s clean
 RUN sudo make -s install -j8

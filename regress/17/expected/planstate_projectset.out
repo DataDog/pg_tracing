@@ -7,15 +7,15 @@
 (3 rows)
 
 SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans where trace_id='00000000000000000000000000000001';
-                    span_operation                     | deparse_info |  parameters   | lvl 
--------------------------------------------------------+--------------+---------------+-----
- select information_schema._pg_expandarray($1::int[]); |              | {"'{0,1,2}'"} |   0
- Planner                                               |              |               |   1
- ExecutorRun                                           |              |               |   1
- ProjectSet                                            |              |               |   2
- Result                                                |              |               |   3
- SELECT * FROM pg_catalog.unnest($1) WITH ORDINALITY   |              |               |   3
- Planner                                               |              |               |   4
+                    span_operation                    | deparse_info |  parameters   | lvl 
+------------------------------------------------------+--------------+---------------+-----
+ select information_schema._pg_expandarray($1::int[]) |              | {"'{0,1,2}'"} |   0
+ Planner                                              |              |               |   1
+ ExecutorRun                                          |              |               |   1
+ ProjectSet                                           |              |               |   2
+ Result                                               |              |               |   3
+ SELECT * FROM pg_catalog.unnest($1) WITH ORDINALITY  |              |               |   3
+ Planner                                              |              |               |   4
 (7 rows)
 
 -- +---------------------------------------------+

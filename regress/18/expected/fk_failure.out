@@ -1,0 +1,10 @@
+CREATE TYPE rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+CREATE TABLE enumtest_parent (id rainbow PRIMARY KEY);
+CREATE TABLE enumtest_child (parent rainbow REFERENCES enumtest_parent);
+INSERT INTO enumtest_parent VALUES ('red');
+/*traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ INSERT INTO enumtest_child VALUES ('blue');
+ERROR:  insert or update on table "enumtest_child" violates foreign key constraint "enumtest_child_parent_fkey"
+DETAIL:  Key (parent)=(blue) is not present in table "enumtest_parent".
+-- Cleanup
+CALL reset_settings();
+CALL clean_spans();
