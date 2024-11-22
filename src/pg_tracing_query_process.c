@@ -13,7 +13,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "utils/memutils.h"
 #include "parser/scanner.h"
 #include "pg_tracing.h"
 
@@ -211,6 +210,132 @@ comp_location(const void *a, const void *b)
 		return 0;
 }
 
+/*
+ * Given a valid SQL string and an array of constant-location records,
+ * fill in the textual lengths of those constants.
+ *
+ * The constants may use any allowed constant syntax, such as float literals,
+ * bit-strings, single-quoted strings and dollar-quoted strings.  This is
+ * accomplished by using the public API for the core scanner.
+ *
+ * It is the caller's job to ensure that the string is a valid SQL statement
+ * with constants at the indicated locations.  Since in practice the string
+ * has already been parsed, and the locations that the caller provides will
+ * have originated from within the authoritative parser, this should not be
+ * a problem.
+ *
+ * Duplicate constant pointers are possible, and will have their lengths
+ * marked as '-1', so that they are later ignored.  (Actually, we assume the
+ * lengths were initialized as -1 to start with, and don't change them here.)
+ *
+ * If query_loc > 0, then "query" has been advanced by that much compared to
+ * the original string start, so we need to translate the provided locations
+ * to compensate.  (This lets us avoid re-scanning statements before the one
+ * of interest, so it's worth doing.)
+ *
+ * N.B. There is an assumption that a '-' character at a Const location begins
+ * a negative numeric constant.  This precludes there ever being another
+ * reason for a constant to start with a '-'.
+ */
+static void
+fill_in_constant_lengths(const JumbleState *jstate, const char *query,
+						 int query_loc, int *sub_query_loc)
+{
+	LocationLen *locs;
+	core_yyscan_t yyscanner;
+	core_yy_extra_type yyextra;
+	core_YYSTYPE yylval;
+	YYLTYPE		yylloc;
+	int			last_loc = -1;
+	int			i;
+
+	/*
+	 * Sort the records by location so that we can process them in order while
+	 * scanning the query text.
+	 */
+	if (jstate->clocations_count > 1)
+		qsort(jstate->clocations, jstate->clocations_count,
+			  sizeof(LocationLen), comp_location);
+	locs = jstate->clocations;
+
+	/* initialize the flex scanner --- should match raw_parser() */
+	yyscanner = scanner_init(query,
+							 &yyextra,
+							 &ScanKeywords,
+							 ScanKeywordTokens);
+
+	/* we don't want to re-emit any escape string warnings */
+	yyextra.escape_string_warning = false;
+
+	/* Search for each constant, in sequence */
+	for (i = 0; i < jstate->clocations_count; i++)
+	{
+		int			loc = locs[i].location;
+		int			tok;
+
+		/* Adjust recorded location if we're dealing with partial string */
+		loc -= query_loc;
+
+		Assert(loc >= 0);
+
+		if (loc <= last_loc)
+			continue;			/* Duplicate constant, ignore */
+
+		/* Lex tokens until we find the desired constant */
+		for (;;)
+		{
+			tok = core_yylex(&yylval, &yylloc, yyscanner);
+
+			/* We should not hit end-of-string, but if we do, behave sanely */
+			if (tok == 0)
+				break;			/* out of inner for-loop */
+
+			if (*sub_query_loc == -1)
+				*sub_query_loc = yylloc;
+
+			/*
+			 * We should find the token position exactly, but if we somehow
+			 * run past it, work with that.
+			 */
+			if (yylloc >= loc)
+			{
+				if (query[loc] == '-')
+				{
+					/*
+					 * It's a negative value - this is the one and only case
+					 * where we replace more than a single token.
+					 *
+					 * Do not compensate for the core system's special-case
+					 * adjustment of location to that of the leading '-'
+					 * operator in the event of a negative constant.  It is
+					 * also useful for our purposes to start from the minus
+					 * symbol.  In this way, queries like "select * from foo
+					 * where bar = 1" and "select * from foo where bar = -2"
+					 * will have identical normalized query strings.
+					 */
+					tok = core_yylex(&yylval, &yylloc, yyscanner);
+					if (tok == 0)
+						break;	/* out of inner for-loop */
+				}
+
+				/*
+				 * We now rely on the assumption that flex has placed a zero
+				 * byte after the text of the current token in scanbuf.
+				 */
+				locs[i].length = strlen(yyextra.scanbuf + loc);
+				break;			/* out of inner for-loop */
+			}
+		}
+
+		/* If we hit end-of-string, give up, leaving remaining lengths -1 */
+		if (tok == 0)
+			break;
+
+		last_loc = loc;
+	}
+
+	scanner_finish(yyscanner);
+}
 
 /*
  * Normalise query: Comments are removed, Constants are replaced by $x, all tokens
@@ -219,45 +344,54 @@ comp_location(const void *a, const void *b)
  */
 const char *
 normalise_query_parameters(const SpanContext * span_context, Span * span,
-						   int query_loc, int *query_len_p)
+						   int *query_len_p)
 {
-	const char *query = span_context->query_text;
+	const char *sub_query;
+	int			query_loc = span_context->query->stmt_location; /* Query location in the
+																 * complete query_text */
+	int			query_len = span_context->query->stmt_len;	/* Query length in the
+															 * complete query_text */
 	const JumbleState *jstate = span_context->jstate;
 	char	   *norm_query;
-	int			query_len = *query_len_p;
-	int			len_parameter;
-	int			norm_query_buflen,	/* Space allowed for norm_query */
-				n_quer_loc = 0;
-	LocationLen *locs;
-	core_yyscan_t yyscanner;
-	core_yy_extra_type yyextra;
-	core_YYSTYPE yylval;
-	YYLTYPE		yylloc;
-	int			bytes_written;
-	int			current_loc = 0;
+	int			i,
+				sub_query_loc = -1, /* Location in the confined sub query */
+				norm_query_buflen,	/* Space allowed for norm_query */
+				len_to_wrt,		/* Length (in bytes) to write */
+				n_quer_loc = 0; /* Normalized query byte location */
 	bool		extract_parameters = span_context->max_parameter_size > 0;
 
+
+	/*
+	 * Confine our attention to the relevant part of the string, if the query
+	 * is a portion of a multi-statement source string, and update query
+	 * location and length if needed.
+	 */
+	sub_query = CleanQuerytext(span_context->query_text, &query_loc, &query_len);
+	if (query_len == 0)
+		return "";
+
+	/*
+	 * Get constants' lengths (core system only gives us locations).  Note
+	 * this also ensures the items are sorted by location.
+	 */
+	fill_in_constant_lengths(jstate, sub_query, query_loc, &sub_query_loc);
+
+	/*
+	 * Save the current position in parameters buffer for the eventual
+	 * parameter values
+	 */
 	if (extract_parameters)
 		span->parameter_offset = span_context->parameters_buffer->len;
 
-	if (query_loc == -1)
-	{
-		/* If query location is unknown, distrust query_len as well */
-		query_loc = 0;
-		query_len = strlen(query);
-	}
-	else
-	{
-		/* Length of 0 (or -1) means "rest of string" */
-		if (query_len <= 0)
-			query_len = strlen(query);
-		else
-			Assert(query_len <= strlen(query));
-	}
-
+	/*
+	 * Allow for $n symbols to be longer than the constants they replace.
+	 * Constants must take at least one byte in text form, while a $n symbol
+	 * certainly isn't more than 11 bytes, even if n reaches INT_MAX.  We
+	 * could refine that limit based on the max value of n for the current
+	 * query, but it hardly seems worth any extra effort to do so.
+	 */
 	norm_query_buflen = query_len + jstate->clocations_count * 10;
 	Assert(norm_query_buflen > 0);
-	locs = jstate->clocations;
 
 	/* Allocate result buffer */
 	norm_query = palloc(norm_query_buflen + 1);
@@ -266,101 +400,60 @@ normalise_query_parameters(const SpanContext * span_context, Span * span,
 		qsort(jstate->clocations, jstate->clocations_count,
 			  sizeof(LocationLen), comp_location);
 
-	/* initialize the flex scanner --- should match raw_parser() */
-	yyscanner = scanner_init(query + query_loc,
-							 &yyextra,
-							 &ScanKeywords,
-							 ScanKeywordTokens);
-
-	for (;;)
+	for (i = 0; i < jstate->clocations_count; i++)
 	{
-		int			loc = locs[current_loc].location;
-		int			tok;
+		int			off,		/* Offset from start for cur tok */
+					tok_len;	/* Length (in bytes) of that tok */
 
-		bytes_written = 0;
+		off = jstate->clocations[i].location;
+		/* Adjust recorded location if we're dealing with partial string */
+		off -= query_loc;
 
-		loc -= query_loc;
+		tok_len = jstate->clocations[i].length;
 
-		tok = core_yylex(&yylval, &yylloc, yyscanner);
+		if (tok_len < 0)
+			continue;			/* ignore any duplicates */
 
-		/*
-		 * We should not hit end-of-string, but if we do, behave sanely
-		 */
-		if (tok == 0)
-			break;				/* out of inner for-loop */
-		if (yylloc > query_len)
-			break;
+		/* Copy next chunk (what precedes the next constant) */
+		len_to_wrt = off - sub_query_loc;
 
-		/*
-		 * We should find the token position exactly, but if we somehow run
-		 * past it, work with that.
-		 */
-		if (current_loc < jstate->clocations_count && yylloc >= loc)
+		Assert(len_to_wrt >= 0);
+		memcpy(norm_query + n_quer_loc, sub_query + sub_query_loc, len_to_wrt);
+		n_quer_loc += len_to_wrt;
+
+		/* And insert a param symbol in place of the constant token */
+		n_quer_loc += sprintf(norm_query + n_quer_loc, "$%d",
+							  i + 1 + jstate->highest_extern_param_id);
+
+		if (extract_parameters)
 		{
-			if (query[loc] == '-')
-			{
-				/*
-				 * It's a negative value - this is the one and only case where
-				 * we replace more than a single token.
-				 *
-				 * Do not compensate for the core system's special-case
-				 * adjustment of location to that of the leading '-' operator
-				 * in the event of a negative constant.  It is also useful for
-				 * our purposes to start from the minus symbol.  In this way,
-				 * queries like "select * from foo where bar = 1" and "select *
-				 * from foo where bar = -2" will have identical normalized
-				 * query strings.
-				 */
-				if (extract_parameters)
-					bytes_written = append_str_to_parameters_buffer("-", 1, false);
-				tok = core_yylex(&yylval, &yylloc, yyscanner);
-				if (tok == 0)
-					break;		/* out of inner for-loop */
-			}
-			if (yylloc > 0 && isspace(yyextra.scanbuf[yylloc - 1]) && n_quer_loc > 0)
-				norm_query[n_quer_loc++] = yyextra.scanbuf[yylloc - 1];
+			int			bytes_written = append_str_to_parameters_buffer(sub_query + off, tok_len, true);
 
-			/* Append the current parameter $x in the normalised query */
-			n_quer_loc += sprintf(norm_query + n_quer_loc, "$%d",
-								  current_loc + 1 + jstate->highest_extern_param_id);
-
-			if (extract_parameters)
-			{
-				len_parameter = strlen(yyextra.scanbuf + yylloc);
-
-
-				/*
-				 * We may have added a - char before, add this to the
-				 * bytes_written so it is counted as a parameter
-				 */
-				bytes_written += append_str_to_parameters_buffer(yyextra.scanbuf + yylloc, len_parameter, true);
-				if (bytes_written == 0)
-					/* Nothing was written, the parameter was fully truncated */
-					span->num_truncated_parameters++;
-				else
-					/* We have at least a partial parameter */
-					span->num_parameters++;
-			}
-
-			current_loc++;
+			if (bytes_written == 0)
+				/* Nothing was written, the parameter was fully truncated */
+				span->num_truncated_parameters++;
+			else
+				/* We have at least a partial parameter */
+				span->num_parameters++;
 		}
-		else
-		{
-			int			to_copy;
 
-			if (yylloc > 0 && isspace(yyextra.scanbuf[yylloc - 1]) && n_quer_loc > 0)
-				norm_query[n_quer_loc++] = yyextra.scanbuf[yylloc - 1];
-
-			to_copy = strlen(yyextra.scanbuf + yylloc);
-			Assert(n_quer_loc + to_copy < norm_query_buflen + 1);
-			memcpy(norm_query + n_quer_loc, yyextra.scanbuf + yylloc, to_copy);
-			n_quer_loc += to_copy;
-		}
+		sub_query_loc = off + tok_len;
 	}
-	scanner_finish(yyscanner);
+
+	/*
+	 * We've copied up until the last ignorable constant.  Copy over the
+	 * remaining bytes of the original query string.
+	 */
+	len_to_wrt = query_len - sub_query_loc;
+
+	Assert(len_to_wrt >= 0);
+	memcpy(norm_query + n_quer_loc, sub_query + sub_query_loc, len_to_wrt);
+	n_quer_loc += len_to_wrt;
+
+	Assert(n_quer_loc <= norm_query_buflen);
+	norm_query[n_quer_loc] = '\0';
 
 	*query_len_p = n_quer_loc;
-	norm_query[n_quer_loc] = '\0';
 	return norm_query;
 }
 
