@@ -43,5 +43,20 @@ extern void *guc_malloc(int elevel, size_t size);
 
 #endif
 
+#if (PG_VERSION_NUM < 180000)
+
+#define EXECUTOR_RUN(...) \
+		if (prev_ExecutorRun) \
+			prev_ExecutorRun(queryDesc, direction, count, execute_once); \
+		else \
+			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+#else
+
+#define EXECUTOR_RUN(...) \
+		if (prev_ExecutorRun) \
+			prev_ExecutorRun(queryDesc, direction, count); \
+		else \
+			standard_ExecutorRun(queryDesc, direction, count);
+#endif
 
 #endif							/* VERSION_COMPAT_H */
