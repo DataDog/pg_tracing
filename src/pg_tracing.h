@@ -15,9 +15,6 @@
 #include "storage/lwlock.h"
 #include "version_compat.h"
 
-/* Location of external text file */
-#define INT64_HEX_FORMAT "%016" INT64_MODIFIER "x"
-
 /*
  * Counters extracted from query instrumentation
  */

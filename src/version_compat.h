@@ -45,6 +45,7 @@ extern void *guc_malloc(int elevel, size_t size);
 
 #if (PG_VERSION_NUM < 180000)
 
+#define UINT64_HEX_PADDED_FORMAT  "%016" INT64_MODIFIER "x"
 #define EXECUTOR_RUN(...) \
 		if (prev_ExecutorRun) \
 			prev_ExecutorRun(queryDesc, direction, count, execute_once); \
@@ -52,6 +53,7 @@ extern void *guc_malloc(int elevel, size_t size);
 			standard_ExecutorRun(queryDesc, direction, count, execute_once);
 #else
 
+#define UINT64_HEX_PADDED_FORMAT  "%016" PRIx64
 #define EXECUTOR_RUN(...) \
 		if (prev_ExecutorRun) \
 			prev_ExecutorRun(queryDesc, direction, count); \

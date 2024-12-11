@@ -60,7 +60,7 @@ append_text_field(StringInfo str, const char *label, const char *value, bool add
 static void
 append_int_field(StringInfo str, const char *label, int64 value, bool add_comma)
 {
-	appendStringInfo(str, "\"%s\": %" INT64_MODIFIER "d", label, value);
+	appendStringInfo(str, "\"%s\": "INT64_FORMAT, label, value);
 	if (add_comma)
 		appendStringInfoChar(str, ',');
 }
@@ -79,7 +79,7 @@ append_nano_timestamp(StringInfo str, const char *label, TimestampTz value, bool
 	Timestamp	epoch = SetEpochTimestamp();
 	int64		result = value - epoch;
 
-	char	   *ts_nano = psprintf("%" INT64_MODIFIER "u000", result);
+	char	   *ts_nano = psprintf(UINT64_FORMAT "000", result);
 
 	escape_json(str, label);
 	appendStringInfoChar(str, ':');
@@ -300,11 +300,11 @@ append_span(const JsonContext * json_ctx, const Span * span)
 
 	operation_name = get_operation_name(span);
 
-	pg_snprintf(trace_id, 33, INT64_HEX_FORMAT INT64_HEX_FORMAT,
+	pg_snprintf(trace_id, 33, UINT64_HEX_PADDED_FORMAT UINT64_HEX_PADDED_FORMAT,
 				span->trace_id.traceid_left,
 				span->trace_id.traceid_right);
-	pg_snprintf(parent_id, 17, INT64_HEX_FORMAT, span->parent_id);
-	pg_snprintf(span_id, 17, INT64_HEX_FORMAT, span->span_id);
+	pg_snprintf(parent_id, 17, UINT64_HEX_PADDED_FORMAT, span->parent_id);
+	pg_snprintf(span_id, 17, UINT64_HEX_PADDED_FORMAT, span->span_id);
 
 	appendStringInfoChar(str, '{');
 	append_text_field(str, "traceId", trace_id, true);
