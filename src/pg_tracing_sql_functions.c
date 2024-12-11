@@ -186,11 +186,11 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span)
 	operation_name = get_operation_name(span);
 	sql_error_code = unpack_sql_state(span->sql_error_code);
 
-	pg_snprintf(trace_id, 33, INT64_HEX_FORMAT INT64_HEX_FORMAT,
+	pg_snprintf(trace_id, 33, UINT64_HEX_PADDED_FORMAT UINT64_HEX_PADDED_FORMAT,
 				span->trace_id.traceid_left,
 				span->trace_id.traceid_right);
-	pg_snprintf(parent_id, 17, INT64_HEX_FORMAT, span->parent_id);
-	pg_snprintf(span_id, 17, INT64_HEX_FORMAT, span->span_id);
+	pg_snprintf(parent_id, 17, UINT64_HEX_PADDED_FORMAT, span->parent_id);
+	pg_snprintf(span_id, 17, UINT64_HEX_PADDED_FORMAT, span->span_id);
 
 	Assert(span_type != NULL);
 	Assert(operation_name != NULL);
