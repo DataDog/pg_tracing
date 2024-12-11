@@ -265,9 +265,15 @@ static PlannedStmt *pg_tracing_planner_hook(Query *query,
 											int cursorOptions,
 											ParamListInfo params);
 static void pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags);
+#if (PG_VERSION_NUM < 180000)
 static void pg_tracing_ExecutorRun(QueryDesc *queryDesc,
 								   ScanDirection direction,
 								   uint64 count, bool execute_once);
+#else
+static void pg_tracing_ExecutorRun(QueryDesc *queryDesc,
+								   ScanDirection direction,
+								   uint64 count);
+#endif
 static void pg_tracing_ExecutorFinish(QueryDesc *queryDesc);
 static void pg_tracing_ExecutorEnd(QueryDesc *queryDesc);
 static void pg_tracing_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
@@ -1834,8 +1840,12 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
  * If the plan needs to create parallel workers, push the trace context in the parallel shared buffer.
  */
 static void
+#if (PG_VERSION_NUM < 180000)
 pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 					   bool execute_once)
+#else
+pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count)
+#endif
 {
 	SpanContext span_context;
 	TimestampTz span_end_time;
@@ -1850,10 +1860,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 		nested_level++;
 		PG_TRY();
 		{
-			if (prev_ExecutorRun)
-				prev_ExecutorRun(queryDesc, direction, count, execute_once);
-			else
-				standard_ExecutorRun(queryDesc, direction, count, execute_once);
+			EXECUTOR_RUN();
 		}
 		PG_FINALLY();
 		{
@@ -1910,10 +1917,7 @@ pg_tracing_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 cou
 	nested_level++;
 	PG_TRY();
 	{
-		if (prev_ExecutorRun)
-			prev_ExecutorRun(queryDesc, direction, count, execute_once);
-		else
-			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		EXECUTOR_RUN();
 	}
 	PG_CATCH();
 	{
