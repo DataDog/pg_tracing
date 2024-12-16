@@ -86,35 +86,35 @@ SELECT trace_id, name,
 CALL clean_spans();
 -- Test parameters and deparse_info
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT * FROM pg_tracing_test WHERE a=1;
- a |          b           
----+----------------------
- 1 | aaa                 
+ a |          b           | c 
+---+----------------------+---
+ 1 | 1                    | 1
 (1 row)
 
 SELECT trace_id, name, parameters, deparse_info, lvl FROM peek_ordered_json_spans;
-             trace_id             |                        name                         | parameters |    deparse_info     | lvl 
-----------------------------------+-----------------------------------------------------+------------+---------------------+-----
- 00000000000000000000000000000001 | SELECT * FROM pg_tracing_test WHERE a=$1            | {1}        |                     |   1
- 00000000000000000000000000000001 | Planner                                             |            |                     |   2
- 00000000000000000000000000000001 | ExecutorRun                                         |            |                     |   2
- 00000000000000000000000000000001 | IndexScan using pg_tracing_index on pg_tracing_test |            | Index Cond: (a = 1) |   3
+             trace_id             |                         name                          | parameters |    deparse_info     | lvl 
+----------------------------------+-------------------------------------------------------+------------+---------------------+-----
+ 00000000000000000000000000000001 | SELECT * FROM pg_tracing_test WHERE a=$1              | {1}        |                     |   1
+ 00000000000000000000000000000001 | Planner                                               |            |                     |   2
+ 00000000000000000000000000000001 | ExecutorRun                                           |            |                     |   2
+ 00000000000000000000000000000001 | IndexScan using pg_tracing_index_a on pg_tracing_test |            | Index Cond: (a = 1) |   3
 (4 rows)
 
 CALL clean_spans();
 -- Test service name
 /*traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ SELECT * FROM pg_tracing_test WHERE a=1;
- a |          b           
----+----------------------
- 1 | aaa                 
+ a |          b           | c 
+---+----------------------+---
+ 1 | 1                    | 1
 (1 row)
 
 SELECT trace_id, name, service_name FROM peek_ordered_json_spans;
-             trace_id             |                        name                         |    service_name     
-----------------------------------+-----------------------------------------------------+---------------------
- 00000000000000000000000000000001 | SELECT * FROM pg_tracing_test WHERE a=$1            | "PostgreSQL_Server"
- 00000000000000000000000000000001 | Planner                                             | "PostgreSQL_Server"
- 00000000000000000000000000000001 | ExecutorRun                                         | "PostgreSQL_Server"
- 00000000000000000000000000000001 | IndexScan using pg_tracing_index on pg_tracing_test | "PostgreSQL_Server"
+             trace_id             |                         name                          |    service_name     
+----------------------------------+-------------------------------------------------------+---------------------
+ 00000000000000000000000000000001 | SELECT * FROM pg_tracing_test WHERE a=$1              | "PostgreSQL_Server"
+ 00000000000000000000000000000001 | Planner                                               | "PostgreSQL_Server"
+ 00000000000000000000000000000001 | ExecutorRun                                           | "PostgreSQL_Server"
+ 00000000000000000000000000000001 | IndexScan using pg_tracing_index_a on pg_tracing_test | "PostgreSQL_Server"
 (4 rows)
 
 -- Cleanup
