@@ -20,13 +20,13 @@ FROM peek_ordered_spans;
  00000000000000000000000000000002 | Planner           | Planner                                                         | f           | f
  00000000000000000000000000000002 | ExecutorRun       | ExecutorRun                                                     |             | 
  00000000000000000000000000000002 | Update            | Update on pg_tracing_test                                       | t           | t
- 00000000000000000000000000000002 | IndexScan         | IndexScan using pg_tracing_index on pg_tracing_test             | f           | f
+ 00000000000000000000000000000002 | IndexScan         | IndexScan using pg_tracing_index_a on pg_tracing_test           | f           | f
  00000000000000000000000000000002 | TransactionCommit | TransactionCommit                                               |             | 
  00000000000000000000000000000003 | Delete query      | DELETE FROM pg_tracing_test WHERE a = $1                        | t           | t
  00000000000000000000000000000003 | Planner           | Planner                                                         | f           | f
  00000000000000000000000000000003 | ExecutorRun       | ExecutorRun                                                     |             | 
  00000000000000000000000000000003 | Delete            | Delete on pg_tracing_test                                       | t           | t
- 00000000000000000000000000000003 | IndexScan         | IndexScan using pg_tracing_index on pg_tracing_test             | t           | t
+ 00000000000000000000000000000003 | IndexScan         | IndexScan using pg_tracing_index_a on pg_tracing_test           | t           | t
  00000000000000000000000000000003 | TransactionCommit | TransactionCommit                                               |             | 
 (19 rows)
 

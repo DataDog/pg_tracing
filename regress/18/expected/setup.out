@@ -25,10 +25,12 @@ $$;
 CREATE OR REPLACE PROCEDURE reset_pg_tracing_test_table() AS $$
 BEGIN
     DROP TABLE IF EXISTS pg_tracing_test;
-    CREATE TABLE pg_tracing_test (a int, b char(20));
+    CREATE TABLE pg_tracing_test (a int, b char(20), c int);
     COMMIT;
-    CREATE INDEX pg_tracing_index ON pg_tracing_test (a);
-    INSERT INTO pg_tracing_test VALUES(generate_series(1, 10000), 'aaa');
+    CREATE INDEX pg_tracing_index_a ON pg_tracing_test (a);
+    CREATE INDEX pg_tracing_index_b ON pg_tracing_test (b);
+    CREATE INDEX pg_tracing_index_c ON pg_tracing_test (c);
+    INSERT INTO pg_tracing_test SELECT *, *, * FROM generate_series(1, 10000);
     ANALYZE pg_tracing_test;
 END;
 $$ LANGUAGE plpgsql;

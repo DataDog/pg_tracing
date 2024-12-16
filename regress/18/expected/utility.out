@@ -57,6 +57,10 @@ SET pg_tracing.sample_rate = 1.0;
 DROP EXTENSION pg_tracing;
 CREATE EXTENSION pg_tracing;
 SET pg_tracing.sample_rate = 0.0;
+-- Fetching spans with sort and aggregations can lead to very expensive plans
+-- while only a small amount of rows is processed. Disable jit as it will add
+-- a significant overhead for not much benefit
+set jit=false;
 -- Create utility view to keep order stable
 CREATE VIEW peek_ordered_spans AS
     WITH oldest_start AS (
@@ -66,6 +70,21 @@ CREATE VIEW peek_ordered_spans AS
         extract(MICROSECONDS FROM age(span_start, oldest_start.min_start)) as us_start,
         extract(MICROSECONDS FROM age(span_end, oldest_start.min_start)) as us_end
         FROM pg_tracing_peek_spans_with_level, oldest_start order by span_start, lvl, span_end, deparse_info;
+CREATE VIEW peek_ordered_spans_with_pos AS
+    WITH oldest_start AS (
+        SELECT min(span_start) as min_start FROM pg_tracing_peek_spans
+    ), time_position AS (
+        SELECT time, ROW_NUMBER () OVER (ORDER BY time) as pos FROM (
+            SELECT span_start as time FROM pg_tracing_peek_spans_with_level
+            UNION
+            SELECT span_end as time FROM pg_tracing_peek_spans_with_level)
+    ) SELECT pg_tracing_peek_spans_with_level.*, start_time.pos as pos_start, end_time.pos as pos_end,
+            extract(MICROSECONDS FROM age(span_start, oldest_start.min_start)) as us_start,
+            extract(MICROSECONDS FROM age(span_end, oldest_start.min_start)) as us_end
+            FROM oldest_start, pg_tracing_peek_spans_with_level
+            JOIN time_position start_time ON span_start = start_time.time
+            JOIN time_position end_time ON span_end = end_time.time
+            ORDER BY span_start, lvl, span_end, deparse_info;
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int, status jsonb);
 CREATE VIEW peek_json_spans AS

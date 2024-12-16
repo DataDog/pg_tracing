@@ -92,13 +92,16 @@ $(BUILD_TEST_TARGETS):
 run-test: build-test-pg$(PG_VERSION)
 	docker run					                \
 		--name $(TEST_CONTAINER_NAME) --rm		\
-		$(DOCKER_RUN_OPTS)						\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
 		bash -c "make regresscheck_noinstall && make installcheck"
 
 .PHONY: update-regress-output
-update-regress-output: DOCKER_RUN_OPTS = -v./results:/usr/src/pg_tracing/results
-update-regress-output: run-test
+update-regress-output: build-test-pg$(PG_VERSION)
+	docker run					                \
+		--name $(TEST_CONTAINER_NAME) --rm		\
+		-v./results:/usr/src/pg_tracing/results	\
+		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
+		bash -c "make regresscheck_noinstall || true"
 	@if [ $(PG_VERSION) = "15" ]; then \
 		cp results/*.out expected/;	\
 	else \
