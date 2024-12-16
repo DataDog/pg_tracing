@@ -77,7 +77,7 @@ CREATE VIEW peek_ordered_spans_with_pos AS
         SELECT time, ROW_NUMBER () OVER (ORDER BY time) as pos FROM (
             SELECT span_start as time FROM pg_tracing_peek_spans_with_level
             UNION
-            SELECT span_end as time FROM pg_tracing_peek_spans_with_level)
+            SELECT span_end as time FROM pg_tracing_peek_spans_with_level) positions
     ) SELECT pg_tracing_peek_spans_with_level.*, start_time.pos as pos_start, end_time.pos as pos_end,
             extract(MICROSECONDS FROM age(span_start, oldest_start.min_start)) as us_start,
             extract(MICROSECONDS FROM age(span_end, oldest_start.min_start)) as us_end

@@ -107,3 +107,11 @@ update-regress-output: build-test-pg$(PG_VERSION)
 	else \
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
+
+.PHONY: update-regress-output-local
+update-regress-output-local: regresscheck
+	@if [ $(PG_VERSION) = "15" ]; then \
+		cp results/*.out expected/;	\
+	else \
+		cp results/*.out regress/$(PG_VERSION)/expected; \
+	fi
