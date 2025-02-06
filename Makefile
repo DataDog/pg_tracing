@@ -6,7 +6,6 @@ EXTENSION  = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
 PG_CONFIG  = pg_config
-# TODO: Make this optional
 SHLIB_LINK = -lcurl
 OBJS = \
 	$(WIN32RES) \
@@ -115,3 +114,18 @@ update-regress-output-local: regresscheck
 	else \
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
+
+.PHONY: dist/$(EXTENSION)-$(EXTVERSION).zip
+
+# The version number of the library
+EXTVERSION = $(shell grep '"version":' META.json | head -1 \
+	| sed -e 's/[ 	]*"version":[ 	]*"\(.*\)",/\1/')
+
+# Prepare the package for PGXN submission
+package: dist dist/$(EXTENSION)-$(EXTVERSION).zip
+
+dist:
+	mkdir -p dist
+
+dist/$(EXTENSION)-$(EXTVERSION).zip:
+	git archive --format zip --prefix=$(EXTENSION)-$(EXTVERSION)/ --output $@ main
