@@ -1,17 +1,17 @@
 {
     "name": "pg_tracing",
-    "abstract": "Extension to provide Distributed Tracing for PostgreSQL",
-    "version": "0.1.0",
+    "abstract": "Distributed Tracing for PostgreSQL",
+    "version": "@PG_TRACING_VERSION@",
     "maintainer": [
         "Anthonin Bonnefoy <anthonin.bonnefoy@gmail.com>"
     ],
-    "license": "MIT",
-    "generated_by": "Anthonin Bonnefoy",
-    "release_status": "alpha",
+    "tags": [ "monitoring", "tracing" ],
+    "release_status": "unstable",
+    "license": "mit",
     "prereqs": {
         "runtime": {
             "requires": {
-                "PostgreSQL": "16.0"
+                "PostgreSQL": "15.0.0"
             }
         }
     },
@@ -19,8 +19,8 @@
         "pg_tracing": {
             "file": "sql/pg_tracing--0.1.0.sql",
             "docfile": "doc/pg_tracing.md",
-            "version": "0.1.0",
-            "abstract": "Extension to provide Distributed Tracing for PostgreSQL"
+            "version": "@PG_TRACING_VERSION@",
+            "abstract": "Distributed Tracing for PostgreSQL"
         }
     },
     "resources": {
@@ -33,12 +33,9 @@
             "type": "git"
         }
     },
+    "generated_by": "Anthonin Bonnefoy",
     "meta-spec": {
       "version": "1.0.0",
       "url": "http://pgxn.org/meta/spec.txt"
-    },
-    "tags": [
-        "monitoring",
-        "tracing"
-    ]
+    }
 }

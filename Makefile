@@ -23,8 +23,18 @@ OBJS = \
 	src/pg_tracing_strinfo.o \
 	src/version_compat.o
 
-# Default version:
+EXTRA_CLEAN = META.json $(EXTENSION)-$(EXTVERSION).zip
+
+PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
+ifndef PG_CONFIG_EXISTS
+# pg_config is not present, let's assume we are packaging and use the latest PG version
+PG_VERSION ?= $(lastword $(PG_VERSIONS))
+else
+# Default to pg_config's advertised version
 PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | tr -d 'devel')
+PGXS := $(shell $(PG_CONFIG) --pgxs)
+include $(PGXS)
+endif
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction planstate_projectset
 
@@ -52,11 +62,7 @@ REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
 				 parallel subxact full_buffer \
 				 guc nested wal cleanup
 
-PGXS := $(shell $(PG_CONFIG) --pgxs)
-
 TAP_TESTS = 1
-
-include $(PGXS)
 
 regresscheck_noinstall:
 	$(pg_regress_check) $(REGRESSCHECKS_OPTS) $(REGRESSCHECKS) || \
@@ -115,17 +121,13 @@ update-regress-output-local: regresscheck
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
 
-.PHONY: dist/$(EXTENSION)-$(EXTVERSION).zip
-
-# The version number of the library
-EXTVERSION = $(shell grep '"version":' META.json | head -1 \
-	| sed -e 's/[ 	]*"version":[ 	]*"\(.*\)",/\1/')
-
 # Prepare the package for PGXN submission
-package: dist dist/$(EXTENSION)-$(EXTVERSION).zip
+EXTVERSION = $(shell git describe --tags | sed 's/^v//')
 
-dist:
-	mkdir -p dist
+META.json: META.json.in
+	@sed "s/@PG_TRACING_VERSION@/$(EXTVERSION)/g" $< > $@
 
-dist/$(EXTENSION)-$(EXTVERSION).zip:
-	git archive --format zip --prefix=$(EXTENSION)-$(EXTVERSION)/ --output $@ main
+$(EXTENSION)-$(EXTVERSION).zip: META.json
+	git archive --format zip --prefix "$(EXTENSION)-$(EXTVERSION)/" --add-file $< -o "$(EXTENSION)-$(EXTVERSION).zip" HEAD
+
+dist: $(EXTENSION)-$(EXTVERSION).zip
