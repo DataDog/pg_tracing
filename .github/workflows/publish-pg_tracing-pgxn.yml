@@ -2,6 +2,8 @@
 
 name: Publish pg_tracing (PGXN)
 
+permissions: {}
+
 on:
   push:
     tags:
@@ -13,7 +15,8 @@ jobs:
     name: Publish pg_tracing to PGXN
     runs-on: ubuntu-latest
     container: pgxn/pgxn-tools
-
+    permissions:
+      contents: read
     steps:
       - name: Checkout Git Repository
         uses: actions/checkout@v4
