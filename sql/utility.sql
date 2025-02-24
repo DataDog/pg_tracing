@@ -78,7 +78,7 @@ CREATE VIEW peek_ordered_spans AS
     ) select *,
         extract(MICROSECONDS FROM age(span_start, oldest_start.min_start)) as us_start,
         extract(MICROSECONDS FROM age(span_end, oldest_start.min_start)) as us_end
-        FROM pg_tracing_peek_spans_with_level, oldest_start order by span_start, lvl, span_end, deparse_info;
+        FROM pg_tracing_peek_spans_with_level, oldest_start order by span_start, span_end desc, lvl, deparse_info;
 
 CREATE VIEW peek_ordered_spans_with_pos AS
     WITH oldest_start AS (
@@ -94,7 +94,7 @@ CREATE VIEW peek_ordered_spans_with_pos AS
             FROM oldest_start, pg_tracing_peek_spans_with_level
             JOIN time_position start_time ON span_start = start_time.time
             JOIN time_position end_time ON span_end = end_time.time
-            ORDER BY span_start, lvl, span_end, deparse_info;
+            ORDER BY span_start, span_end desc, lvl, deparse_info;
 
 -- Column type to convert json to record
 create type span_json as ("traceId" text, "parentSpanId" text, "spanId" text, name text, "startTimeUnixNano" text, "endTimeUnixNano" text, attributes jsonb, kind int, status jsonb);
