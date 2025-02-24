@@ -1,6 +1,6 @@
 ARG PG_VERSION=16
 
-FROM ubuntu:focal as base
+FROM ubuntu:jammy as base
 
 ARG PG_VERSION
 
@@ -11,7 +11,12 @@ RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt focal-pgdg main ${PG_VERSION}" > /etc/apt/sources.list.d/pgdg.list
+
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt jammy-pgdg main ${PG_VERSION}" > /etc/apt/sources.list.d/pgdg.list
+RUN if [ "${PG_VERSION}" = "18" ] ; then \
+    echo "deb http://apt.postgresql.org/pub/repos/apt jammy-pgdg-snapshot main ${PG_VERSION}" >> /etc/apt/sources.list.d/pgdg.list; \
+    echo "Package: *\nPin: release a=jammy-pgdg-snapshot\nPin-Priority: 900" > /etc/apt/preferences.d/99pgdg; \
+fi
 
 # Install PostgreSQL
 RUN apt update \
