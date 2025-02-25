@@ -85,9 +85,7 @@ typedefs.list:
 
 .PHONY: pgindent
 pgindent: typedefs.list
-	pgindent --typedefs=typedefs.list \
-	src/*.c \
-	src/*.h
+	pgindent --typedefs=typedefs.list src/*.c src/*.h
 
 # DOCKER BUILDS
 TEST_CONTAINER_NAME = pg_tracing_test
@@ -109,6 +107,13 @@ run-test: build-test-pg$(PG_VERSION)
 		--name $(TEST_CONTAINER_NAME) --rm		\
 		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
 		bash -c "make regresscheck_noinstall && make installcheck"
+
+.PHONY: run-pgindent-diff
+run-pgindent-diff: build-test-pg$(PG_VERSION)
+	docker run					                \
+		--name $(TEST_CONTAINER_NAME) --rm		\
+		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
+		bash -c "pgindent --diff --check --typedefs=typedefs.list src/*.c src/*.h"
 
 .PHONY: update-regress-output
 update-regress-output: build-test-pg$(PG_VERSION)
