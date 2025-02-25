@@ -60,7 +60,7 @@ append_text_field(StringInfo str, const char *label, const char *value, bool add
 static void
 append_int_field(StringInfo str, const char *label, int64 value, bool add_comma)
 {
-	appendStringInfo(str, "\"%s\": "INT64_FORMAT, label, value);
+	appendStringInfo(str, "\"%s\": " INT64_FORMAT, label, value);
 	if (add_comma)
 		appendStringInfoChar(str, ',');
 }
