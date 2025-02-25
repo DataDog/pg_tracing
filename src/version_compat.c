@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #if PG_VERSION_NUM < 160000
+#include "version_compat.h"
 
 /*
  * repalloc0
