@@ -23,9 +23,16 @@ OBJS = \
 	src/pg_tracing_strinfo.o \
 	src/version_compat.o
 
-EXTRA_CLEAN = META.json $(EXTENSION)-$(EXTVERSION).zip
-
 PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
+GIT_EXISTS := $(shell command -v git 2> /dev/null)
+
+# Prepare the package for PGXN submission
+ifdef GIT_EXISTS
+EXTVERSION = $(shell git describe --tags | sed 's/^v//')
+else
+EXTVERSION = "0.1"
+endif
+
 ifndef PG_CONFIG_EXISTS
 # pg_config is not present, let's assume we are packaging and use the latest PG version
 PG_VERSION ?= $(lastword $(PG_VERSIONS))
@@ -35,6 +42,8 @@ PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | t
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 endif
+
+EXTRA_CLEAN = META.json $(EXTENSION)-$(EXTVERSION).zip
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction planstate_projectset
 
@@ -120,9 +129,6 @@ update-regress-output-local: regresscheck
 	else \
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
-
-# Prepare the package for PGXN submission
-EXTVERSION = $(shell git describe --tags | sed 's/^v//')
 
 META.json: META.json.in
 	@sed "s/@PG_TRACING_VERSION@/$(EXTVERSION)/g" $< > $@
