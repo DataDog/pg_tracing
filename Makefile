@@ -25,6 +25,7 @@ OBJS = \
 
 PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
 GIT_EXISTS := $(shell command -v git 2> /dev/null)
+PG_CFLAGS = -Werror
 
 # Prepare the package for PGXN submission
 ifdef GIT_EXISTS
