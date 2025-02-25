@@ -264,12 +264,13 @@ static PlannedStmt *pg_tracing_planner_hook(Query *query,
 											const char *query_string,
 											int cursorOptions,
 											ParamListInfo params);
-static void pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags);
 #if (PG_VERSION_NUM < 180000)
+static void pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags);
 static void pg_tracing_ExecutorRun(QueryDesc *queryDesc,
 								   ScanDirection direction,
 								   uint64 count, bool execute_once);
 #else
+static bool pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags);
 static void pg_tracing_ExecutorRun(QueryDesc *queryDesc,
 								   ScanDirection direction,
 								   uint64 count);
@@ -1750,12 +1751,19 @@ pg_tracing_planner_hook(Query *query, const char *query_string, int cursorOption
  * random sample_rate.
  * If query is sampled, start the top span if it doesn't already exist.
  */
+#if (PG_VERSION_NUM < 180000)
 static void
+#else
+static bool
+#endif
 pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	SpanContext span_context;
 	bool		is_lazy_function;
 	Traceparent *traceparent = &executor_traceparent;
+#if (PG_VERSION_NUM >= 180000)
+	bool		res;
+#endif
 
 	if (nested_level == 0)
 	{
@@ -1791,10 +1799,9 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	{
 		/* No sampling, go through normal ExecutorStart */
 		if (prev_ExecutorStart)
-			prev_ExecutorStart(queryDesc, eflags);
+			return prev_ExecutorStart(queryDesc, eflags);
 		else
-			standard_ExecutorStart(queryDesc, eflags);
-		return;
+			return standard_ExecutorStart(queryDesc, eflags);
 	}
 
 	/* Statement is sampled */
@@ -1817,10 +1824,17 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	if (pg_tracing_planstate_spans && !within_declare_cursor)
 		queryDesc->instrument_options = INSTRUMENT_ALL;
 
+#if (PG_VERSION_NUM >= 180000)
+	if (prev_ExecutorStart)
+		res = prev_ExecutorStart(queryDesc, eflags);
+	else
+		res = standard_ExecutorStart(queryDesc, eflags);
+#else
 	if (prev_ExecutorStart)
 		prev_ExecutorStart(queryDesc, eflags);
 	else
 		standard_ExecutorStart(queryDesc, eflags);
+#endif
 
 	/* Allocate totaltime instrumentation in the per-query context */
 	if (queryDesc->totaltime == NULL)
@@ -1831,6 +1845,10 @@ pg_tracing_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		queryDesc->totaltime = InstrAlloc(1, INSTRUMENT_ALL, false);
 		MemoryContextSwitchTo(oldcxt);
 	}
+
+#if (PG_VERSION_NUM >= 180000)
+	return res;
+#endif
 }
 
 /*
