@@ -25,6 +25,8 @@ jobs:
           fetch-depth: 0
       - name: Set environment variables
         run: echo "PG_VERSION=${{ matrix.PG_VERSION }}" >> $GITHUB_ENV
+      - name: Add gcc problem matcher
+        run: echo "::add-matcher::matcher.json"
       - name: Build Docker Test Image
         run: make build-test-image
       - name: Run Test
