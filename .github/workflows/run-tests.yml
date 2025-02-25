@@ -29,6 +29,10 @@ jobs:
         run: echo "::add-matcher::matcher.json"
       - name: Build Docker Test Image
         run: make build-test-image
+      - name: Check pgindent
+        # pgindent is only available starting PG 17
+        if: ${{ matrix.PG_VERSION > 16 }}
+        run: make run-pgindent-diff
       - name: Run Test
         timeout-minutes: 1
         run: make run-test
