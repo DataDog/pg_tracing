@@ -154,6 +154,7 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  Limit              |            |   2
 (4 rows)
 
+CALL clean_spans();
 -- Check standalone trace
 SET pg_tracing.sample_rate = 1.0;
 SELECT 1;
@@ -163,37 +164,11 @@ SELECT 1;
 (1 row)
 
 -- Make sure we have unique span ids
-SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
+SELECT count(distinct span_id) from pg_tracing_consume_spans;
  count 
 -------
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-     1
-(27 rows)
+     4
+(1 row)
 
 CALL clean_spans();
 -- Trigger a planner error
