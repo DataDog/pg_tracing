@@ -1,5 +1,5 @@
 # Supported PostgreSQL versions:
-PG_VERSIONS = 15 16 17 18
+PG_VERSIONS = 14 15 16 17 18
 
 MODULE_big = pg_tracing
 EXTENSION  = pg_tracing
@@ -7,6 +7,26 @@ DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
 PG_CONFIG  = pg_config
 SHLIB_LINK = -lcurl
+
+PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
+GIT_EXISTS := $(shell command -v git 2> /dev/null)
+PG_CFLAGS = -Werror
+
+# Prepare the package for PGXN submission
+ifdef GIT_EXISTS
+EXTVERSION = $(shell git describe --tags | sed 's/^v//')
+else
+EXTVERSION = "0.1"
+endif
+
+ifdef PG_CONFIG_EXISTS
+# Default to pg_config's advertised version
+PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | tr -d 'devel')
+else
+# pg_config is not present, let's assume we are packaging and use the latest PG version
+PG_VERSION ?= $(lastword $(PG_VERSIONS))
+endif
+
 OBJS = \
 	$(WIN32RES) \
 	src/pg_tracing.o \
@@ -23,24 +43,12 @@ OBJS = \
 	src/pg_tracing_sql_functions.o \
 	src/pg_tracing_strinfo.o \
 	src/version_compat.o
-
-PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
-GIT_EXISTS := $(shell command -v git 2> /dev/null)
-PG_CFLAGS = -Werror
-
-# Prepare the package for PGXN submission
-ifdef GIT_EXISTS
-EXTVERSION = $(shell git describe --tags | sed 's/^v//')
-else
-EXTVERSION = "0.1"
+ifeq ($(shell test $(PG_VERSION) -le 14; echo $$?),0)
+# Include backport of pg_prng for PG 14
+OBJS += src/pg_prng.o
 endif
 
-ifndef PG_CONFIG_EXISTS
-# pg_config is not present, let's assume we are packaging and use the latest PG version
-PG_VERSION ?= $(lastword $(PG_VERSIONS))
-else
-# Default to pg_config's advertised version
-PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | tr -d 'devel')
+ifdef PG_CONFIG_EXISTS
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 endif

@@ -181,9 +181,11 @@ static void
 append_node_counters(StringInfo str, const NodeCounters * node_counters)
 {
 	double		blk_read_time,
-				blk_write_time,
-				temp_blk_read_time,
+				blk_write_time;
+#if PG_VERSION_NUM >= 150000
+	double		temp_blk_read_time,
 				temp_blk_write_time;
+#endif
 	double		generation_counter,
 				inlining_counter,
 				optimization_counter,
@@ -214,10 +216,12 @@ append_node_counters(StringInfo str, const NodeCounters * node_counters)
 	append_attribute_double(str, "blocks.io.read_time", blk_read_time, true, true);
 	append_attribute_double(str, "blocks.io.write_time", blk_write_time, true, true);
 
+#if PG_VERSION_NUM >= 150000
 	temp_blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_read_time);
 	temp_blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_write_time);
 	append_attribute_double(str, "temp_blocks.io.read_time", temp_blk_read_time, true, true);
 	append_attribute_double(str, "temp_blocks.io.write_time", temp_blk_write_time, true, true);
+#endif
 	append_attribute_int(str, "temp_blocks.read", node_counters->buffer_usage.temp_blks_read, true, true);
 	append_attribute_int(str, "temp_blocks.written", node_counters->buffer_usage.temp_blks_written, true, true);
 

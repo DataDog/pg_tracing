@@ -247,7 +247,9 @@ static PerLevelInfos * per_level_infos = NULL;
 #define	INITIAL_ALLOCATED_SPANS 25
 
 /* Saved hook values in case of unload */
+#if (PG_VERSION_NUM >= 150000)
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
+#endif
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
 static planner_hook_type prev_planner_hook = NULL;
@@ -286,6 +288,7 @@ static void pg_tracing_xact_callback(XactEvent event, void *arg);
 
 static void pg_tracing_shmem_request(void);
 static void pg_tracing_shmem_startup_hook(void);
+static Size pg_tracing_memsize(void);
 
 static void initialize_trace_level(void);
 
@@ -507,14 +510,18 @@ _PG_init(void)
 							   NULL);
 
 
-	MarkGUCPrefixReserved("pg_tracing");
-
 	/* For jumble state */
 	EnableQueryId();
+
+#if (PG_VERSION_NUM < 150000)
+	pg_tracing_shmem_request();
+#else
+	MarkGUCPrefixReserved("pg_tracing");
 
 	/* Install hooks. */
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = pg_tracing_shmem_request;
+#endif
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = pg_tracing_shmem_startup_hook;
@@ -639,8 +646,10 @@ pg_tracing_shmem_startup(void)
 static void
 pg_tracing_shmem_request(void)
 {
+#if (PG_VERSION_NUM >= 150000)
 	if (prev_shmem_request_hook)
 		prev_shmem_request_hook();
+#endif
 	RequestAddinShmemSpace(pg_tracing_memsize());
 	RequestNamedLWLockTranche("pg_tracing", 1);
 }
@@ -891,8 +900,10 @@ command_type_to_span_type(CmdType cmd_type)
 			return SPAN_TOP_UPDATE;
 		case CMD_DELETE:
 			return SPAN_TOP_DELETE;
+#if PG_VERSION_NUM >= 150000
 		case CMD_MERGE:
 			return SPAN_TOP_MERGE;
+#endif
 		case CMD_UTILITY:
 			return SPAN_TOP_UTILITY;
 		case CMD_NOTHING:
