@@ -10,7 +10,6 @@
  */
 #include "postgres.h"
 
-#include "common/pg_prng.h"
 #include "nodes/nodeFuncs.h"
 #include "pg_tracing.h"
 #include "utils/ruleutils.h"
@@ -60,7 +59,7 @@ cleanup_planstarts(void)
 uint64
 generate_parallel_workers_parent_id(void)
 {
-	parallel_workers_parent_id = pg_prng_int64(&pg_global_prng_state);
+	parallel_workers_parent_id = generate_rnd_uint64();
 	return parallel_workers_parent_id;
 }
 
@@ -214,7 +213,7 @@ ExecProcNodeFirstPgTracing(PlanState *planstate)
 			break;
 		default:
 			/* Normal node, generate a random span_id */
-			span_id = pg_prng_uint64(&pg_global_prng_state);
+			span_id = generate_rnd_uint64();
 	}
 
 	/* Register planstate start */
@@ -393,7 +392,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 			 * their start. Fallback to the parent start.
 			 */
 			span_start = parent_start;
-			span_id = pg_prng_uint64(&pg_global_prng_state);
+			span_id = generate_rnd_uint64();
 			break;
 		case T_Hash:
 			/* For hash node, use the child's start */
@@ -405,7 +404,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 			 * We still need to generate a dedicated span_id since
 			 * traced_planstate's span_id will be used by the child
 			 */
-			span_id = pg_prng_uint64(&pg_global_prng_state);
+			span_id = generate_rnd_uint64();
 			break;
 		default:
 
@@ -470,7 +469,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 		 * to get the span's end.
 		 */
 		initplan_traced_planstate = get_traced_planstate(splan);
-		init_plan_span_id = pg_prng_uint64(&pg_global_prng_state);
+		init_plan_span_id = generate_rnd_uint64();
 		initplan_span_end = get_span_end_from_planstate(splan, initplan_traced_planstate->node_start, root_end);
 
 		initplan_span = create_span_node(splan, planstateTraceContext,
@@ -501,7 +500,7 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 		 * still use the tracedplan to get the end.
 		 */
 		subplan_traced_planstate = get_traced_planstate(splan);
-		subplan_span_id = pg_prng_uint64(&pg_global_prng_state);
+		subplan_span_id = generate_rnd_uint64();
 		subplan_span_end = get_span_end_from_planstate(subplan_traced_planstate->planstate, subplan_traced_planstate->node_start, root_end);
 
 		/*
