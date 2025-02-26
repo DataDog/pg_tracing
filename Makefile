@@ -50,6 +50,10 @@ REGRESSCHECKS = setup utility select parameters insert trigger cursor json trans
 
 REGRESSCHECKS_OPTS = --no-locale --encoding=UTF8 --temp-config pg_tracing.conf
 
+ifeq ($(shell test $(PG_VERSION) -ge 15; echo $$?),0)
+REGRESSCHECKS += select_multistatement planstate_subplans
+endif
+
 # \bind is only available starting PG 16
 ifeq ($(shell test $(PG_VERSION) -ge 16; echo $$?),0)
 REGRESSCHECKS += extended parameters_extended
@@ -68,8 +72,7 @@ REGRESSCHECKS += psql_extended_18 psql_extended_tx_18
 endif
 
 REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
-				 planstate_subplans planstate_union \
-				 parallel subxact full_buffer \
+				 planstate_union parallel subxact full_buffer \
 				 guc nested wal cleanup
 
 TAP_TESTS = 1

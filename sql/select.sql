@@ -54,28 +54,18 @@ set statement_timeout=0;
 SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans where trace_id='00000000000000000000000000000008';
 
 -- Cleanup
-SET plan_cache_mode='auto';
+SET plan_cache_mode TO DEFAULT;
 
 -- Run a statement with node not executed
 /*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000b-000000000000000b-01'*/ select 1 limit 0;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000b';
 
--- Test multiple statements in a single query
-/*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000c-000000000000000c-01'*/ select 1; select 2;
-SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000c';
-
--- Check multi statement query
-CALL clean_spans();
-SET pg_tracing.sample_rate = 1.0;
--- Force a multi-query statement with \;
-SELECT 1\; SELECT 1, 2;
-SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
-CALL clean_spans();
-
 -- Check standalone trace
+SET pg_tracing.sample_rate = 1.0;
 SELECT 1;
 -- Make sure we have unique span ids
 SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
+CALL clean_spans();
 
 -- Trigger a planner error
 SELECT '\xDEADBEEF'::bytea::text::int;
@@ -95,7 +85,7 @@ CALL clean_spans();
 -- Check function calls that don't have sources in pg_proc
 SELECT information_schema._pg_truetypid(a, t) FROM pg_attribute a, pg_type t limit 1;
 SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
+CALL clean_spans();
 
 -- Cleanup
-CALL clean_spans();
 CALL reset_settings();
