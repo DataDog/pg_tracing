@@ -59,12 +59,13 @@ SET plan_cache_mode TO DEFAULT;
 -- Run a statement with node not executed
 /*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000b-000000000000000b-01'*/ select 1 limit 0;
 SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000b';
+CALL clean_spans();
 
 -- Check standalone trace
 SET pg_tracing.sample_rate = 1.0;
 SELECT 1;
 -- Make sure we have unique span ids
-SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
+SELECT count(distinct span_id) from pg_tracing_consume_spans;
 CALL clean_spans();
 
 -- Trigger a planner error
