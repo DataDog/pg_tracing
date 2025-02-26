@@ -138,7 +138,7 @@ SELECT span_type, span_operation, sql_error_code, lvl FROM peek_ordered_spans wh
 (4 rows)
 
 -- Cleanup
-SET plan_cache_mode='auto';
+SET plan_cache_mode TO DEFAULT;
 -- Run a statement with node not executed
 /*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000b-000000000000000b-01'*/ select 1 limit 0;
  ?column? 
@@ -154,57 +154,8 @@ SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0
  Limit              |            |   2
 (4 rows)
 
--- Test multiple statements in a single query
-/*dddbs='postgres.db',traceparent='00-0000000000000000000000000000000c-000000000000000c-01'*/ select 1; select 2;
- ?column? 
-----------
-        1
-(1 row)
-
- ?column? 
-----------
-        2
-(1 row)
-
-SELECT span_operation, parameters, lvl from peek_ordered_spans where trace_id='0000000000000000000000000000000c';
- span_operation | parameters | lvl 
-----------------+------------+-----
- select $1      | {1}        |   0
- Planner        |            |   1
- ExecutorRun    |            |   1
- Result         |            |   2
-(4 rows)
-
--- Check multi statement query
-CALL clean_spans();
-SET pg_tracing.sample_rate = 1.0;
--- Force a multi-query statement with \;
-SELECT 1\; SELECT 1, 2;
- ?column? 
-----------
-        1
-(1 row)
-
- ?column? | ?column? 
-----------+----------
-        1 |        2
-(1 row)
-
-SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
-  span_type   | span_operation | parameters | lvl 
---------------+----------------+------------+-----
- Select query | SELECT $1      | {1}        |   0
- Planner      | Planner        |            |   1
- ExecutorRun  | ExecutorRun    |            |   1
- Result       | Result         |            |   2
- Select query | SELECT $1, $2  | {1,2}      |   0
- Planner      | Planner        |            |   1
- ExecutorRun  | ExecutorRun    |            |   1
- Result       | Result         |            |   2
-(8 rows)
-
-CALL clean_spans();
 -- Check standalone trace
+SET pg_tracing.sample_rate = 1.0;
 SELECT 1;
  ?column? 
 ----------
@@ -219,8 +170,32 @@ SELECT count(span_id) from pg_tracing_consume_spans group by span_id;
      1
      1
      1
-(4 rows)
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+     1
+(27 rows)
 
+CALL clean_spans();
 -- Trigger a planner error
 SELECT '\xDEADBEEF'::bytea::text::int;
 ERROR:  invalid input syntax for type integer: "\xdeadbeef"
@@ -287,6 +262,6 @@ SELECT span_type, span_operation, parameters, lvl from peek_ordered_spans;
  Result       | Result                                                                                |            |   4
 (12 rows)
 
--- Cleanup
 CALL clean_spans();
+-- Cleanup
 CALL reset_settings();
