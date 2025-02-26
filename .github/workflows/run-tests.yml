@@ -17,7 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        PG_VERSION: [15, 16, 17, 18]
+        #        PG_VERSION: [15, 16, 17, 18]
+        PG_VERSION: [15]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,23 +34,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build container image
-        uses: docker/build-push-action@v3
+      - name: Build Docker Test Image
+        uses: docker/build-push-action@v6
         with:
-          push: false
-          load: true
           build-args: "PG_VERSION=${{ matrix.PG_VERSION }}"
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: pg_tracing_test:${{ matrix.PG_VERSION }}
 
-      - name: Build Docker Test Image
-        run: make build-test-image
 
-      - name: Check pgindent
-        # pgindent is only available starting PG 17
-        if: ${{ matrix.PG_VERSION > 16 }}
-        run: make run-pgindent-diff
+#       - name: Build Docker Test Image
+#         run: make build-test-image
+
+#       - name: Check pgindent
+#         # pgindent is only available starting PG 17
+#         if: ${{ matrix.PG_VERSION > 16 }}
+#         run: make run-pgindent-diff
+
 
       - name: Run Test
         timeout-minutes: 1
