@@ -11,6 +11,29 @@
 
 #include "postgres.h"
 
+#if (PG_VERSION_NUM < 150000)
+
+#include "pg_prng.h"
+
+typedef double Cardinality;
+
+/*
+ * Thin wrappers that convert strings to exactly 64-bit integers, matching our
+ * definition of int64.  (For the naming, compare that POSIX has
+ * strtoimax()/strtoumax() which return intmax_t/uintmax_t.)
+ */
+#if SIZEOF_LONG == 8
+#define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
+#define strtou64(str, endptr, base) ((uint64) strtoul(str, endptr, base))
+#elif SIZEOF_LONG_LONG == 8
+#define strtoi64(str, endptr, base) ((int64) strtoll(str, endptr, base))
+#define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))
+#else
+#error "cannot find integer type of the same size as int64_t"
+#endif
+
+#endif
+
 #if (PG_VERSION_NUM < 160000)
 
 #include "utils/queryjumble.h"

@@ -411,8 +411,10 @@ plan_to_span_type(const Plan *plan)
 					return SPAN_NODE_UPDATE;
 				case CMD_DELETE:
 					return SPAN_NODE_DELETE;
+#if PG_VERSION_NUM >= 150000
 				case CMD_MERGE:
 					return SPAN_NODE_MERGE;
+#endif
 				default:
 					return SPAN_NODE_UNKNOWN;
 			}

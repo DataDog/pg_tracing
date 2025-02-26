@@ -59,14 +59,16 @@ add_plan_counters(const PlanCounters * plan_counters, int i, Datum *values)
  * Add node counters to the Datum output
  */
 static int
-add_node_counters(const NodeCounters * node_counters, int i, Datum *values)
+add_node_counters(const NodeCounters * node_counters, int i, Datum *values, bool *nulls)
 {
 	Datum		wal_bytes;
 	char		buf[256];
 	double		blk_read_time,
-				blk_write_time,
-				temp_blk_read_time,
+				blk_write_time;
+#if PG_VERSION_NUM >= 150000
+	double		temp_blk_read_time,
 				temp_blk_write_time;
+#endif
 	double		generation_counter,
 				inlining_counter,
 				optimization_counter,
@@ -95,13 +97,18 @@ add_node_counters(const NodeCounters * node_counters, int i, Datum *values)
 	blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.blk_write_time);
 #endif
 
-	temp_blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_read_time);
-	temp_blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_write_time);
-
 	values[i++] = Float8GetDatumFast(blk_read_time);
 	values[i++] = Float8GetDatumFast(blk_write_time);
+
+#if PG_VERSION_NUM >= 150000
+	temp_blk_read_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_read_time);
+	temp_blk_write_time = INSTR_TIME_GET_MILLISEC(node_counters->buffer_usage.temp_blk_write_time);
 	values[i++] = Float8GetDatumFast(temp_blk_read_time);
 	values[i++] = Float8GetDatumFast(temp_blk_write_time);
+#else
+	nulls[i++] = 1;
+	nulls[i++] = 1;
+#endif
 
 	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.temp_blks_read);
 	values[i++] = Int64GetDatumFast(node_counters->buffer_usage.temp_blks_written);
@@ -216,7 +223,7 @@ add_result_span(ReturnSetInfo *rsinfo, Span * span)
 		|| span->type == SPAN_PLANNER)
 	{
 		i = add_plan_counters(&span->plan_counters, i, values);
-		i = add_node_counters(&span->node_counters, i, values);
+		i = add_node_counters(&span->node_counters, i, values, nulls);
 		values[i++] = Int64GetDatumFast(span->startup);
 
 		if (span->parameter_offset != -1)
@@ -249,6 +256,48 @@ pg_tracing_json_spans(PG_FUNCTION_ARGS)
 
 	PG_RETURN_TEXT_P(cstring_to_text(json_ctx.str->data));
 }
+
+#if PG_VERSION_NUM < 150000
+/*
+ * InitMaterializedSRF
+ *
+ * Pulled from funcapi.c. Flags can be ignored as it will always be 0
+ */
+static void
+InitMaterializedSRF(FunctionCallInfo fcinfo, bits32 flags)
+{
+	bool		random_access;
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	Tuplestorestate *tupstore;
+	MemoryContext old_context,
+				per_query_ctx;
+	TupleDesc	stored_tupdesc;
+
+	/* check to see if caller supports returning a tuplestore */
+	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+
+	/*
+	 * Store the tuplestore and the tuple descriptor in ReturnSetInfo.  This
+	 * must be done in the per-query memory context.
+	 */
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	old_context = MemoryContextSwitchTo(per_query_ctx);
+
+	if (get_call_result_type(fcinfo, NULL, &stored_tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	random_access = (rsinfo->allowedModes & SFRM_Materialize_Random) != 0;
+
+	tupstore = tuplestore_begin_heap(random_access, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = stored_tupdesc;
+	MemoryContextSwitchTo(old_context);
+}
+#endif
 
 /*
  * Return spans as a result set.
