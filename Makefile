@@ -18,6 +18,7 @@ OBJS = \
 	src/pg_tracing_parallel.o \
 	src/pg_tracing_planstate.o \
 	src/pg_tracing_query_process.o \
+	src/pg_tracing_rng.o \
 	src/pg_tracing_span.o \
 	src/pg_tracing_sql_functions.o \
 	src/pg_tracing_strinfo.o \

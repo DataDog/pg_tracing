@@ -52,7 +52,6 @@
 #include "access/parallel.h"
 #include "executor/executor.h"
 #include "access/xact.h"
-#include "common/pg_prng.h"
 #include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "pg_tracing.h"
@@ -1117,8 +1116,8 @@ set_trace_id(Traceparent * traceparent)
 		return;
 	}
 
-	traceparent->trace_id.traceid_left = pg_prng_int64(&pg_global_prng_state);
-	traceparent->trace_id.traceid_right = pg_prng_int64(&pg_global_prng_state);
+	traceparent->trace_id.traceid_left = generate_rnd_uint64();
+	traceparent->trace_id.traceid_right = generate_rnd_uint64();
 	/* Tag it as generated */
 	traceparent->generated = true;
 
@@ -1165,7 +1164,7 @@ is_query_sampled(const Traceparent * traceparent)
 	 * We have a non zero global sample rate or a sampled flag. Either way, we
 	 * need a rand value
 	 */
-	rand = pg_prng_double(&pg_global_prng_state);
+	rand = generate_rnd_double();
 	if (traceparent->sampled)
 		/* Sampled flag case */
 		sampled = (rand < pg_tracing_caller_sample_rate);

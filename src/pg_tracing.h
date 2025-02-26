@@ -402,6 +402,9 @@ extern bool traceid_zero(TraceId trace_id);
 extern bool traceid_equal(TraceId trace_id_1, TraceId trace_id_2);
 extern const char *span_type_to_str(SpanType span_type);
 
+/* pg_tracing_rng.c */
+extern double generate_rnd_double(void);
+extern uint64 generate_rnd_uint64(void);
 
 /* pg_tracing_sql_functions.c */
 extern pgTracingStats get_empty_pg_tracing_stats(void);

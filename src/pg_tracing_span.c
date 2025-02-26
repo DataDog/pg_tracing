@@ -10,7 +10,6 @@
  */
 #include "postgres.h"
 
-#include "common/pg_prng.h"
 #include "storage/proc.h"
 #include "pg_tracing.h"
 
@@ -39,7 +38,7 @@ begin_span(TraceId trace_id, Span * span, SpanType type,
 	if (span_id != NULL)
 		span->span_id = *span_id;
 	else
-		span->span_id = pg_prng_uint64(&pg_global_prng_state);
+		span->span_id = generate_rnd_uint64();
 
 	span->worker_id = -1;
 	span->operation_name_offset = -1;
