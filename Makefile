@@ -91,7 +91,7 @@ pgindent: typedefs.list
 	pgindent --typedefs=typedefs.list src/*.c src/*.h
 
 # DOCKER BUILDS
-TEST_CONTAINER_NAME = pg_tracing_test
+TEST_CONTAINER_NAME = pg_tracing_test_$(PG_VERSION)
 BUILD_TEST_TARGETS  = $(patsubst %,build-test-pg%,$(PG_VERSIONS))
 
 .PHONY: build-test-image
