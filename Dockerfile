@@ -1,6 +1,6 @@
 ARG PG_VERSION=16
 
-FROM ubuntu:jammy as base
+FROM ubuntu:jammy AS base
 
 ARG PG_VERSION
 
@@ -33,7 +33,7 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 # Build pg_tracing for a given --build-arg PG_VERSION target version of
 # PostgreSQL.
 #
-FROM base as build
+FROM base AS build
 
 ARG PG_VERSION
 ENV PG_CONFIG /usr/lib/postgresql/${PG_VERSION}/bin/pg_config
@@ -68,7 +68,7 @@ COPY --chown=postgres tests/postgresql.conf /usr/src/pg_tracing/test_db/
 # Given the build image above, we can now run our test suite targetting a
 # given version of Postgres.
 #
-FROM build as test
+FROM build AS test
 
 ARG PG_VERSION
 USER postgres
