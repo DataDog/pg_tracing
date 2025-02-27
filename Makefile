@@ -108,7 +108,7 @@ build-test-image: build-test-pg$(PG_VERSION) ;
 
 .PHONY: $(BUILD_TEST_TARGETS)
 $(BUILD_TEST_TARGETS):
-	docker build \
+	docker buildx build --load \
 	  $(DOCKER_BUILD_OPTS) \
 	  --build-arg PG_VERSION=$(PG_VERSION)	 \
 	  -t $(TEST_CONTAINER_NAME):$(subst build-test-,,$@) .
