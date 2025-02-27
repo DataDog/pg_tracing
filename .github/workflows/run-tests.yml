@@ -23,16 +23,37 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Set environment variables
         run: echo "PG_VERSION=${{ matrix.PG_VERSION }}" >> $GITHUB_ENV
+
       - name: Add gcc problem matcher
         run: echo "::add-matcher::matcher.json"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache register
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-PG-${{ matrix.PG_VERSION }}-buildx-${{ hashFiles('**/Dockerfile') }}
+
       - name: Build Docker Test Image
-        run: make build-test-image
+        uses: docker/build-push-action@v6
+        with:
+          load: true
+          build-args: "PG_VERSION=${{ matrix.PG_VERSION }}"
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+          tags: pg_tracing_test:${{ matrix.PG_VERSION }}
+
       - name: Check pgindent
         # pgindent is only available starting PG 17
         if: ${{ matrix.PG_VERSION > 16 }}
         run: make run-pgindent-diff
+
       - name: Run Test
         timeout-minutes: 1
         run: make run-test
