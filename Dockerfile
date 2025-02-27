@@ -36,7 +36,7 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 FROM base AS build
 
 ARG PG_VERSION
-ENV PG_CONFIG /usr/lib/postgresql/${PG_VERSION}/bin/pg_config
+ENV PG_CONFIG=/usr/lib/postgresql/${PG_VERSION}/bin/pg_config
 USER postgres
 
 WORKDIR /usr/src/pg_tracing
@@ -72,4 +72,4 @@ FROM build AS test
 
 ARG PG_VERSION
 USER postgres
-ENV PATH /usr/lib/postgresql/${PG_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/usr/lib/postgresql/${PG_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
