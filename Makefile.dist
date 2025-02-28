@@ -1,0 +1,13 @@
+EXTENSION  = pg_tracing
+EXT_VERSION = $(shell git describe --tags | sed 's/^v//')
+
+default: dist
+
+# pgxn packaging
+META.json: META.json.in
+	@sed "s/@PG_TRACING_VERSION@/$(EXT_VERSION)/g" $< > $@
+
+$(EXTENSION)-$(EXT_VERSION).zip: META.json
+	git archive --format zip --prefix "$(EXTENSION)-$(EXT_VERSION)/" --add-file $< -o "$(EXTENSION)-$(EXT_VERSION).zip" HEAD
+
+dist: $(EXTENSION)-$(EXT_VERSION).zip

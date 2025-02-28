@@ -9,15 +9,7 @@ PG_CONFIG  = pg_config
 SHLIB_LINK = -lcurl
 
 PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
-GIT_EXISTS := $(shell command -v git 2> /dev/null)
 PG_CFLAGS = -Werror
-
-# Prepare the package for PGXN submission
-ifdef GIT_EXISTS
-EXTVERSION = $(shell git describe --tags | sed 's/^v//')
-else
-EXTVERSION = "0.1"
-endif
 
 ifdef PG_CONFIG_EXISTS
 # Default to pg_config's advertised version
@@ -53,7 +45,7 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 endif
 
-EXTRA_CLEAN = META.json $(EXTENSION)-$(EXTVERSION).zip
+EXTRA_CLEAN = META.json $(EXTENSION)-$(EXT_VERSION).zip
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction planstate_projectset
 
@@ -102,6 +94,7 @@ pgindent: typedefs.list
 # DOCKER BUILDS
 TEST_CONTAINER_NAME = pg_tracing_test_$(PG_VERSION)
 BUILD_TEST_TARGETS  = $(patsubst %,build-test-pg%,$(PG_VERSIONS))
+DOCKER_BASE_ARGS	= --name $(TEST_CONTAINER_NAME) --rm $(TEST_CONTAINER_NAME):pg$(PG_VERSION)
 
 .PHONY: build-test-image
 build-test-image: build-test-pg$(PG_VERSION) ;
@@ -115,24 +108,18 @@ $(BUILD_TEST_TARGETS):
 
 .PHONY: run-test
 run-test: build-test-pg$(PG_VERSION)
-	docker run					                \
-		--name $(TEST_CONTAINER_NAME) --rm		\
-		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
+	docker run $(DOCKER_BASE_ARGS) \
 		bash -c "make regresscheck_noinstall && make installcheck"
 
 .PHONY: run-pgindent-diff
 run-pgindent-diff: build-test-pg$(PG_VERSION)
-	docker run					                \
-		--name $(TEST_CONTAINER_NAME) --rm		\
-		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
+	docker run $(DOCKER_BASE_ARGS) \
 		bash -c "pgindent --diff --check --typedefs=typedefs.list src/*.c src/*.h"
 
 .PHONY: update-regress-output
 update-regress-output: build-test-pg$(PG_VERSION)
-	docker run					                \
-		--name $(TEST_CONTAINER_NAME) --rm		\
+	docker run $(DOCKER_BASE_ARGS) \
 		-v./results:/usr/src/pg_tracing/results	\
-		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
 		bash -c "make regresscheck_noinstall || true"
 	@if [ $(PG_VERSION) = "15" ]; then \
 		cp results/*.out expected/;	\
@@ -148,10 +135,5 @@ update-regress-output-local: regresscheck
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
 
-META.json: META.json.in
-	@sed "s/@PG_TRACING_VERSION@/$(EXTVERSION)/g" $< > $@
-
-$(EXTENSION)-$(EXTVERSION).zip: META.json
-	git archive --format zip --prefix "$(EXTENSION)-$(EXTVERSION)/" --add-file $< -o "$(EXTENSION)-$(EXTVERSION).zip" HEAD
-
-dist: $(EXTENSION)-$(EXTVERSION).zip
+dist:
+	make -f Makefile.dist
