@@ -1,31 +1,10 @@
-# Supported PostgreSQL versions:
-PG_VERSIONS = 14 15 16 17 18
-
 MODULE_big = pg_tracing
-EXTENSION  = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
-PG_CONFIG  = pg_config
 SHLIB_LINK = -lcurl
-
-PG_CONFIG_EXISTS := $(shell command -v $(PG_CONFIG) 2> /dev/null)
-GIT_EXISTS := $(shell command -v git 2> /dev/null)
 PG_CFLAGS = -Werror
 
-# Prepare the package for PGXN submission
-ifdef GIT_EXISTS
-EXTVERSION = $(shell git describe --tags | sed 's/^v//')
-else
-EXTVERSION = "0.1"
-endif
-
-ifdef PG_CONFIG_EXISTS
-# Default to pg_config's advertised version
-PG_VERSION ?= $(shell $(PG_CONFIG) --version | cut -d' ' -f2 | cut -d'.' -f1 | tr -d 'devel')
-else
-# pg_config is not present, let's assume we are packaging and use the latest PG version
-PG_VERSION ?= $(lastword $(PG_VERSIONS))
-endif
+include common.mk
 
 OBJS = \
 	$(WIN32RES) \
@@ -52,8 +31,6 @@ ifdef PG_CONFIG_EXISTS
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 endif
-
-EXTRA_CLEAN = META.json $(EXTENSION)-$(EXTVERSION).zip
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction planstate_projectset
 
@@ -100,8 +77,9 @@ pgindent: typedefs.list
 	pgindent --typedefs=typedefs.list src/*.c src/*.h
 
 # DOCKER BUILDS
-TEST_CONTAINER_NAME = pg_tracing_test_$(PG_VERSION)
-BUILD_TEST_TARGETS  = $(patsubst %,build-test-pg%,$(PG_VERSIONS))
+TEST_CONTAINER_NAME	= pg_tracing_test_$(PG_VERSION)
+BUILD_TEST_TARGETS	= $(patsubst %,build-test-pg%,$(PG_VERSIONS))
+DOCKER_RUN_OPTS		= --name $(TEST_CONTAINER_NAME) $(TEST_CONTAINER_NAME):pg$(PG_VERSION)
 
 .PHONY: build-test-image
 build-test-image: build-test-pg$(PG_VERSION) ;
@@ -109,30 +87,23 @@ build-test-image: build-test-pg$(PG_VERSION) ;
 .PHONY: $(BUILD_TEST_TARGETS)
 $(BUILD_TEST_TARGETS):
 	docker buildx build --load \
-	  $(DOCKER_BUILD_OPTS) \
-	  --build-arg PG_VERSION=$(PG_VERSION)	 \
-	  -t $(TEST_CONTAINER_NAME):$(subst build-test-,,$@) .
+		--rm --build-arg PG_VERSION=$(PG_VERSION) \
+		-t $(TEST_CONTAINER_NAME):$(subst build-test-,,$@) .
 
 .PHONY: run-test
 run-test: build-test-pg$(PG_VERSION)
-	docker run					                \
-		--name $(TEST_CONTAINER_NAME) --rm		\
-		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
+	docker run $(DOCKER_RUN_OPTS) \
 		bash -c "make regresscheck_noinstall && make installcheck"
 
 .PHONY: run-pgindent-diff
 run-pgindent-diff: build-test-pg$(PG_VERSION)
-	docker run					                \
-		--name $(TEST_CONTAINER_NAME) --rm		\
-		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
+	docker run $(DOCKER_RUN_OPTS) \
 		bash -c "pgindent --diff --check --typedefs=typedefs.list src/*.c src/*.h"
 
 .PHONY: update-regress-output
 update-regress-output: build-test-pg$(PG_VERSION)
-	docker run					                \
-		--name $(TEST_CONTAINER_NAME) --rm		\
+	docker run $(DOCKER_RUN_OPTS) \
 		-v./results:/usr/src/pg_tracing/results	\
-		$(TEST_CONTAINER_NAME):pg$(PG_VERSION)	\
 		bash -c "make regresscheck_noinstall || true"
 	@if [ $(PG_VERSION) = "15" ]; then \
 		cp results/*.out expected/;	\
@@ -148,10 +119,9 @@ update-regress-output-local: regresscheck
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
 
-META.json: META.json.in
-	@sed "s/@PG_TRACING_VERSION@/$(EXTVERSION)/g" $< > $@
+.PHONY: dist packages
+dist:
+	@make -f Makefile.dist
 
-$(EXTENSION)-$(EXTVERSION).zip: META.json
-	git archive --format zip --prefix "$(EXTENSION)-$(EXTVERSION)/" --add-file $< -o "$(EXTENSION)-$(EXTVERSION).zip" HEAD
-
-dist: $(EXTENSION)-$(EXTVERSION).zip
+packages:
+	@make -C packages

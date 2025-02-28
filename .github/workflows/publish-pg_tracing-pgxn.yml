@@ -22,10 +22,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Bundle the Release
-        run: make dist
+
+      - id: dist
+        name: Bundle the Release
+        run: make dist >> "$GITHUB_OUTPUT"
+
       - name: Release on PGXN
         env:
           PGXN_USERNAME: ${{ secrets.PGXN_USERNAME }}
           PGXN_PASSWORD: ${{ secrets.PGXN_PASSWORD }}
-        run: pgxn-release
+        run: pgxn-release ${{ steps.dist.outputs.artifact }}
