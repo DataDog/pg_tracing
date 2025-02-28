@@ -32,6 +32,7 @@ WORKDIR /usr/src/pg_tracing
 RUN mkdir src
 
 # Copy sources and compile
+COPY --chown=postgres common.mk ./
 COPY --chown=postgres Makefile ./
 COPY --chown=postgres *.sql ./
 COPY --chown=postgres pg_tracing.control ./
