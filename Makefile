@@ -120,8 +120,9 @@ update-regress-output-local: regresscheck
 		cp results/*.out regress/$(PG_VERSION)/expected; \
 	fi
 
+.PHONY: dist packages
 dist:
-	make -f Makefile.dist
+	@make -f Makefile.dist
 
 package:
 	make -C packages
