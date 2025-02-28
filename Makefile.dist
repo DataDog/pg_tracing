@@ -1,4 +1,5 @@
-EXTENSION  = pg_tracing
+include common.mk
+
 EXT_VERSION = $(shell git describe --tags | sed 's/^v//')
 
 default: dist
