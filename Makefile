@@ -124,5 +124,5 @@ update-regress-output-local: regresscheck
 dist:
 	@make -f Makefile.dist
 
-package:
-	make -C packages
+packages:
+	@make -C packages
