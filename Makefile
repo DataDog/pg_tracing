@@ -1,11 +1,10 @@
-include common.mk
-
 MODULE_big = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
-PG_CONFIG  = pg_config
 SHLIB_LINK = -lcurl
 PG_CFLAGS = -Werror
+
+include common.mk
 
 OBJS = \
 	$(WIN32RES) \
@@ -32,8 +31,6 @@ ifdef PG_CONFIG_EXISTS
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 endif
-
-EXTRA_CLEAN = META.json $(EXTENSION)-$(EXT_VERSION).zip
 
 REGRESSCHECKS = setup utility select parameters insert trigger cursor json transaction planstate_projectset
 
