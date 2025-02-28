@@ -77,9 +77,9 @@ pgindent: typedefs.list
 	pgindent --typedefs=typedefs.list src/*.c src/*.h
 
 # DOCKER BUILDS
-TEST_CONTAINER_NAME = pg_tracing_test_$(PG_VERSION)
-BUILD_TEST_TARGETS  = $(patsubst %,build-test-pg%,$(PG_VERSIONS))
-DOCKER_BASE_ARGS	= --name $(TEST_CONTAINER_NAME) --rm $(TEST_CONTAINER_NAME):pg$(PG_VERSION)
+TEST_CONTAINER_NAME	= pg_tracing_test_$(PG_VERSION)
+BUILD_TEST_TARGETS	= $(patsubst %,build-test-pg%,$(PG_VERSIONS))
+DOCKER_RUN_OPTS		= --rm --name $(TEST_CONTAINER_NAME) $(TEST_CONTAINER_NAME):pg$(PG_VERSION)
 
 .PHONY: build-test-image
 build-test-image: build-test-pg$(PG_VERSION) ;
@@ -87,23 +87,22 @@ build-test-image: build-test-pg$(PG_VERSION) ;
 .PHONY: $(BUILD_TEST_TARGETS)
 $(BUILD_TEST_TARGETS):
 	docker buildx build --load \
-	  $(DOCKER_BUILD_OPTS) \
-	  --build-arg PG_VERSION=$(PG_VERSION)	 \
-	  -t $(TEST_CONTAINER_NAME):$(subst build-test-,,$@) .
+		--rm --build-arg PG_VERSION=$(PG_VERSION) \
+		-t $(TEST_CONTAINER_NAME):$(subst build-test-,,$@) .
 
 .PHONY: run-test
 run-test: build-test-pg$(PG_VERSION)
-	docker run $(DOCKER_BASE_ARGS) \
+	docker run $(DOCKER_RUN_OPTS) \
 		bash -c "make regresscheck_noinstall && make installcheck"
 
 .PHONY: run-pgindent-diff
 run-pgindent-diff: build-test-pg$(PG_VERSION)
-	docker run $(DOCKER_BASE_ARGS) \
+	docker run $(DOCKER_RUN_OPTS) \
 		bash -c "pgindent --diff --check --typedefs=typedefs.list src/*.c src/*.h"
 
 .PHONY: update-regress-output
 update-regress-output: build-test-pg$(PG_VERSION)
-	docker run $(DOCKER_BASE_ARGS) \
+	docker run $(DOCKER_RUN_OPTS) \
 		-v./results:/usr/src/pg_tracing/results	\
 		bash -c "make regresscheck_noinstall || true"
 	@if [ $(PG_VERSION) = "15" ]; then \
