@@ -3,10 +3,12 @@ include common.mk
 default: dist
 
 # pgxn packaging
-META.json: META.json.in
+$(TMP_DIR)/META.json: META.json.in
+	@mkdir -p $(TMP_DIR)
 	@sed "s/@PG_TRACING_VERSION@/$(EXT_VERSION)/g" $< > $@
 
-$(EXTENSION)-$(EXT_VERSION).zip: META.json
-	git archive --format zip --prefix "$(EXTENSION)-$(EXT_VERSION)/" --add-file $< -o "$(EXTENSION)-$(EXT_VERSION).zip" HEAD
+$(TMP_DIR)/$(EXTENSION)-$(EXT_VERSION).zip: $(TMP_DIR)/META.json
+	@git archive --format zip --prefix "$(EXTENSION)-$(EXT_VERSION)/" --add-file $< -o "$(TMP_DIR)/$(EXTENSION)-$(EXT_VERSION).zip" HEAD
+	@echo "artifact=$(TMP_DIR)/$(EXTENSION)-$(EXT_VERSION).zip"
 
-dist: $(EXTENSION)-$(EXT_VERSION).zip
+dist: $(TMP_DIR)/$(EXTENSION)-$(EXT_VERSION).zip
