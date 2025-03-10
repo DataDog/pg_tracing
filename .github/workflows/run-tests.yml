@@ -62,6 +62,7 @@ jobs:
       - name: Check pgindent
         # pgindent is only available starting PG 17
         if: ${{ matrix.PG_VERSION > 16 }}
+        timeout-minutes: 1
         run: make run-pgindent-diff
 
       - name: Run Test
