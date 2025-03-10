@@ -1,0 +1,64 @@
+# Publish pg_tracing (Ubuntu)
+# Build and publish the pg_tracing extension as .deb to GitHub Releases.
+
+name: Publish pg_tracing (Ubuntu)
+
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ext_version:
+        description: "The version to set for the pg_tracing release. This publishes the latest commit of the chosen branch and uploads it to the pre-existing GitHub Release of the provided version."
+        required: true
+        default: ""
+
+jobs:
+  publish-pg_tracing:
+    name: Publish pg_tracing for PostgreSQL ${{ matrix.PG_VERSION }}
+    runs-on: ${{ matrix.OS }}
+    arch: ${{ matrix.ARCH }}
+    strategy:
+      fail-fast: false
+      matrix:
+        PG_VERSION: [14, 15, 16, 17]
+        OS: [ubuntu-latest]
+        ARCH: [arm64]
+
+    steps:
+      - name: Checkout Git Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Retrieve Tag Version
+        id: retrieve_version
+        run: |
+          if [ -n "${{ github.event.inputs.ext_version }}" ]; then
+            EXT_VERSION=${{ github.event.inputs.ext_version }}
+            echo "ext_version=$EXT_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create deb Package
+        run: EXT_VERSION=${{ steps.retrieve_version.outputs.ext_version }} PG_VERSION=${{ matrix.PG_VERSION }} make packages
+
+      - name: Sign and Attest Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ./postgresql-$(matrix.PG_VERSION)-pg-tracing_${{ steps.retrieve_version.outputs.ext_version }}_${{ matrix.ARCH }}.deb
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            postgresql-$(matrix.PG_VERSION)-pg-tracing_${{ steps.retrieve_version.outputs.ext_version }}_${{ matrix.ARCH }}.deb
