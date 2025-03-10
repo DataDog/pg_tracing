@@ -17,9 +17,9 @@ endif
 # Get extension version
 GIT_EXISTS := $(shell command -v git 2> /dev/null)
 ifdef GIT_EXISTS
-EXT_VERSION = $(shell git describe --tags | sed 's/^v//')
+EXT_VERSION ?= $(shell git describe --tags | sed 's/^v//')
 else
-EXT_VERSION = "0.1.0"
+EXT_VERSION ?= "0.1.0"
 endif
 
 TMP_DIR=$(PWD)/tmp
