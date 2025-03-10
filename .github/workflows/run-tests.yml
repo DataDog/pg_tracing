@@ -33,13 +33,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache register
-        uses: actions/cache@v4
+      - name: Restore Build Image from cache
+        id: cache-build-image-restore
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-PG-${{ matrix.PG_VERSION }}-buildx-${{ hashFiles('**/Dockerfile') }}
 
       - name: Build Docker Test Image
+        id: build-test-image
         uses: docker/build-push-action@v6
         with:
           load: true
@@ -48,6 +50,14 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
           tags: pg_tracing_test:${{ matrix.PG_VERSION }}
+
+      - name: Save Build Image in cache
+        id: cache-build-image-save
+        if: always() && steps.cache-build-image-restore.outputs.cache-hit != 'true' && steps.build-test-image.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-PG-${{ matrix.PG_VERSION }}-buildx-${{ hashFiles('**/Dockerfile') }}
 
       - name: Check pgindent
         # pgindent is only available starting PG 17
