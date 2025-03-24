@@ -16,5 +16,6 @@ $(TMP_DIR)/$(DEB_PACKAGE):
 	@mkdir -p $(TMP_DIR)
 	docker build --rm --platform linux/$(ARCH) \
 		$(DOCKER_BUILD_OPTS) -f deb.Dockerfile -t $(IMAGE_NAME) ..
-	docker run --rm --platform linux/$(ARCH) \
-		-v $(TMP_DIR):/out $(IMAGE_NAME) bash -c "cp /usr/src/pg_tracing/$(DEB_PACKAGE) /out"
+	docker create --name dummy $(IMAGE_NAME)
+	docker cp dummy:/usr/src/pg_tracing/$(DEB_PACKAGE) ../tmp/$(DEB_PACKAGE)
+	docker rm -f dummy
