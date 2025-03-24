@@ -34,6 +34,8 @@ RUN mkdir src
 # Copy sources and compile
 COPY --chown=postgres common.mk ./
 COPY --chown=postgres Makefile ./
+COPY --chown=postgres Makefile.dist ./
+COPY --chown=postgres META.json.in ./
 COPY --chown=postgres *.sql ./
 COPY --chown=postgres pg_tracing.control ./
 COPY --chown=postgres ./src/*.c ./src
