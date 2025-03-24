@@ -1,0 +1,73 @@
+# Publish pg_tracing (Ubuntu)
+# Build and publish the pg_tracing extension as .deb to GitHub Releases.
+
+name: Publish pg_tracing (Ubuntu)
+
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ext_version:
+        description: "The version to set for the pg_tracing release. This publishes the latest commit of the chosen branch and uploads it to the pre-existing GitHub Release of the provided version."
+        required: true
+        default: ""
+
+jobs:
+  publish-pg_tracing:
+    name: Publish pg_tracing for PostgreSQL ${{ matrix.pg_version }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pg_version: [14, 15, 16, 17]
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+        include:
+          - name: Ubuntu amd64 (Jammy)
+            runner: ubuntu-22.04
+            arch: amd64
+          - name: Ubuntu arm (Jammy)
+            runner: ubuntu-22.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout Git Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Retrieve Tag Version
+        id: retrieve_version
+        run: |
+          if [ -n "${{ github.event.inputs.ext_version }}" ]; then
+            EXT_VERSION=${{ github.event.inputs.ext_version }}
+          else
+            if [[ $GITHUB_REF == refs/tags/v* ]]; then
+              EXT_VERSION=${GITHUB_REF#refs/tags/v}
+            else
+              EXT_VERSION="0.0.0"
+            fi
+          fi
+          echo "ext_version=$EXT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create deb Package
+        run: ARCH=${{ matrix.arch }} EXT_VERSION=${{ steps.retrieve_version.outputs.ext_version }} PG_VERSION=${{ matrix.pg_version }} make packages
+
+      - name: Sign and Attest Build Provenance
+        uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v.2.2.3
+        with:
+          subject-path: |
+            ./tmp/postgresql-${{ matrix.pg_version }}-pg-tracing_${{ steps.retrieve_version.outputs.ext_version }}_${{ matrix.arch }}.deb
+
+      - name: Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v 2.2.1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ./tmp/postgresql-${{ matrix.pg_version }}-pg-tracing_${{ steps.retrieve_version.outputs.ext_version }}_${{ matrix.arch }}.deb
