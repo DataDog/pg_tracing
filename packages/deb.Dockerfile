@@ -59,5 +59,3 @@ RUN fpm \
   --description "Distributed Tracing for PostgreSQL" \
   --vendor "datadoghq" --license="MIT" \
   -s dir usr
-
-VOLUME ["/out"]
