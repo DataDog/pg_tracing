@@ -25,7 +25,7 @@ jobs:
 
       - id: dist
         name: Bundle the Release
-        run: make dist >> "$GITHUB_OUTPUT"
+        run: make -s dist >> "$GITHUB_OUTPUT"
 
       - name: Release on PGXN
         env:
