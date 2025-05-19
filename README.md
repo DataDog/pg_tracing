@@ -21,7 +21,7 @@ See [Trace Propagation](#trace-propagation) for more details.
 
 ## PostgreSQL Version Compatibility
 
-pg_tracing only supports PostgreSQL 15 and 16 for the moment.
+pg_tracing only supports PostgreSQL 14, 15 and 16 for the moment.
 
 ## Generated Spans
 
