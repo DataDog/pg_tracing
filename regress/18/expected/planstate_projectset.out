@@ -14,7 +14,7 @@ SELECT span_operation, deparse_info, parameters, lvl from peek_ordered_spans whe
  ExecutorRun                                          |              |               |   1
  ProjectSet                                           |              |               |   2
  Result                                               |              |               |   3
- SELECT * FROM pg_catalog.unnest($1) WITH ORDINALITY  |              |               |   3
+ SELECT * FROM pg_catalog.unnest($1) WITH ORDINALITY  |              | {"{0,1,2}"}   |   3
  Planner                                              |              |               |   4
 (7 rows)
 
