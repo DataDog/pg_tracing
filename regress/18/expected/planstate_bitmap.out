@@ -24,11 +24,11 @@ SELECT span_operation, deparse_info, parameters, pos_start, pos_end, lvl from pe
  SELECT * from pg_tracing_test where a=$1 OR b=$2 OR c=$3 |                                                         | {1,'2',3}  |         1 |      11 |   0
  Planner                                                  |                                                         |            |         2 |       3 |   1
  ExecutorRun                                              |                                                         |            |         4 |      10 |   1
- BitmapHeapScan on pg_tracing_test                        | Recheck Cond: ((c = 3) OR (b = '2'::bpchar) OR (a = 1)) |            |         5 |       9 |   2
+ BitmapHeapScan on pg_tracing_test                        | Recheck Cond: ((a = 1) OR (b = '2'::bpchar) OR (c = 3)) |            |         5 |       9 |   2
  BitmapOr                                                 |                                                         |            |         5 |       8 |   3
- BitmapIndexScan on pg_tracing_index_c                    | Index Cond: (c = 3)                                     |            |         5 |       6 |   4
+ BitmapIndexScan on pg_tracing_index_a                    | Index Cond: (a = 1)                                     |            |         5 |       6 |   4
  BitmapIndexScan on pg_tracing_index_b                    | Index Cond: (b = '2'::bpchar)                           |            |         6 |       7 |   4
- BitmapIndexScan on pg_tracing_index_a                    | Index Cond: (a = 1)                                     |            |         7 |       8 |   4
+ BitmapIndexScan on pg_tracing_index_c                    | Index Cond: (c = 3)                                     |            |         7 |       8 |   4
 (8 rows)
 
 -- Clean created spans
