@@ -41,6 +41,16 @@ set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
 set min_parallel_table_scan_size=0;
 set max_parallel_workers_per_gather=2;
+
+-- Test a sampled parallel hash join. Parallel Hash nodes may have
+-- instrumentation even when their child was executed by another worker.
+set enable_nestloop=false;
+set enable_mergejoin=false;
+/*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000005-01'*/ select count(*) from pg_tracing_test r join pg_tracing_test s using (a) \gset
+\echo :count
+CALL clean_spans();
+
+-- Test leaderless parallel query
 set parallel_leader_participation=false;
 /*dddbs='postgres.db',traceparent='00-00000000000000000000000000000001-0000000000000001-01'*/ select 1 from pg_class limit 1;
 
