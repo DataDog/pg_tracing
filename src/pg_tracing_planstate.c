@@ -395,10 +395,12 @@ create_spans_from_planstate(PlanState *planstate, planstateTraceContext * planst
 			span_id = generate_rnd_uint64();
 			break;
 		case T_Hash:
-			/* For hash node, use the child's start */
+			/* The child may be executed by another parallel worker */
 			traced_planstate = get_traced_planstate(outerPlanState(planstate));
-			Assert(traced_planstate != NULL);
-			span_start = traced_planstate->node_start;
+			if (traced_planstate != NULL)
+				span_start = traced_planstate->node_start;
+			else
+				span_start = parent_start;
 
 			/*
 			 * We still need to generate a dedicated span_id since
