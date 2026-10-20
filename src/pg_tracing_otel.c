@@ -109,7 +109,7 @@ send_json_trace(OtelContext * octx, const char *json_span)
 	if (octx->config_changed)
 	{
 		curl_easy_setopt(octx->curl, CURLOPT_URL, pg_tracing_otel_endpoint);
-		curl_easy_setopt(octx->curl, CURLOPT_CONNECTTIMEOUT_MS, pg_tracing_otel_connect_timeout_ms);
+		curl_easy_setopt(octx->curl, CURLOPT_CONNECTTIMEOUT_MS, (long) pg_tracing_otel_connect_timeout_ms);
 		octx->config_changed = false;
 	}
 	curl_easy_setopt(octx->curl, CURLOPT_POSTFIELDS, json_span);
