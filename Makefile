@@ -4,6 +4,10 @@ PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
 SHLIB_LINK = -lcurl
 PG_CFLAGS = -Werror
 
+# Must be set before including PGXS, which only defines the TAP test targets
+# (prove_installcheck, installcheck) when TAP_TESTS is set.
+TAP_TESTS = 1
+
 include common.mk
 
 OBJS = \
@@ -61,7 +65,6 @@ REGRESSCHECKS += sample planstate planstate_bitmap planstate_hash \
 				 planstate_union parallel subxact full_buffer \
 				 guc nested wal cleanup
 
-TAP_TESTS = 1
 
 regresscheck_noinstall:
 	$(pg_regress_check) $(REGRESSCHECKS_OPTS) $(REGRESSCHECKS) || \
