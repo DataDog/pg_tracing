@@ -1,7 +1,8 @@
 MODULE_big = pg_tracing
 DATA       = pg_tracing--0.1.0.sql
 PGFILEDESC = "pg_tracing - Distributed Tracing for PostgreSQL"
-SHLIB_LINK = -lcurl
+PG_CPPFLAGS = $(shell pkg-config --cflags libcurl 2>/dev/null)
+SHLIB_LINK = $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 PG_CFLAGS = -Werror
 
 include common.mk
